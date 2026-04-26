@@ -1,17 +1,33 @@
 // server/routes/auth.js
 const express = require('express');
 const jwt     = require('jsonwebtoken');
-const { authenticateUser }          = require('../services/ldapService');
+const { authenticateUser }                   = require('../services/ldapService');
 const { mapGroupsToRole, extractGroupNames } = require('../utils/roleMapper');
-const { verifyToken }               = require('../middleware/authMiddleware');
+const { verifyToken }                        = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
 const JWT_SECRET     = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 
-// ── POST /auth/login ────────────────────────────────────────────────────────
-// Accepts { username, password }, binds to LDAP, fetches groups, returns JWT.
+// Usernames/emails listed here always receive SUPER_ADMIN regardless of AD groups.
+// Set in .env as: SUPER_ADMIN_USERS=a.alkubaesy,another.user@swd.bh
+function getSuperAdminOverrides() {
+  return (process.env.SUPER_ADMIN_USERS || '')
+    .split(',')
+    .map(u => u.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function resolveRole(ldapUser, groupRole) {
+  const overrides = getSuperAdminOverrides();
+  const isSuperAdmin =
+    overrides.includes(ldapUser.username.toLowerCase()) ||
+    overrides.includes(ldapUser.email.toLowerCase());
+  return isSuperAdmin ? 'SUPER_ADMIN' : groupRole;
+}
+
+// ── POST /auth/login ───────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   const { username, password } = req.body || {};
 
@@ -22,8 +38,9 @@ router.post('/login', async (req, res) => {
   try {
     const ldapUser = await authenticateUser(username.trim(), password);
 
-    const role   = mapGroupsToRole(ldapUser.memberOf);
-    const groups = extractGroupNames(ldapUser.memberOf);
+    const groupRole = mapGroupsToRole(ldapUser.memberOf);
+    const role      = resolveRole(ldapUser, groupRole);
+    const groups    = extractGroupNames(ldapUser.memberOf);
 
     const payload = {
       username:   ldapUser.username,
@@ -47,12 +64,8 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid username or password.' });
     }
     if (code === 'LDAP_UNREACHABLE') {
-      return res.status(503).json({
-        success: false,
-        message: 'Authentication service is temporarily unavailable. Please try again later.',
-      });
+      return res.status(503).json({ success: false, message: 'Authentication service is temporarily unavailable. Please try again later.' });
     }
-    // USER_NOT_FOUND means bound OK but no directory entry — treat as auth failure
     if (code === 'USER_NOT_FOUND') {
       return res.status(401).json({ success: false, message: 'User account not found in directory.' });
     }
@@ -60,15 +73,12 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ── GET /auth/me ─────────────────────────────────────────────────────────────
-// Returns the currently authenticated user decoded from the JWT.
+// ── GET /auth/me ────────────────────────────────────────────────────────────
 router.get('/me', verifyToken, (req, res) => {
   return res.status(200).json({ success: true, user: req.user });
 });
 
-// ── POST /auth/logout ────────────────────────────────────────────────────────
-// JWTs are stateless — the client discards the token. Server logs the event.
-// For stricter revocation, integrate a token denylist (e.g. Redis / Firestore).
+// ── POST /auth/logout ───────────────────────────────────────────────────────
 router.post('/logout', verifyToken, (req, res) => {
   console.log(`[Auth] Logout: ${req.user.username}`);
   return res.status(200).json({ success: true, message: 'Logged out successfully.' });
