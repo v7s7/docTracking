@@ -1,4 +1,4 @@
-const BASE_URL  = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const BASE_URL  = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 const TOKEN_KEY = 'doctracking_token';
 const USER_KEY  = 'doctracking_user';
 
@@ -18,7 +18,6 @@ export async function login(username, password) {
 export async function logout() {
   const token = getToken();
   if (token) {
-    // Best-effort server-side logout log; ignore network errors
     try {
       await fetch(`${BASE_URL}/auth/logout`, {
         method:  'POST',
@@ -39,8 +38,6 @@ export function getStoredUser() {
   catch { return null; }
 }
 
-// Validates the locally stored token against the server.
-// Returns the user object on success, or null if the token is invalid/expired.
 export async function fetchMe() {
   const token = getToken();
   if (!token) return null;
