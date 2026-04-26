@@ -1,12 +1,13 @@
 // server/index.js
-const express = require('express');
-const cors = require('cors');
+const express    = require('express');
+const cors       = require('cors');
 const bodyParser = require('body-parser');
 require('dotenv').config();
 
-const authRoutes = require('./routes/auth');
+const authRoutes  = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 5000;
 
 if (!process.env.JWT_SECRET) {
@@ -21,7 +22,8 @@ if (!process.env.LDAP_URL) {
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000', credentials: true }));
 app.use(bodyParser.json());
 
-app.use('/auth', authRoutes);
+app.use('/auth',  authRoutes);
+app.use('/admin', adminRoutes); // all routes inside are SUPER_ADMIN-only
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 

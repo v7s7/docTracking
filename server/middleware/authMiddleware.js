@@ -1,8 +1,8 @@
 // server/middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
 
-// Numeric weight per role — used by requireRole to compare privilege levels
-const ROLE_WEIGHT = { READONLY: 1, STAFF: 2, MANAGER: 3, ADMIN: 4 };
+// Numeric weight per role — SUPER_ADMIN (5) sits above ADMIN (4)
+const ROLE_WEIGHT = { READONLY: 1, STAFF: 2, MANAGER: 3, ADMIN: 4, SUPER_ADMIN: 5 };
 
 /**
  * Validates the Bearer JWT in the Authorization header and attaches the
@@ -27,10 +27,15 @@ function verifyToken(req, res, next) {
 }
 
 /**
- * Route-level guard. Attach after verifyToken.
- * Usage: router.get('/admin', verifyToken, requireRole('ADMIN'), handler)
+ * Route-level privilege guard. Always place after verifyToken.
  *
- * @param {'READONLY'|'STAFF'|'MANAGER'|'ADMIN'} minRole
+ * Role ladder: READONLY < STAFF < MANAGER < ADMIN < SUPER_ADMIN
+ *
+ * Usage examples:
+ *   router.delete('/doc/:id',  verifyToken, requireRole('MANAGER'), handler)
+ *   router.get('/admin/config',verifyToken, requireRole('SUPER_ADMIN'), handler)
+ *
+ * @param {'READONLY'|'STAFF'|'MANAGER'|'ADMIN'|'SUPER_ADMIN'} minRole
  */
 function requireRole(minRole) {
   return (req, res, next) => {

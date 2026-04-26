@@ -1,0 +1,51 @@
+{
+  "_note": "Edit this file directly (then restart) OR use PUT /admin/config at runtime. Super Admin panel writes here live.",
+
+  "departments": [
+    {
+      "id": "general",
+      "label": "General",
+      "ldapGroup": "",
+      "fields": [
+        { "key": "title",       "label": "Document Title",  "type": "text",     "required": true,  "placeholder": "Enter document title" },
+        { "key": "doc_type",    "label": "Document Type",   "type": "select",   "required": true,  "options": ["Memo", "Report", "Letter", "Form", "Other"] },
+        { "key": "priority",   "label": "Priority",        "type": "select",   "required": true,  "options": ["Low", "Normal", "High", "Urgent"] },
+        { "key": "description","label": "Description",     "type": "textarea", "required": false, "placeholder": "Brief description of the document" }
+      ]
+    },
+    {
+      "id": "accounts",
+      "label": "Accounts Department",
+      "ldapGroup": "accounts_dept",
+      "fields": [
+        { "key": "title",    "label": "Document Title",  "type": "text",     "required": true,  "placeholder": "Enter document title" },
+        { "key": "doc_type", "label": "Document Type",   "type": "select",   "required": true,  "options": ["Invoice", "Purchase Order", "Receipt", "Budget Report", "Other"] },
+        { "key": "amount",   "label": "Amount (BHD)",    "type": "number",   "required": false, "placeholder": "0.000" },
+        { "key": "priority", "label": "Priority",        "type": "select",   "required": true,  "options": ["Low", "Normal", "High", "Urgent"] },
+        { "key": "notes",    "label": "Notes",            "type": "textarea", "required": false }
+      ]
+    }
+  ],
+
+  "roleGroupMap": {
+    "super_admins":      "SUPER_ADMIN",
+    "domain admins":     "SUPER_ADMIN",
+    "it_dept":           "ADMIN",
+    "system_admins":     "ADMIN",
+    "it_administrators": "ADMIN",
+    "managers":          "MANAGER",
+    "dept_managers":     "MANAGER",
+    "supervisors":       "MANAGER",
+    "senior_staff":      "MANAGER",
+    "accounts_dept":     "STAFF",
+    "hr_dept":           "STAFF",
+    "legal_dept":        "STAFF",
+    "operations_dept":   "STAFF",
+    "finance_dept":      "STAFF",
+    "it_support":        "STAFF",
+    "general_staff":     "STAFF",
+    "audit_team":        "READONLY",
+    "external_auditors": "READONLY",
+    "compliance":        "READONLY"
+  }
+}
