@@ -3,10 +3,10 @@ import { useLang } from '../../context/LangContext';
 import { getTasks } from '../../services/taskService';
 
 const STATUS_COLORS = {
-  new:         { bg: '#EBF8FF', color: '#2B6CB0' },
+  new:         { bg: '#FFF0F0', color: '#C41E1E' },
   assigned:    { bg: '#FFFBEA', color: '#B7791F' },
-  in_progress: { bg: '#E6FFFA', color: '#2C7A7B' },
-  returned:    { bg: '#FFF5F5', color: '#C53030' },
+  in_progress: { bg: '#EAF4EA', color: '#2D6E2D' },
+  returned:    { bg: '#FFF5F5', color: '#9A1818' },
   closed:      { bg: '#F0FFF4', color: '#276749' },
 };
 

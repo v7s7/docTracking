@@ -4,10 +4,10 @@ import { getDashboard } from '../../services/taskService';
 import { isOverdue } from '../tasks/TaskList';
 
 const STATUS_COLORS = {
-  new:         { bg: '#EBF8FF', color: '#2B6CB0', icon: '🔵' },
-  assigned:    { bg: '#FFF9E6', color: '#B7791F', icon: '🟡' },
-  in_progress: { bg: '#EBF8FF', color: '#2C7A7B', icon: '🟢' },
-  returned:    { bg: '#FFF5F5', color: '#C53030', icon: '🔴' },
+  new:         { bg: '#FFF0F0', color: '#C41E1E', icon: '🔴' },
+  assigned:    { bg: '#FFFBEA', color: '#B7791F', icon: '🟡' },
+  in_progress: { bg: '#EAF4EA', color: '#2D6E2D', icon: '🟢' },
+  returned:    { bg: '#FFF5F5', color: '#9A1818', icon: '↩️' },
   closed:      { bg: '#F0FFF4', color: '#276749', icon: '✅' },
 };
 

@@ -6,11 +6,11 @@ import { getDepartments } from '../../services/deptService';
 const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
 
 const ROLE_COLORS = {
-  SUPER_ADMIN:      '#6c3483',
-  ADMIN:            '#1a56db',
-  CUSTOMER_SERVICE: '#0D7C7E',
-  MANAGER:          '#0e7c50',
-  STAFF:            '#b7770d',
+  SUPER_ADMIN:      '#7B1414',
+  ADMIN:            '#C41E1E',
+  CUSTOMER_SERVICE: '#2D6E2D',
+  MANAGER:          '#245724',
+  STAFF:            '#B7791F',
   READONLY:         '#718096',
 };
 

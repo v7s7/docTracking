@@ -1,25 +1,25 @@
 /* ── CSS Variables ─────────────────────────────────────────── */
 :root {
-  --primary:        #1B3A5C;
-  --primary-hover:  #152E4A;
-  --primary-light:  #EBF1F8;
-  --accent:         #0D7C7E;
-  --accent-hover:   #0A6365;
-  --accent-light:   #E6F4F4;
-  --bg:             #F0F4F8;
+  --primary:        #C41E1E;   /* Crimson red — logo shield/arch */
+  --primary-hover:  #A51818;
+  --primary-light:  #FDEEEE;
+  --accent:         #2D6E2D;   /* Forest green — logo palm tree */
+  --accent-hover:   #245724;
+  --accent-light:   #EAF4EA;
+  --bg:             #F5F5F5;
   --surface:        #FFFFFF;
-  --surface-2:      #F7FAFC;
-  --border:         #E2E8F0;
-  --border-2:       #CBD5E1;
-  --text:           #1A2332;
-  --text-2:         #4A5568;
-  --text-3:         #718096;
+  --surface-2:      #FAFAFA;
+  --border:         #E8E8E8;
+  --border-2:       #D0D0D0;
+  --text:           #1A1A1A;
+  --text-2:         #444444;
+  --text-3:         #777777;
   --success:        #276749;
   --success-bg:     #F0FFF4;
   --success-border: #9AE6B4;
-  --danger:         #C53030;
-  --danger-bg:      #FFF5F5;
-  --danger-border:  #FEB2B2;
+  --danger:         #C41E1E;
+  --danger-bg:      #FFF0F0;
+  --danger-border:  #F5AAAA;
   --warning:        #B7791F;
   --warning-bg:     #FFFAF0;
   --sidebar-w:      268px;
@@ -588,7 +588,7 @@ tr:hover td { background: var(--surface-2); }
 
 .login-brand {
   flex: 1;
-  background: linear-gradient(155deg, #1B3A5C 0%, #0D2540 60%, #0A1E33 100%);
+  background: linear-gradient(155deg, #C41E1E 0%, #9A1818 60%, #7A1212 100%);
   display: flex;
   flex-direction: column;
   align-items: center;

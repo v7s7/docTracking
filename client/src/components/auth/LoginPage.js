@@ -53,7 +53,7 @@ export default function LoginPage() {
             <div className="lang-toggle" style={{ background: '#f0f4f8', border: '1px solid #e2e8f0' }}>
               <button
                 className={`lang-btn${lang === 'ar' ? ' active' : ''}`}
-                style={{ color: lang === 'ar' ? '#1B3A5C' : '#718096', background: lang === 'ar' ? '#fff' : 'transparent' }}
+                style={{ color: lang === 'ar' ? '#C41E1E' : '#718096', background: lang === 'ar' ? '#fff' : 'transparent' }}
                 onClick={() => lang !== 'ar' && toggle()}
                 type="button"
               >
@@ -61,7 +61,7 @@ export default function LoginPage() {
               </button>
               <button
                 className={`lang-btn${lang === 'en' ? ' active' : ''}`}
-                style={{ color: lang === 'en' ? '#1B3A5C' : '#718096', background: lang === 'en' ? '#fff' : 'transparent' }}
+                style={{ color: lang === 'en' ? '#C41E1E' : '#718096', background: lang === 'en' ? '#fff' : 'transparent' }}
                 onClick={() => lang !== 'en' && toggle()}
                 type="button"
               >
@@ -120,7 +120,7 @@ export default function LoginPage() {
               className="btn btn-primary"
               type="submit"
               disabled={submitting}
-              style={{ marginTop: '0.25rem', padding: '0.7rem', fontSize: '0.95rem', width: '100%', background: '#1B3A5C', borderColor: '#1B3A5C' }}
+              style={{ marginTop: '0.25rem', padding: '0.7rem', fontSize: '0.95rem', width: '100%' }}
             >
               {submitting
                 ? <><span className="spinner" style={{ width: 16, height: 16, borderTopColor: '#fff' }} />{t.signingIn}</>
