@@ -2,100 +2,376 @@
   "_note": "Edit this file directly (then restart) OR use PUT /admin/config at runtime. Super Admin panel writes here live.",
   "departments": [
     {
-      "id": "general",
-      "label": "General",
-      "ldapGroup": "",
+      "id": "cs_correspondence",
+      "label": "خدمة العملاء – المراسلات الرسمية",
+      "ldapGroup": "customer_service",
       "fields": [
         {
-          "key": "title",
-          "label": "Document Title",
+          "key": "serial_number",
+          "label": "رقم التسلسل",
+          "type": "number",
+          "required": true,
+          "placeholder": "أدخل رقم التسلسل"
+        },
+        {
+          "key": "transaction_type",
+          "label": "نوع المعاملة",
+          "type": "select",
+          "required": true,
+          "options": ["صادر", "وارد"]
+        },
+        {
+          "key": "doc_date",
+          "label": "تاريخ الكتاب",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "sender_recipient",
+          "label": "الجهة المرسلة / المرسل إليها",
           "type": "text",
           "required": true,
-          "placeholder": "Enter document title"
+          "placeholder": "اسم الجهة"
         },
         {
-          "key": "doc_type",
-          "label": "Document Type",
-          "type": "select",
-          "required": true,
-          "options": [
-            "Memo",
-            "Report",
-            "Letter",
-            "Form",
-            "Other"
-          ]
-        },
-        {
-          "key": "priority",
-          "label": "Priority",
-          "type": "select",
-          "required": true,
-          "options": [
-            "Low",
-            "Normal",
-            "High",
-            "Urgent"
-          ]
-        },
-        {
-          "key": "description",
-          "label": "Description",
+          "key": "subject",
+          "label": "موضوع الكتاب",
           "type": "textarea",
-          "required": false,
-          "placeholder": "Brief description of the document"
+          "required": true,
+          "placeholder": "موضوع المراسلة"
+        },
+        {
+          "key": "delivery_method",
+          "label": "طريقة الاستلام / التسليم",
+          "type": "select",
+          "required": true,
+          "options": ["يدوي", "بريد", "إيميل"]
+        },
+        {
+          "key": "receipt_date",
+          "label": "تاريخ الاستلام / التسليم",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "recipient_name",
+          "label": "اسم المستلم",
+          "type": "text",
+          "required": true,
+          "placeholder": "اسم المستلم"
+        },
+        {
+          "key": "recipient_signature",
+          "label": "توقيع المستلم",
+          "type": "checkbox",
+          "required": false
         }
       ]
     },
     {
-      "id": "accounts",
-      "label": "Accounts Department",
+      "id": "cs_inquiries",
+      "label": "خدمة العملاء – الاستفسارات العامة",
+      "ldapGroup": "customer_service",
+      "fields": [
+        {
+          "key": "inquiry_date",
+          "label": "تاريخ الاستفسار",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "inquirer_name",
+          "label": "اسم المستفسر",
+          "type": "text",
+          "required": true,
+          "placeholder": "اسم المستفسر"
+        },
+        {
+          "key": "requested_dept",
+          "label": "قسم المطلوب",
+          "type": "text",
+          "required": true,
+          "placeholder": "القسم المعني بالاستفسار"
+        },
+        {
+          "key": "contact_number",
+          "label": "رقم التواصل",
+          "type": "text",
+          "required": true,
+          "placeholder": "رقم الهاتف"
+        },
+        {
+          "key": "inquiry_details",
+          "label": "تفاصيل الاستفسار",
+          "type": "textarea",
+          "required": true,
+          "placeholder": "اكتب تفاصيل الاستفسار"
+        },
+        {
+          "key": "dept_replied",
+          "label": "هل تم الرد عليه من قبل القسم",
+          "type": "select",
+          "required": true,
+          "options": ["لا", "نعم"]
+        }
+      ]
+    },
+    {
+      "id": "accounts_checks",
+      "label": "قسم الحسابات – تسليم الشيكات",
       "ldapGroup": "accounts_dept",
       "fields": [
         {
-          "key": "title",
-          "label": "Document Title",
-          "type": "text",
+          "key": "serial_number",
+          "label": "رقم التسلسل",
+          "type": "number",
           "required": true,
-          "placeholder": "Enter document title"
+          "placeholder": "رقم التسلسل"
         },
         {
-          "key": "doc_type",
-          "label": "Document Type",
-          "type": "select",
+          "key": "check_number",
+          "label": "رقم الشيك",
+          "type": "text",
           "required": true,
-          "options": [
-            "Invoice",
-            "Purchase Order",
-            "Receipt",
-            "Budget Report",
-            "Other"
-          ]
+          "placeholder": "رقم الشيك"
         },
         {
           "key": "amount",
-          "label": "Amount (BHD)",
+          "label": "المبلغ",
           "type": "number",
-          "required": false,
+          "required": true,
           "placeholder": "0.000"
         },
         {
-          "key": "priority",
-          "label": "Priority",
+          "key": "beneficiary_name",
+          "label": "اسم المستفيد",
+          "type": "text",
+          "required": true,
+          "placeholder": "اسم المستفيد"
+        },
+        {
+          "key": "beneficiary_type",
+          "label": "نوع المستفيد",
           "type": "select",
           "required": true,
-          "options": [
-            "Low",
-            "Normal",
-            "High",
-            "Urgent"
-          ]
+          "options": ["فرد", "شركة", "جهة"]
+        },
+        {
+          "key": "delivery_method",
+          "label": "طريقة التسليم",
+          "type": "select",
+          "required": true,
+          "options": ["يدوي", "مندوب"]
+        },
+        {
+          "key": "delivery_date",
+          "label": "تاريخ التسليم",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "recipient_name",
+          "label": "اسم المستلم",
+          "type": "text",
+          "required": true,
+          "placeholder": "اسم المستلم"
+        },
+        {
+          "key": "recipient_contact",
+          "label": "رقم تواصل المستلم",
+          "type": "text",
+          "required": false,
+          "placeholder": "رقم الهاتف"
+        },
+        {
+          "key": "recipient_signature",
+          "label": "توقيع المستلم",
+          "type": "checkbox",
+          "required": false
         },
         {
           "key": "notes",
-          "label": "Notes",
+          "label": "ملاحظات",
           "type": "textarea",
+          "required": false,
+          "placeholder": "أي ملاحظات إضافية"
+        }
+      ]
+    },
+    {
+      "id": "banks_social_research",
+      "label": "قسم المصارف – البحوث الاجتماعية",
+      "ldapGroup": "banks_dept",
+      "fields": [
+        {
+          "key": "research_date",
+          "label": "تاريخ البحث الاجتماعي",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "head_of_household",
+          "label": "اسم رب الأسرة",
+          "type": "text",
+          "required": true,
+          "placeholder": "الاسم الكامل"
+        },
+        {
+          "key": "contact_number",
+          "label": "رقم التواصل",
+          "type": "text",
+          "required": true,
+          "placeholder": "رقم الهاتف"
+        },
+        {
+          "key": "researcher_name",
+          "label": "اسم الباحث",
+          "type": "text",
+          "required": true,
+          "placeholder": "اسم الباحث الاجتماعي"
+        }
+      ]
+    },
+    {
+      "id": "banks_student_contracts",
+      "label": "قسم المصارف – عقود الطلبة الجامعيين",
+      "ldapGroup": "banks_dept",
+      "fields": [
+        {
+          "key": "contract_date",
+          "label": "تاريخ توقيع العقد",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "student_name",
+          "label": "اسم الطالب",
+          "type": "text",
+          "required": true,
+          "placeholder": "الاسم الكامل"
+        },
+        {
+          "key": "personal_id",
+          "label": "الرقم الشخصي",
+          "type": "text",
+          "required": true,
+          "placeholder": "الرقم الشخصي"
+        },
+        {
+          "key": "contact_number",
+          "label": "رقم التواصل",
+          "type": "text",
+          "required": true,
+          "placeholder": "رقم الهاتف"
+        },
+        {
+          "key": "university",
+          "label": "الجامعة",
+          "type": "text",
+          "required": true,
+          "placeholder": "اسم الجامعة"
+        },
+        {
+          "key": "specialization",
+          "label": "التخصص",
+          "type": "text",
+          "required": true,
+          "placeholder": "التخصص الدراسي"
+        },
+        {
+          "key": "academic_level",
+          "label": "المرحلة الدراسية",
+          "type": "select",
+          "required": true,
+          "options": ["دبلوم", "بكالوريوس", "ماجستير"]
+        },
+        {
+          "key": "signing_date",
+          "label": "تاريخ التوقيع",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "is_signed",
+          "label": "تم التوقيع",
+          "type": "select",
+          "required": true,
+          "options": ["لا", "نعم"]
+        },
+        {
+          "key": "employee_name",
+          "label": "اسم الموظف",
+          "type": "text",
+          "required": true,
+          "placeholder": "اسم الموظف المسؤول"
+        }
+      ]
+    },
+    {
+      "id": "asset_development_leases",
+      "label": "قسم تنمية الأصول الوقفية – عقود الإيجار",
+      "ldapGroup": "asset_development_dept",
+      "fields": [
+        {
+          "key": "contract_number",
+          "label": "رقم العقد",
+          "type": "text",
+          "required": true,
+          "placeholder": "رقم العقد"
+        },
+        {
+          "key": "transfer_date",
+          "label": "تاريخ تحويل العقد",
+          "type": "date",
+          "required": true
+        },
+        {
+          "key": "contract_owner_name",
+          "label": "اسم صاحب العقد",
+          "type": "text",
+          "required": true,
+          "placeholder": "الاسم الكامل"
+        },
+        {
+          "key": "personal_id",
+          "label": "الرقم الشخصي",
+          "type": "text",
+          "required": true,
+          "placeholder": "الرقم الشخصي"
+        },
+        {
+          "key": "contact_number",
+          "label": "رقم التواصل",
+          "type": "text",
+          "required": true,
+          "placeholder": "رقم الهاتف"
+        },
+        {
+          "key": "property_type",
+          "label": "نوع العقار",
+          "type": "select",
+          "required": true,
+          "options": ["محل", "شقة", "أرض", "مبنى"]
+        },
+        {
+          "key": "is_signed",
+          "label": "تم التوقيع",
+          "type": "select",
+          "required": true,
+          "options": ["لا", "نعم"]
+        },
+        {
+          "key": "tenant_signature",
+          "label": "توقيع المستأجر",
+          "type": "checkbox",
           "required": false
+        },
+        {
+          "key": "notes",
+          "label": "ملاحظات",
+          "type": "textarea",
+          "required": false,
+          "placeholder": "أي ملاحظات إضافية"
         }
       ]
     }
@@ -110,11 +386,11 @@
     "dept_managers": "MANAGER",
     "supervisors": "MANAGER",
     "senior_staff": "MANAGER",
+    "customer_service": "STAFF",
     "accounts_dept": "STAFF",
+    "banks_dept": "STAFF",
+    "asset_development_dept": "STAFF",
     "hr_dept": "STAFF",
-    "legal_dept": "STAFF",
-    "operations_dept": "STAFF",
-    "finance_dept": "STAFF",
     "it_support": "STAFF",
     "general_staff": "STAFF",
     "audit_team": "READONLY",
