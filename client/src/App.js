@@ -3,203 +3,26 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LangProvider, useLang } from './context/LangContext';
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
+import Dashboard from './components/dashboard/Dashboard';
+import TaskList from './components/tasks/TaskList';
+import TaskDetail from './components/tasks/TaskDetail';
+import CreateTaskModal from './components/tasks/CreateTaskModal';
+import UserManagement from './components/users/UserManagement';
 import { getDepartments } from './services/deptService';
 
-// ── Group departments by ldapGroup ───────────────────────────
-function groupDepts(depts) {
-  const groups = {};
-  for (const d of depts) {
-    const g = d.ldapGroup || '__other__';
-    if (!groups[g]) groups[g] = [];
-    groups[g].push(d);
-  }
-  return groups;
-}
+// ── Role helpers ─────────────────────────────────────────────
+function isCS(role)      { return ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(role); }
+function isSuperAdmin(r) { return r === 'SUPER_ADMIN'; }
 
-// ── Render a single form field ───────────────────────────────
-function FormField({ field, value, onChange }) {
-  const { t } = useLang();
-  const id = `field-${field.key}`;
-
-  if (field.type === 'checkbox') {
-    return (
-      <div className="form-group">
-        <div className="checkbox-row">
-          <input
-            id={id}
-            type="checkbox"
-            checked={!!value}
-            onChange={e => onChange(field.key, e.target.checked)}
-          />
-          <label className="checkbox-label" htmlFor={id}>
-            {field.label}
-            {field.required && <span className="req"> *</span>}
-          </label>
-        </div>
-      </div>
-    );
-  }
-
-  const isWide = field.type === 'textarea';
-
-  return (
-    <div className={`form-group${isWide ? ' full-width' : ''}`}>
-      <label className="form-label" htmlFor={id}>
-        {field.label}
-        {field.required && <span className="req"> *</span>}
-      </label>
-
-      {field.type === 'select' ? (
-        <select
-          id={id}
-          className="form-control"
-          value={value || ''}
-          onChange={e => onChange(field.key, e.target.value)}
-          required={field.required}
-        >
-          <option value="">—</option>
-          {(field.options || []).map(opt => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
-      ) : field.type === 'textarea' ? (
-        <textarea
-          id={id}
-          className="form-control"
-          value={value || ''}
-          onChange={e => onChange(field.key, e.target.value)}
-          placeholder={field.placeholder || ''}
-          required={field.required}
-          rows={3}
-        />
-      ) : (
-        <input
-          id={id}
-          className="form-control"
-          type={field.type}
-          value={value || ''}
-          onChange={e => onChange(field.key, e.target.value)}
-          placeholder={field.placeholder || ''}
-          required={field.required}
-          dir={field.type === 'number' || field.type === 'date' || field.type === 'email' ? 'ltr' : undefined}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Department form view ─────────────────────────────────────
-function DeptFormView({ dept }) {
-  const { t } = useLang();
-  const [values, setValues]   = useState({});
-  const [success, setSuccess] = useState(false);
-
-  useEffect(() => {
-    setValues({});
-    setSuccess(false);
-  }, [dept.id]);
-
-  function handleChange(key, val) {
-    setValues(p => ({ ...p, [key]: val }));
-    setSuccess(false);
-  }
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    // Placeholder: no backend records endpoint yet — show success toast
-    setSuccess(true);
-    setTimeout(() => setSuccess(false), 4000);
-  }
-
-  function handleReset() {
-    setValues({});
-    setSuccess(false);
-  }
-
-  return (
-    <div className="card" style={{ maxWidth: 900 }}>
-      <div className="card-header">
-        <div>
-          <div className="card-title">{dept.label}</div>
-          <div className="card-subtitle">{t.newRecord}</div>
-        </div>
-      </div>
-
-      <div className="card-body">
-        {success && (
-          <div className="alert alert-success" style={{ marginBottom: '1.25rem' }}>
-            <span>✓</span>
-            <span>{t.submitted}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <div className="form-grid">
-            {dept.fields.map(field => (
-              <FormField
-                key={field.key}
-                field={field}
-                value={values[field.key]}
-                onChange={handleChange}
-              />
-            ))}
-          </div>
-
-          <div className="form-actions">
-            <button className="btn btn-primary" type="submit">{t.submit}</button>
-            <button className="btn btn-secondary" type="button" onClick={handleReset}>{t.reset}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ── Sidebar ──────────────────────────────────────────────────
-function Sidebar({ depts, activeDeptId, onSelect, onAdminClick, showAdmin, user }) {
-  const { t } = useLang();
-  const groups = groupDepts(depts);
-
-  return (
-    <aside className="app-sidebar">
-      {Object.entries(groups).map(([groupKey, items]) => (
-        <div className="sidebar-section" key={groupKey}>
-          <div className="sidebar-section-title">
-            {t.groupLabels?.[groupKey] || groupKey}
-          </div>
-          {items.map(d => (
-            <div
-              key={d.id}
-              className={`sidebar-item${activeDeptId === d.id ? ' active' : ''}`}
-              onClick={() => onSelect(d.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={e => e.key === 'Enter' && onSelect(d.id)}
-            >
-              <span className="sidebar-dot" />
-              <span>{d.label}</span>
-            </div>
-          ))}
-        </div>
-      ))}
-
-      {user?.role === 'SUPER_ADMIN' && (
-        <>
-          <div className="sidebar-divider" style={{ margin: 'auto 1rem 0.5rem' }} />
-          <div
-            className={`sidebar-admin-item${showAdmin ? ' active' : ''}`}
-            onClick={onAdminClick}
-            role="button"
-            tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && onAdminClick()}
-          >
-            <span>⚙</span>
-            <span>{t.adminPanel}</span>
-          </div>
-        </>
-      )}
-    </aside>
-  );
+// ── Nav items per role ───────────────────────────────────────
+function navItems(role, t) {
+  const items = [
+    { id: 'dashboard', icon: '📊', label: t.dashboard },
+    { id: 'tasks',     icon: '📋', label: t.tasks },
+  ];
+  if (isSuperAdmin(role)) items.push({ id: 'users', icon: '👥', label: t.users });
+  if (isSuperAdmin(role)) items.push({ id: 'settings', icon: '⚙', label: t.settings });
+  return items;
 }
 
 // ── Header ───────────────────────────────────────────────────
@@ -208,10 +31,7 @@ function Header({ user }) {
   const { t, lang, toggle } = useLang();
 
   const initials = (user?.name || user?.username || '?')
-    .split(' ')
-    .map(w => w[0])
-    .slice(0, 2)
-    .join('');
+    .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
     <header className="app-header">
@@ -222,114 +42,125 @@ function Header({ user }) {
           <div className="header-subtitle">{t.appName}</div>
         </div>
       </div>
-
       <div className="header-actions">
         <div className="lang-toggle">
-          <button
-            className={`lang-btn${lang === 'ar' ? ' active' : ''}`}
-            onClick={() => lang !== 'ar' && toggle()}
-            type="button"
-          >
-            عربي
-          </button>
-          <button
-            className={`lang-btn${lang === 'en' ? ' active' : ''}`}
-            onClick={() => lang !== 'en' && toggle()}
-            type="button"
-          >
-            EN
-          </button>
+          <button className={`lang-btn${lang === 'ar' ? ' active' : ''}`} type="button"
+            onClick={() => lang !== 'ar' && toggle()}>عربي</button>
+          <button className={`lang-btn${lang === 'en' ? ' active' : ''}`} type="button"
+            onClick={() => lang !== 'en' && toggle()}>EN</button>
         </div>
-
         <div className="user-chip">
           <div className="user-avatar">{initials}</div>
           <div style={{ lineHeight: 1.3 }}>
             <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{user?.name || user?.username}</div>
-            <div className="user-role-badge">{t.roles?.[user?.role] || user?.role}</div>
+            <span className="user-role-badge">{t.roles?.[user?.role] || user?.role}</span>
           </div>
         </div>
-
         <button className="btn-header" onClick={logout}>{t.signOut}</button>
       </div>
     </header>
   );
 }
 
-// ── Authenticated shell ──────────────────────────────────────
-function AppShell() {
-  const { user, loading }   = useAuth();
-  const { t }               = useLang();
-  const [depts, setDepts]   = useState([]);
-  const [activeDeptId, setActiveDeptId] = useState(null);
-  const [showAdmin, setShowAdmin]       = useState(false);
-  const [deptsLoading, setDeptsLoading] = useState(true);
-
-  const loadDepts = useCallback(async () => {
-    try {
-      const data = await getDepartments();
-      setDepts(data);
-      if (data.length > 0 && !activeDeptId) setActiveDeptId(data[0].id);
-    } catch (_) {
-      // departments unavailable — not fatal
-    } finally {
-      setDeptsLoading(false);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (user) loadDepts();
-  }, [user, loadDepts]);
-
-  if (loading) {
-    return (
-      <div className="page-loading">
-        <span className="spinner" />
-        <span>{t.loading}</span>
-      </div>
-    );
-  }
-
-  if (!user) return <LoginPage />;
-
-  const activeDept = depts.find(d => d.id === activeDeptId);
+// ── Sidebar ──────────────────────────────────────────────────
+function Sidebar({ activeView, onNav, user }) {
+  const { t } = useLang();
+  const items = navItems(user?.role, t);
 
   return (
-    <div className="app-shell" style={{ flexDirection: 'column' }}>
+    <aside className="app-sidebar">
+      {items.map(item => (
+        <div
+          key={item.id}
+          className={`sidebar-item${activeView === item.id ? ' active' : ''}`}
+          style={{ paddingInlineStart: '1.25rem', gap: '0.7rem' }}
+          onClick={() => onNav(item.id)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => e.key === 'Enter' && onNav(item.id)}
+        >
+          <span style={{ fontSize: '1rem' }}>{item.icon}</span>
+          <span>{item.label}</span>
+        </div>
+      ))}
+    </aside>
+  );
+}
+
+// ── Authenticated shell ──────────────────────────────────────
+function AppShell() {
+  const { user, loading } = useAuth();
+  const { t }             = useLang();
+  const [view, setView]   = useState('dashboard');  // dashboard | tasks | users | settings
+  const [taskId, setTaskId] = useState(null);         // non-null → showing TaskDetail
+  const [showCreate, setShowCreate] = useState(false);
+  const [refresh, setRefresh]       = useState(0);
+
+  // Pre-load departments for sidebar (unused here but keeps cache warm)
+  useEffect(() => { if (user) getDepartments().catch(() => {}); }, [user]);
+
+  const handleNavAndClearTask = useCallback((v) => {
+    setView(v);
+    setTaskId(null);
+  }, []);
+
+  if (loading) return <div className="page-loading"><span className="spinner" /><span>{t.loading}</span></div>;
+  if (!user)   return <LoginPage />;
+
+  const canCreateTask = isCS(user.role);
+
+  const createBtn = canCreateTask ? (
+    <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+      + {t.createTask}
+    </button>
+  ) : null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Header user={user} />
 
-      <div style={{ display: 'flex', flex: 1 }}>
-        <Sidebar
-          depts={depts}
-          activeDeptId={showAdmin ? null : activeDeptId}
-          onSelect={id => { setActiveDeptId(id); setShowAdmin(false); }}
-          onAdminClick={() => setShowAdmin(p => !p)}
-          showAdmin={showAdmin}
-          user={user}
-        />
+      <div style={{ display: 'flex', flex: 1, marginTop: 'var(--header-h)' }}>
+        <Sidebar activeView={taskId ? 'tasks' : view} onNav={handleNavAndClearTask} user={user} />
 
         <main className="app-main">
-          {showAdmin ? (
+          {/* Task detail (overrides view) */}
+          {taskId ? (
+            <TaskDetail
+              taskId={taskId}
+              onBack={() => setTaskId(null)}
+              onUpdate={() => setRefresh(r => r + 1)}
+            />
+          ) : view === 'dashboard' ? (
+            <Dashboard onTaskClick={id => { setView('tasks'); setTaskId(id); }} key={refresh} />
+          ) : view === 'tasks' ? (
+            <TaskList
+              key={refresh}
+              onSelect={id => setTaskId(id)}
+              createButton={createBtn}
+            />
+          ) : view === 'users' && isSuperAdmin(user.role) ? (
+            <UserManagement />
+          ) : view === 'settings' && isSuperAdmin(user.role) ? (
             <SuperAdminPanel />
-          ) : deptsLoading ? (
-            <div className="page-loading">
-              <span className="spinner" />
-              <span>{t.loading}</span>
-            </div>
-          ) : activeDept ? (
-            <DeptFormView key={activeDept.id} dept={activeDept} />
           ) : (
             <div className="empty-state">
-              <div className="empty-icon">📄</div>
-              <div className="empty-title">{t.selectDept}</div>
+              <div className="empty-icon">🔒</div>
+              <div className="empty-sub">Access denied.</div>
             </div>
           )}
         </main>
       </div>
+
+      {showCreate && (
+        <CreateTaskModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setRefresh(r => r + 1); setView('tasks'); }}
+        />
+      )}
     </div>
   );
 }
 
-// ── Root ─────────────────────────────────────────────────────
 export default function App() {
   return (
     <LangProvider>
