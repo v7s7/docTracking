@@ -128,6 +128,12 @@ const T = {
     noTasks:       'No tasks yet.',
     noUsers:       'No users yet.',
 
+    overdue:           'Overdue',
+    overdueTasks:      'Overdue Tasks',
+    notifications:     'Notifications',
+    markAllRead:       'Mark all read',
+    noNotifications:   'No notifications yet.',
+    search:            'Search…',
     roles: {
       SUPER_ADMIN:      'Super Admin',
       ADMIN:            'Admin',
@@ -269,6 +275,12 @@ const T = {
     noTasks:       'لا توجد مهام بعد.',
     noUsers:       'لا يوجد مستخدمون بعد.',
 
+    overdue:           'متأخرة',
+    overdueTasks:      'المهام المتأخرة',
+    notifications:     'الإشعارات',
+    markAllRead:       'تعليم الكل كمقروء',
+    noNotifications:   'لا توجد إشعارات بعد.',
+    search:            'بحث…',
     roles: {
       SUPER_ADMIN:      'مدير النظام',
       ADMIN:            'مشرف',

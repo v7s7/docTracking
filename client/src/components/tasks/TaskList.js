@@ -17,6 +17,11 @@ const PRIORITY_COLORS = {
   urgent: '#C53030',
 };
 
+export function isOverdue(task) {
+  if (!task.expected_at || task.status === 'closed') return false;
+  return new Date(task.expected_at) < new Date();
+}
+
 export function StatusBadge({ status, t }) {
   const c = STATUS_COLORS[status] || { bg: '#f0f0f0', color: '#666' };
   return (
@@ -35,10 +40,18 @@ export function PriorityBadge({ priority, t }) {
   );
 }
 
+export function OverduePill({ t }) {
+  return (
+    <span style={{ background: '#FFF5F5', color: '#C53030', border: '1px solid #FEB2B2', padding: '1px 8px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700, marginInlineStart: '0.35rem' }}>
+      ⚠ {t.overdue || 'Overdue'}
+    </span>
+  );
+}
+
 export default function TaskList({ onSelect, createButton }) {
   const { t } = useLang();
-  const [tasks,  setTasks]  = useState([]);
-  const [total,  setTotal]  = useState(0);
+  const [tasks,   setTasks]   = useState([]);
+  const [total,   setTotal]   = useState(0);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ status: '', search: '' });
 
@@ -57,10 +70,6 @@ export default function TaskList({ onSelect, createButton }) {
 
   useEffect(() => { load(); }, [load]);
 
-  function setFilter(k, v) {
-    setFilters(p => ({ ...p, [k]: v }));
-  }
-
   const statusOptions = ['', 'new', 'assigned', 'in_progress', 'returned', 'closed'];
 
   return (
@@ -75,15 +84,15 @@ export default function TaskList({ onSelect, createButton }) {
             <input
               className="form-control"
               style={{ minWidth: 180, padding: '0.4rem 0.7rem', fontSize: '0.85rem' }}
-              placeholder={`🔍 ${t.search || 'Search…'}`}
+              placeholder={`🔍 ${t.search || '…'}`}
               value={filters.search}
-              onChange={e => setFilter('search', e.target.value)}
+              onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
             />
             <select
               className="form-control"
               style={{ width: 'auto', padding: '0.4rem 0.7rem', fontSize: '0.85rem' }}
               value={filters.status}
-              onChange={e => setFilter('status', e.target.value)}
+              onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}
             >
               {statusOptions.map(s => (
                 <option key={s} value={s}>{s ? (t.statuses?.[s] || s) : `— ${t.taskStatus} —`}</option>
@@ -112,31 +121,41 @@ export default function TaskList({ onSelect, createButton }) {
                   <th>{t.taskStatus}</th>
                   <th>{t.taskPriority}</th>
                   <th>{t.taskAssigned}</th>
-                  <th>{t.taskCreated}</th>
+                  <th>{t.taskExpected}</th>
                 </tr>
               </thead>
               <tbody>
-                {tasks.map(task => (
-                  <tr
-                    key={task.id}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => onSelect?.(task.id)}
-                  >
-                    <td><code className="tag">{task.serial}</code></td>
-                    <td style={{ maxWidth: 260 }}>
-                      <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>
-                      {task.source_entity && <div className="text-sm text-muted">{task.source_entity}</div>}
-                    </td>
-                    <td><StatusBadge status={task.status} t={t} /></td>
-                    <td><PriorityBadge priority={task.priority} t={t} /></td>
-                    <td className="text-sm text-muted">
-                      {task.current_dept_id ? (t.groupLabels?.[task.current_dept_id] || task.current_dept_id) : '—'}
-                    </td>
-                    <td className="text-sm text-muted">
-                      {task.created_at?.slice(0, 10)}
-                    </td>
-                  </tr>
-                ))}
+                {tasks.map(task => {
+                  const overdue = isOverdue(task);
+                  return (
+                    <tr
+                      key={task.id}
+                      style={{
+                        cursor: 'pointer',
+                        background: overdue ? '#fff8f8' : undefined,
+                        borderInlineStart: overdue ? '3px solid #C53030' : '3px solid transparent',
+                      }}
+                      onClick={() => onSelect?.(task.id)}
+                    >
+                      <td><code className="tag">{task.serial}</code></td>
+                      <td style={{ maxWidth: 280 }}>
+                        <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {task.title}
+                          {overdue && <OverduePill t={t} />}
+                        </div>
+                        {task.source_entity && <div className="text-sm text-muted">{task.source_entity}</div>}
+                      </td>
+                      <td><StatusBadge status={task.status} t={t} /></td>
+                      <td><PriorityBadge priority={task.priority} t={t} /></td>
+                      <td className="text-sm text-muted">
+                        {task.current_dept_id ? (t.groupLabels?.[task.current_dept_id] || task.current_dept_id) : '—'}
+                      </td>
+                      <td className="text-sm" style={{ color: overdue ? 'var(--danger)' : 'var(--text-3)', fontWeight: overdue ? 600 : 400 }}>
+                        {task.expected_at || '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

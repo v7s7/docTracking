@@ -146,6 +146,12 @@ router.post('/:id/forward', AUTH, requireCS, (req, res) => {
     VALUES (?, 'forwarded', ?, ?, ?, ?, ?)
   `).run(task.id, fromDept, to_dept_id, req.user.id || null, req.user.name || req.user.username, note || '');
 
+  // Notify the destination department
+  db.prepare(`
+    INSERT INTO notifications (dept_id, task_id, task_serial, task_title, type)
+    VALUES (?, ?, ?, ?, 'forwarded')
+  `).run(to_dept_id, task.id, task.serial, task.title);
+
   res.json({ success: true, task: withEvents(db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id)) });
 });
 
@@ -169,6 +175,12 @@ router.post('/:id/return', AUTH, (req, res) => {
     INSERT INTO task_events (task_id, type, from_dept, to_dept, actor_id, actor_name, note)
     VALUES (?, 'returned', ?, 'customer_service', ?, ?, ?)
   `).run(task.id, fromDept, req.user.id || null, req.user.name || req.user.username, note || '');
+
+  // Notify CS that the task was returned
+  db.prepare(`
+    INSERT INTO notifications (dept_id, task_id, task_serial, task_title, type)
+    VALUES ('customer_service', ?, ?, ?, 'returned')
+  `).run(task.id, task.serial, task.title);
 
   res.json({ success: true, task: withEvents(db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id)) });
 });

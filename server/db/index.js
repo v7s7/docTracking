@@ -59,19 +59,40 @@ db.exec(`
     FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS notifications (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    dept_id    TEXT NOT NULL,
+    task_id    INTEGER NOT NULL,
+    task_serial TEXT,
+    task_title  TEXT,
+    type       TEXT NOT NULL DEFAULT 'forwarded',
+    is_read    INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  );
+
   CREATE INDEX IF NOT EXISTS idx_tasks_status   ON tasks(status);
   CREATE INDEX IF NOT EXISTS idx_tasks_dept     ON tasks(current_dept_id);
   CREATE INDEX IF NOT EXISTS idx_events_task_id ON task_events(task_id);
+  CREATE INDEX IF NOT EXISTS idx_notifs_dept    ON notifications(dept_id, is_read);
 `);
 
 // ── Serial number helper ─────────────────────────────────────
+// Format: PREFIX-YYYY-NNNN  (e.g. CS-2026-0001)
+// Prefix is read from TASK_SERIAL_PREFIX env var, defaults to "CS"
 function nextSerial() {
-  const year = new Date().getFullYear();
-  const row  = db.prepare(
+  const prefix = (process.env.TASK_SERIAL_PREFIX || 'CS').toUpperCase();
+  const year   = new Date().getFullYear();
+  const pattern = `${prefix}-${year}-%`;
+  const row = db.prepare(
     "SELECT serial FROM tasks WHERE serial LIKE ? ORDER BY id DESC LIMIT 1"
-  ).get(`${year}-%`);
-  const n = row ? parseInt(row.serial.split('-')[1], 10) + 1 : 1;
-  return `${year}-${String(n).padStart(4, '0')}`;
+  ).get(pattern);
+  let n = 1;
+  if (row) {
+    const parts = row.serial.split('-');
+    n = parseInt(parts[parts.length - 1], 10) + 1;
+  }
+  return `${prefix}-${year}-${String(n).padStart(4, '0')}`;
 }
 
 console.log(`[DB] SQLite ready: ${DB_PATH}`);

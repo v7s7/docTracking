@@ -10,8 +10,9 @@ const authRoutes      = require('./routes/auth');
 const adminRoutes     = require('./routes/admin');
 const deptRoutes      = require('./routes/departments');
 const usersRoutes     = require('./routes/users');
-const tasksRoutes     = require('./routes/tasks');
-const dashboardRoutes = require('./routes/dashboard');
+const tasksRoutes         = require('./routes/tasks');
+const dashboardRoutes     = require('./routes/dashboard');
+const notificationsRoutes = require('./routes/notifications');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -29,7 +30,8 @@ app.use('/admin',       adminRoutes);      // SUPER_ADMIN only
 app.use('/departments', deptRoutes);       // any authenticated user
 app.use('/users',       usersRoutes);      // SUPER_ADMIN only
 app.use('/tasks',       tasksRoutes);      // role-filtered inside
-app.use('/dashboard',   dashboardRoutes);  // role-filtered inside
+app.use('/dashboard',      dashboardRoutes);     // role-filtered inside
+app.use('/notifications',  notificationsRoutes); // per-dept unread count
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 

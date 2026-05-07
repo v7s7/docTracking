@@ -8,6 +8,7 @@ import TaskList from './components/tasks/TaskList';
 import TaskDetail from './components/tasks/TaskDetail';
 import CreateTaskModal from './components/tasks/CreateTaskModal';
 import UserManagement from './components/users/UserManagement';
+import NotificationBell from './components/notifications/NotificationBell';
 import { getDepartments } from './services/deptService';
 
 // ── Role helpers ─────────────────────────────────────────────
@@ -26,7 +27,7 @@ function navItems(role, t) {
 }
 
 // ── Header ───────────────────────────────────────────────────
-function Header({ user }) {
+function Header({ user, onTaskClick }) {
   const { logout } = useAuth();
   const { t, lang, toggle } = useLang();
 
@@ -49,6 +50,7 @@ function Header({ user }) {
           <button className={`lang-btn${lang === 'en' ? ' active' : ''}`} type="button"
             onClick={() => lang !== 'en' && toggle()}>EN</button>
         </div>
+        <NotificationBell onTaskClick={onTaskClick} />
         <div className="user-chip">
           <div className="user-avatar">{initials}</div>
           <div style={{ lineHeight: 1.3 }}>
@@ -117,7 +119,7 @@ function AppShell() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <Header user={user} />
+      <Header user={user} onTaskClick={id => { setView('tasks'); setTaskId(id); }} />
 
       <div style={{ display: 'flex', flex: 1, marginTop: 'var(--header-h)' }}>
         <Sidebar activeView={taskId ? 'tasks' : view} onNav={handleNavAndClearTask} user={user} />

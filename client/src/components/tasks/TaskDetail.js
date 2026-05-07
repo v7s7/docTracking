@@ -13,6 +13,14 @@ const EVENT_ICONS = {
   closed:    '✅',
 };
 
+// Calculate days between two ISO date strings (rounded to 1 decimal)
+function daysBetween(from, to) {
+  const ms = new Date(to) - new Date(from);
+  if (isNaN(ms) || ms < 0) return null;
+  const d = ms / (1000 * 60 * 60 * 24);
+  return d < 1 ? `${Math.round(ms / 60000)}m` : `${d.toFixed(1)}d`;
+}
+
 function Modal({ title, onClose, children }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -154,23 +162,34 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
             <div className="text-muted text-sm" style={{ padding: '1rem 0' }}>—</div>
           ) : (
             <div className="timeline">
-              {task.events.map((ev, i) => (
-                <div key={ev.id} className={`timeline-item${i === task.events.length - 1 ? ' last' : ''}`}>
-                  <div className="timeline-dot">{EVENT_ICONS[ev.type] || '•'}</div>
-                  <div className="timeline-content">
-                    <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                      {t.eventTypes?.[ev.type] || ev.type}
-                      {ev.type === 'forwarded' && ev.to_dept && (
-                        <span style={{ fontWeight: 400, color: 'var(--accent)' }}> {t.groupLabels?.[ev.to_dept] || ev.to_dept}</span>
-                      )}
-                    </div>
-                    {ev.note && <div style={{ color: 'var(--text-2)', fontSize: '0.85rem', marginTop: '0.15rem' }}>{ev.note}</div>}
-                    <div style={{ color: 'var(--text-3)', fontSize: '0.78rem', marginTop: '0.2rem' }}>
-                      {ev.actor_name} · {ev.created_at?.slice(0, 16)}
+              {task.events.map((ev, i) => {
+                const nextEv = task.events[i + 1];
+                const held = (ev.type === 'forwarded' || ev.type === 'created') && nextEv
+                  ? daysBetween(ev.created_at, nextEv.created_at)
+                  : null;
+                return (
+                  <div key={ev.id} className={`timeline-item${i === task.events.length - 1 ? ' last' : ''}`}>
+                    <div className="timeline-dot">{EVENT_ICONS[ev.type] || '•'}</div>
+                    <div className="timeline-content">
+                      <div style={{ fontWeight: 600, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {t.eventTypes?.[ev.type] || ev.type}
+                        {ev.type === 'forwarded' && ev.to_dept && (
+                          <span style={{ fontWeight: 400, color: 'var(--accent)' }}>{t.groupLabels?.[ev.to_dept] || ev.to_dept}</span>
+                        )}
+                        {held && (
+                          <span style={{ fontSize: '0.72rem', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-3)', padding: '1px 7px', borderRadius: 99, fontWeight: 500 }}>
+                            ⏱ {held}
+                          </span>
+                        )}
+                      </div>
+                      {ev.note && <div style={{ color: 'var(--text-2)', fontSize: '0.85rem', marginTop: '0.15rem' }}>{ev.note}</div>}
+                      <div style={{ color: 'var(--text-3)', fontSize: '0.78rem', marginTop: '0.2rem' }}>
+                        {ev.actor_name} · {ev.created_at?.slice(0, 16)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

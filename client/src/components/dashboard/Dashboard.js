@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLang } from '../../context/LangContext';
 import { getDashboard } from '../../services/taskService';
+import { isOverdue } from '../tasks/TaskList';
 
 const STATUS_COLORS = {
   new:         { bg: '#EBF8FF', color: '#2B6CB0', icon: '🔵' },
@@ -52,9 +53,10 @@ export default function Dashboard({ onTaskClick }) {
     return <div className="page-loading"><span className="spinner" /><span>{t.loading}</span></div>;
   }
 
-  const bs = stats?.byStatus || {};
-  const open = (bs.new || 0) + (bs.assigned || 0) + (bs.in_progress || 0);
-  const total = Object.values(bs).reduce((s, n) => s + n, 0);
+  const bs      = stats?.byStatus || {};
+  const open    = (bs.new || 0) + (bs.assigned || 0) + (bs.in_progress || 0);
+  const total   = Object.values(bs).reduce((s, n) => s + n, 0);
+  const overdue = (stats?.recentTasks || []).filter(isOverdue).length;
 
   return (
     <div style={{ maxWidth: 980, margin: '0 auto' }}>
@@ -64,6 +66,9 @@ export default function Dashboard({ onTaskClick }) {
         <StatCard icon="⏳" label={t.openTasks}     value={open}             color="var(--warning)" />
         <StatCard icon="↩️" label={t.returnedTasks} value={bs.returned || 0} color="var(--danger)" />
         <StatCard icon="✅" label={t.closedTasks}   value={bs.closed || 0}   color="var(--success)" />
+        {overdue > 0 && (
+          <StatCard icon="⚠️" label={t.overdueTasks || 'Overdue'} value={overdue} color="var(--danger)" />
+        )}
         {stats?.totalUsers != null && (
           <StatCard icon="👥" label={t.totalUsers} value={stats.totalUsers} color="var(--accent)" />
         )}
