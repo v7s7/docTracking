@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const authRoutes  = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
+const deptRoutes  = require('./routes/departments');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -22,8 +23,9 @@ if (!process.env.LDAP_URL) {
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000', credentials: true }));
 app.use(bodyParser.json());
 
-app.use('/auth',  authRoutes);
-app.use('/admin', adminRoutes); // all routes inside are SUPER_ADMIN-only
+app.use('/auth',        authRoutes);
+app.use('/admin',       adminRoutes);   // all routes inside are SUPER_ADMIN-only
+app.use('/departments', deptRoutes);    // any authenticated user
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 

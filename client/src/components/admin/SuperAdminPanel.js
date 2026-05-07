@@ -1,63 +1,97 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLang } from '../../context/LangContext';
 import * as api from '../../services/adminService';
 
-const FIELD_TYPES  = ['text', 'number', 'textarea', 'select', 'date', 'email', 'checkbox'];
-const VALID_ROLES  = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'READONLY'];
-const ROLE_COLORS  = { SUPER_ADMIN: '#6c3483', ADMIN: '#1a56db', MANAGER: '#0e7c50', STAFF: '#b7770d', READONLY: '#888' };
+const FIELD_TYPES = ['text', 'number', 'textarea', 'select', 'date', 'email', 'checkbox'];
+const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'READONLY'];
 
-function Badge({ role }) {
+const ROLE_COLORS = {
+  SUPER_ADMIN: '#6c3483',
+  ADMIN:       '#1a56db',
+  MANAGER:     '#0e7c50',
+  STAFF:       '#b7770d',
+  READONLY:    '#718096',
+};
+
+function RoleBadge({ role }) {
+  const { t } = useLang();
   return (
-    <span style={{ background: ROLE_COLORS[role] || '#888', color: '#fff', padding: '2px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700 }}>
-      {role}
+    <span className="badge" style={{ background: ROLE_COLORS[role] || '#888', color: '#fff' }}>
+      {t.roles?.[role] || role}
     </span>
   );
 }
 
 function Alert({ msg, type = 'error' }) {
   if (!msg) return null;
-  const colors = {
-    error:   { bg: '#fdf0f0', color: '#c0392b', border: '#f5c6cb' },
-    success: { bg: '#f0fff4', color: '#276749', border: '#9ae6b4' },
-  };
-  const c = colors[type];
-  return <div style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}`, padding: '0.5rem 0.75rem', borderRadius: '4px', marginBottom: '0.75rem', fontSize: '0.875rem' }}>{msg}</div>;
+  return (
+    <div className={`alert alert-${type}`} style={{ marginBottom: '0.9rem' }}>
+      <span>{type === 'error' ? '⚠' : '✓'}</span>
+      <span>{msg}</span>
+    </div>
+  );
 }
 
-// ── Field row form (used for both Add and Edit) ─────────────────
+// ── Field editor row ─────────────────────────────────────────
 const blankField = { key: '', label: '', type: 'text', required: false, options: '', placeholder: '' };
 
-function FieldForm({ initial, onSave, onCancel }) {
+function FieldFormRow({ initial, onSave, onCancel }) {
+  const { t } = useLang();
   const [f, setF] = useState(initial || blankField);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+
   return (
-    <tr style={{ background: '#eef3ff' }}>
-      <td style={s.td}>
-        <input style={s.si} value={f.key} onChange={e => set('key', e.target.value)} placeholder="field_key" disabled={!!initial} />
+    <tr style={{ background: '#EBF1F8' }}>
+      <td style={{ padding: '0.45rem 0.75rem' }}>
+        <input
+          className="form-control"
+          style={{ minWidth: 110, fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
+          value={f.key}
+          onChange={e => set('key', e.target.value)}
+          placeholder={t.fieldKey}
+          disabled={!!initial}
+          dir="ltr"
+        />
       </td>
-      <td style={s.td}><input style={s.si} value={f.label} onChange={e => set('label', e.target.value)} placeholder="Display Label" /></td>
-      <td style={s.td}>
-        <select style={s.si} value={f.type} onChange={e => set('type', e.target.value)}>
-          {FIELD_TYPES.map(t => <option key={t}>{t}</option>)}
+      <td style={{ padding: '0.45rem 0.75rem' }}>
+        <input
+          className="form-control"
+          style={{ minWidth: 120, fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
+          value={f.label}
+          onChange={e => set('label', e.target.value)}
+          placeholder={t.fieldLabel}
+        />
+      </td>
+      <td style={{ padding: '0.45rem 0.75rem' }}>
+        <select
+          className="form-control"
+          style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
+          value={f.type}
+          onChange={e => set('type', e.target.value)}
+        >
+          {FIELD_TYPES.map(tp => <option key={tp} value={tp}>{tp}</option>)}
         </select>
       </td>
-      <td style={{ ...s.td, textAlign: 'center' }}>
-        <input type="checkbox" checked={f.required} onChange={e => set('required', e.target.checked)} />
+      <td style={{ padding: '0.45rem 0.75rem', textAlign: 'center' }}>
+        <input type="checkbox" checked={f.required} onChange={e => set('required', e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
       </td>
-      <td style={s.td}>
+      <td style={{ padding: '0.45rem 0.75rem' }}>
         {f.type === 'select'
-          ? <input style={s.si} value={f.options} onChange={e => set('options', e.target.value)} placeholder="Option1, Option2, Option3" />
-          : <input style={s.si} value={f.placeholder} onChange={e => set('placeholder', e.target.value)} placeholder="Placeholder text" />}
+          ? <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }} value={f.options} onChange={e => set('options', e.target.value)} placeholder={t.optionsPH} />
+          : <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }} value={f.placeholder} onChange={e => set('placeholder', e.target.value)} placeholder="Placeholder…" />
+        }
       </td>
-      <td style={s.td}>
-        <button style={s.btnSave} onClick={() => onSave(f)}>Save</button>
-        <button style={{ ...s.btn, ...s.btnGhost }} onClick={onCancel}>Cancel</button>
+      <td style={{ padding: '0.45rem 0.75rem' }}>
+        <button className="btn btn-sm btn-primary" style={{ marginInlineEnd: '0.3rem' }} onClick={() => onSave(f)}>{t.save}</button>
+        <button className="btn btn-sm btn-ghost" onClick={onCancel}>{t.cancel}</button>
       </td>
     </tr>
   );
 }
 
-// ── Single department card ───────────────────────────────────────
+// ── Department card ──────────────────────────────────────────
 function DeptCard({ dept, onUpdated, onDeleted }) {
+  const { t } = useLang();
   const [open, setOpen]       = useState(false);
   const [editing, setEditing] = useState(false);
   const [label, setLabel]     = useState(dept.label);
@@ -74,7 +108,7 @@ function DeptCard({ dept, onUpdated, onDeleted }) {
   }
 
   async function handleDelete() {
-    if (!window.confirm(`Delete "${dept.label}"? This cannot be undone.`)) return;
+    if (!window.confirm(t.confirmDel)) return;
     try { await api.deleteDept(dept.id); onDeleted(dept.id); }
     catch (e) { setErr(e.message); }
   }
@@ -106,76 +140,114 @@ function DeptCard({ dept, onUpdated, onDeleted }) {
   }
 
   async function handleDeleteField(key) {
-    if (!window.confirm(`Remove field "${key}"?`)) return;
+    if (!window.confirm(t.confirmDel)) return;
     try {
       await api.deleteField(dept.id, key);
-      onUpdated({ ...dept, fields: dept.fields.filter(f => f.key !== key) });
+      onUpdated({ ...dept, fields: dept.fields.filter(fi => fi.key !== key) });
     } catch (e) { setErr(e.message); }
   }
 
   return (
-    <div style={s.card}>
-      <div style={s.cardHead}>
+    <div className="dept-card">
+      <div className="dept-card-head">
         {editing ? (
-          <div style={{ display: 'flex', gap: '0.5rem', flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-            <input style={s.input} value={label} onChange={e => setLabel(e.target.value)} placeholder="Department label" />
-            <input style={{ ...s.input, width: 200 }} value={group} onChange={e => setGroup(e.target.value)} placeholder="AD group CN (optional)" />
-            <button style={s.btnSave} onClick={saveLabel}>Save</button>
-            <button style={{ ...s.btn, ...s.btnGhost }} onClick={() => setEditing(false)}>Cancel</button>
+          <div style={{ display: 'flex', gap: '0.6rem', flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              className="form-control"
+              style={{ minWidth: 200, fontSize: '0.875rem', padding: '0.4rem 0.65rem' }}
+              value={label}
+              onChange={e => setLabel(e.target.value)}
+              placeholder={t.deptLabel}
+            />
+            <input
+              className="form-control"
+              style={{ minWidth: 180, fontSize: '0.875rem', padding: '0.4rem 0.65rem' }}
+              value={group}
+              onChange={e => setGroup(e.target.value)}
+              placeholder={`${t.adGroup} (optional)`}
+              dir="ltr"
+            />
+            <button className="btn btn-sm btn-primary" onClick={saveLabel}>{t.save}</button>
+            <button className="btn btn-sm btn-ghost" onClick={() => setEditing(false)}>{t.cancel}</button>
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
-            <button style={s.toggle} onClick={() => setOpen(p => !p)}>{open ? '▾' : '▸'}</button>
-            <strong>{dept.label}</strong>
-            {dept.ldapGroup && <code style={s.code}>{dept.ldapGroup}</code>}
-            <span style={{ color: '#aaa', fontSize: '0.8rem' }}>{dept.fields.length} field{dept.fields.length !== 1 ? 's' : ''}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, flexWrap: 'wrap' }}>
+            <button
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', padding: '0 0.1rem', lineHeight: 1 }}
+              onClick={() => setOpen(p => !p)}
+              aria-label={open ? 'Collapse' : 'Expand'}
+            >
+              {open ? '▾' : '▸'}
+            </button>
+            <strong style={{ color: 'var(--text)' }}>{dept.label}</strong>
+            {dept.ldapGroup && <code className="tag">{dept.ldapGroup}</code>}
+            <span className="text-sm text-muted">{dept.fields.length} {t.fields}</span>
           </div>
         )}
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {!editing && <button style={{ ...s.btn, ...s.btnGhost }} onClick={() => setEditing(true)}>Edit</button>}
-          <button style={{ ...s.btn, ...s.btnDanger }} onClick={handleDelete}>Delete</button>
+        <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+          {!editing && <button className="btn btn-sm btn-ghost" onClick={() => setEditing(true)}>{t.edit}</button>}
+          <button className="btn btn-sm btn-danger" onClick={handleDelete}>{t.del}</button>
         </div>
       </div>
 
       <Alert msg={err} />
 
       {open && (
-        <div style={{ overflowX: 'auto', marginTop: '0.75rem' }}>
-          <table style={s.table}>
-            <thead>
-              <tr>{['Key', 'Label', 'Type', 'Required', 'Options / Placeholder', 'Actions'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
-            </thead>
-            <tbody>
-              {dept.fields.map(f =>
-                editingF === f.key
-                  ? <FieldForm key={f.key} initial={{ ...f, options: Array.isArray(f.options) ? f.options.join(', ') : (f.options || '') }} onSave={handleSaveField} onCancel={() => setEditingF(null)} />
+        <div style={{ padding: '0 0 0.75rem', borderTop: '1px solid var(--border)' }}>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  {[t.fieldKey, t.fieldLabel, t.fieldType, t.fieldReq, t.optPH, t.actions].map(h => (
+                    <th key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dept.fields.map(f =>
+                  editingF === f.key
+                    ? <FieldFormRow key={f.key} initial={{ ...f, options: Array.isArray(f.options) ? f.options.join(', ') : (f.options || '') }} onSave={handleSaveField} onCancel={() => setEditingF(null)} />
+                    : (
+                      <tr key={f.key}>
+                        <td><code className="tag">{f.key}</code></td>
+                        <td>{f.label}</td>
+                        <td>
+                          <span style={{ background: 'var(--accent-light)', color: 'var(--accent-hover)', padding: '1px 8px', borderRadius: 99, fontSize: '0.78rem', fontWeight: 600 }}>
+                            {f.type}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>{f.required ? '✓' : '—'}</td>
+                        <td style={{ color: 'var(--text-2)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {Array.isArray(f.options) ? f.options.join(', ') : (f.placeholder || <span style={{ color: '#ccc' }}>—</span>)}
+                        </td>
+                        <td>
+                          <button className="btn btn-sm btn-ghost" style={{ marginInlineEnd: '0.3rem' }} onClick={() => setEditingF(f.key)}>{t.edit}</button>
+                          <button className="btn btn-sm btn-danger" onClick={() => handleDeleteField(f.key)}>{t.del}</button>
+                        </td>
+                      </tr>
+                    )
+                )}
+                {addingF
+                  ? <FieldFormRow onSave={handleAddField} onCancel={() => setAddingF(false)} />
                   : (
-                    <tr key={f.key} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                      <td style={s.td}><code style={s.code}>{f.key}</code></td>
-                      <td style={s.td}>{f.label}</td>
-                      <td style={s.td}><span style={s.typeBadge}>{f.type}</span></td>
-                      <td style={{ ...s.td, textAlign: 'center' }}>{f.required ? '✓' : '—'}</td>
-                      <td style={s.td}>{Array.isArray(f.options) ? f.options.join(', ') : (f.placeholder || <span style={{ color: '#ccc' }}>—</span>)}</td>
-                      <td style={s.td}>
-                        <button style={s.btn} onClick={() => setEditingF(f.key)}>Edit</button>
-                        <button style={{ ...s.btn, ...s.btnDanger }} onClick={() => handleDeleteField(f.key)}>Del</button>
+                    <tr>
+                      <td colSpan={6} style={{ padding: '0.6rem 0.75rem' }}>
+                        <button className="btn btn-sm btn-primary" onClick={() => setAddingF(true)}>{t.addField}</button>
                       </td>
                     </tr>
-                  )
-              )}
-              {addingF
-                ? <FieldForm onSave={handleAddField} onCancel={() => setAddingF(false)} />
-                : <tr><td colSpan={6} style={{ padding: '0.5rem' }}><button style={{ ...s.btn, ...s.btnSuccess }} onClick={() => setAddingF(true)}>+ Add Field</button></td></tr>}
-            </tbody>
-          </table>
+                  )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ── Departments tab ──────────────────────────────────────────────
+// ── Departments tab ──────────────────────────────────────────
 function DepartmentsTab() {
+  const { t } = useLang();
   const [depts, setDepts]     = useState([]);
   const [adding, setAdding]   = useState(false);
   const [newLabel, setNewLabel] = useState('');
@@ -198,36 +270,56 @@ function DepartmentsTab() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h3 style={{ margin: 0 }}>Departments &amp; Fields</h3>
-        <button style={s.btnPrimary} onClick={() => setAdding(p => !p)}>+ Add Department</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.deptFields}</h3>
+        <button className="btn btn-primary btn-sm" onClick={() => setAdding(p => !p)}>{t.addDept}</button>
       </div>
+
       <Alert msg={err} />
+
       {adding && (
-        <div style={{ ...s.card, display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
-          <input style={s.input} value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Department label *" />
-          <input style={{ ...s.input, width: 200 }} value={newGroup} onChange={e => setNewGroup(e.target.value)} placeholder="AD group CN (optional)" />
-          <button style={s.btnPrimary} onClick={handleAdd}>Create</button>
-          <button style={{ ...s.btn, ...s.btnGhost }} onClick={() => setAdding(false)}>Cancel</button>
+        <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            className="form-control"
+            style={{ minWidth: 200, fontSize: '0.875rem' }}
+            value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            placeholder={`${t.deptLabel} *`}
+          />
+          <input
+            className="form-control"
+            style={{ minWidth: 180, fontSize: '0.875rem' }}
+            value={newGroup}
+            onChange={e => setNewGroup(e.target.value)}
+            placeholder={`${t.adGroup} (optional)`}
+            dir="ltr"
+          />
+          <button className="btn btn-primary btn-sm" onClick={handleAdd}>{t.add}</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>{t.cancel}</button>
         </div>
       )}
+
       {depts.map(d => (
-        <DeptCard key={d.id} dept={d}
+        <DeptCard
+          key={d.id}
+          dept={d}
           onUpdated={u => setDepts(p => p.map(x => x.id === u.id ? u : x))}
-          onDeleted={id => setDepts(p => p.filter(x => x.id !== id))} />
+          onDeleted={id => setDepts(p => p.filter(x => x.id !== id))}
+        />
       ))}
     </div>
   );
 }
 
-// ── Role Map tab ─────────────────────────────────────────────────
+// ── Role Map tab ─────────────────────────────────────────────
 function RoleMapTab() {
-  const [map, setMap]       = useState({});
-  const [newGroup, setNG]   = useState('');
-  const [newRole, setNR]    = useState('STAFF');
-  const [editingG, setEG]   = useState(null);
-  const [editRole, setER]   = useState('STAFF');
-  const [err, setErr]       = useState('');
+  const { t } = useLang();
+  const [map, setMap]     = useState({});
+  const [newGroup, setNG] = useState('');
+  const [newRole, setNR]  = useState('STAFF');
+  const [editingG, setEG] = useState(null);
+  const [editRole, setER] = useState('STAFF');
+  const [err, setErr]     = useState('');
 
   const load = useCallback(async () => {
     try { const { roleGroupMap } = await api.getRoleMap(); setMap(roleGroupMap); }
@@ -245,51 +337,76 @@ function RoleMapTab() {
     catch (e) { setErr(e.message); }
   }
   async function handleDelete(group) {
-    if (!window.confirm(`Remove mapping for "${group}"?`)) return;
+    if (!window.confirm(t.confirmDel)) return;
     try { const { roleGroupMap } = await api.deleteRoleEntry(group); setMap(roleGroupMap); }
     catch (e) { setErr(e.message); }
   }
 
   return (
     <div>
-      <h3 style={{ margin: '0 0 0.5rem 0' }}>LDAP Group → Role Mappings</h3>
-      <p style={{ color: '#666', fontSize: '0.875rem', marginBottom: '1rem' }}>AD group name (CN only, lowercase) mapped to a system role. Changes apply on the user's next login.</p>
+      <h3 style={{ margin: '0 0 0.3rem 0', fontSize: '1rem', fontWeight: 700 }}>{t.roleMap}</h3>
+      <p className="text-sm text-muted" style={{ marginBottom: '1rem' }}>{t.ldapNote}</p>
       <Alert msg={err} />
-      <table style={{ ...s.table, marginBottom: '1.5rem' }}>
-        <thead><tr><th style={s.th}>AD Group (CN)</th><th style={s.th}>Role</th><th style={s.th}>Actions</th></tr></thead>
-        <tbody>
-          {Object.entries(map).map(([group, role]) => (
-            <tr key={group} style={{ borderBottom: '1px solid #f0f0f0' }}>
-              <td style={s.td}><code style={s.code}>{group}</code></td>
-              <td style={s.td}>
-                {editingG === group
-                  ? <select style={s.si} value={editRole} onChange={e => setER(e.target.value)}>{VALID_ROLES.map(r => <option key={r}>{r}</option>)}</select>
-                  : <Badge role={role} />}
+      <div className="table-wrap" style={{ marginBottom: '1rem' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>AD Group (CN)</th>
+              <th>{t.fieldLabel}</th>
+              <th>{t.actions}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(map).map(([group, role]) => (
+              <tr key={group}>
+                <td><code className="tag">{group}</code></td>
+                <td>
+                  {editingG === group
+                    ? <select className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem', width: 'auto' }} value={editRole} onChange={e => setER(e.target.value)}>
+                        {VALID_ROLES.map(r => <option key={r} value={r}>{t.roles?.[r] || r}</option>)}
+                      </select>
+                    : <RoleBadge role={role} />}
+                </td>
+                <td>
+                  {editingG === group ? (
+                    <>
+                      <button className="btn btn-sm btn-primary" style={{ marginInlineEnd: '0.3rem' }} onClick={() => handleUpdate(group)}>{t.save}</button>
+                      <button className="btn btn-sm btn-ghost" onClick={() => setEG(null)}>{t.cancel}</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="btn btn-sm btn-ghost" style={{ marginInlineEnd: '0.3rem' }} onClick={() => { setEG(group); setER(role); }}>{t.edit}</button>
+                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(group)}>{t.del}</button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+            <tr style={{ background: 'var(--surface-2)' }}>
+              <td>
+                <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }} value={newGroup} onChange={e => setNG(e.target.value)} placeholder={t.newGroup} dir="ltr" />
               </td>
-              <td style={s.td}>
-                {editingG === group ? (
-                  <><button style={s.btnSave} onClick={() => handleUpdate(group)}>Save</button><button style={{ ...s.btn, ...s.btnGhost }} onClick={() => setEG(null)}>Cancel</button></>
-                ) : (
-                  <><button style={s.btn} onClick={() => { setEG(group); setER(role); }}>Edit</button><button style={{ ...s.btn, ...s.btnDanger }} onClick={() => handleDelete(group)}>Del</button></>
-                )}
+              <td>
+                <select className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem', width: 'auto' }} value={newRole} onChange={e => setNR(e.target.value)}>
+                  {VALID_ROLES.map(r => <option key={r} value={r}>{t.roles?.[r] || r}</option>)}
+                </select>
+              </td>
+              <td>
+                <button className="btn btn-sm btn-primary" onClick={handleAdd}>+ {t.add}</button>
               </td>
             </tr>
-          ))}
-          <tr style={{ background: '#f0f4ff' }}>
-            <td style={s.td}><input style={s.si} value={newGroup} onChange={e => setNG(e.target.value)} placeholder="new_group_cn" /></td>
-            <td style={s.td}><select style={s.si} value={newRole} onChange={e => setNR(e.target.value)}>{VALID_ROLES.map(r => <option key={r}>{r}</option>)}</select></td>
-            <td style={s.td}><button style={{ ...s.btn, ...s.btnSuccess }} onClick={handleAdd}>+ Add</button></td>
-          </tr>
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-// ── Config tab ───────────────────────────────────────────────────
+// ── Config tab ───────────────────────────────────────────────
 function ConfigTab() {
-  const [raw, setRaw]       = useState('');
-  const [msg, setMsg]       = useState({ text: '', type: 'error' });
+  const { t } = useLang();
+  const [raw, setRaw] = useState('');
+  const [msg, setMsg] = useState({ text: '', type: 'error' });
 
   async function handleExport() {
     try {
@@ -310,82 +427,81 @@ function ConfigTab() {
     try {
       const cfg = JSON.parse(raw);
       await api.replaceConfig(cfg);
-      setMsg({ text: 'Config imported and applied successfully.', type: 'success' }); setRaw('');
-    } catch (e) { setMsg({ text: e.name === 'SyntaxError' ? 'Invalid JSON.' : e.message, type: 'error' }); }
+      setMsg({ text: t.submitted, type: 'success' }); setRaw('');
+    } catch (e) {
+      setMsg({ text: e.name === 'SyntaxError' ? 'Invalid JSON.' : e.message, type: 'error' });
+    }
   }
 
   return (
     <div>
-      <h3 style={{ margin: '0 0 0.5rem 0' }}>Config Export / Import</h3>
-      <p style={{ color: '#666', fontSize: '0.875rem', marginBottom: '1rem' }}>
-        All settings are stored in <code style={s.code}>server/config/departments.json</code>. You can also edit that file directly and restart the server.
-      </p>
+      <h3 style={{ margin: '0 0 0.3rem 0', fontSize: '1rem', fontWeight: 700 }}>{t.config}</h3>
+      <p className="text-sm text-muted" style={{ marginBottom: '1rem' }}>{t.cfgNote}</p>
       <Alert msg={msg.text} type={msg.type} />
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <button style={s.btnPrimary} onClick={handleExport}>⬇ Export as JSON</button>
-        <button style={{ ...s.btn, ...s.btnGhost }} onClick={handlePreview}>Preview current config</button>
+        <button className="btn btn-primary btn-sm" onClick={handleExport}>{t.exportJSON}</button>
+        <button className="btn btn-ghost btn-sm" onClick={handlePreview}>{t.previewCfg}</button>
       </div>
-      <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#333', display: 'block', marginBottom: '0.4rem' }}>Paste JSON to import (replaces everything):</label>
+      <label className="form-label" style={{ display: 'block', marginBottom: '0.4rem' }}>{t.importNote}</label>
       <textarea
-        style={{ width: '100%', height: 260, fontFamily: 'monospace', fontSize: '0.8rem', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical', boxSizing: 'border-box' }}
-        value={raw} onChange={e => { setRaw(e.target.value); setMsg({ text: '', type: 'error' }); }}
-        placeholder='{"departments": [...], "roleGroupMap": {...}}'
+        className="form-control"
+        style={{ height: 260, fontFamily: 'monospace', fontSize: '0.82rem', resize: 'vertical' }}
+        value={raw}
+        onChange={e => { setRaw(e.target.value); setMsg({ text: '', type: 'error' }); }}
+        placeholder={t.importPH}
+        dir="ltr"
       />
-      <button style={{ ...s.btnPrimary, marginTop: '0.5rem', opacity: raw.trim() ? 1 : 0.5 }} onClick={handleImport} disabled={!raw.trim()}>⬆ Import &amp; Apply</button>
+      <button
+        className="btn btn-primary btn-sm"
+        style={{ marginTop: '0.6rem', opacity: raw.trim() ? 1 : 0.5 }}
+        onClick={handleImport}
+        disabled={!raw.trim()}
+      >
+        {t.importCfg}
+      </button>
     </div>
   );
 }
 
-// ── Main panel ───────────────────────────────────────────────────
-export default function SuperAdminPanel({ onBack }) {
+// ── Main panel ───────────────────────────────────────────────
+export default function SuperAdminPanel() {
+  const { t } = useLang();
   const [tab, setTab] = useState('departments');
+
   const tabs = [
-    { id: 'departments', label: '🏢 Departments & Fields' },
-    { id: 'rolemap',     label: '🔑 Role Mappings' },
-    { id: 'config',      label: '⚙ Config' },
+    { id: 'departments', label: `🏢 ${t.deptFields}` },
+    { id: 'rolemap',     label: `🔑 ${t.roleMaps}` },
+    { id: 'config',      label: `⚙ ${t.config}` },
   ];
+
   return (
-    <div style={s.page}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-        <div>
-          <h2 style={{ margin: 0, color: '#6c3483' }}>Super Admin Panel</h2>
-          <p style={{ margin: '0.2rem 0 0', color: '#888', fontSize: '0.875rem' }}>Manage departments, workflow fields, and role mappings</p>
+    <div style={{ maxWidth: 980, margin: '0 auto' }}>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--primary)' }}>{t.adminPanel}</h2>
+        <p className="text-sm text-muted" style={{ marginTop: '0.2rem' }}>{t.deptFields} · {t.roleMaps} · {t.config}</p>
+      </div>
+
+      <div className="card">
+        <div style={{ padding: '0 1.5rem' }}>
+          <div className="admin-tabs">
+            {tabs.map(tab_ => (
+              <button
+                key={tab_.id}
+                className={`admin-tab${tab === tab_.id ? ' active' : ''}`}
+                onClick={() => setTab(tab_.id)}
+              >
+                {tab_.label}
+              </button>
+            ))}
+          </div>
         </div>
-        {onBack && <button style={{ ...s.btn, ...s.btnGhost }} onClick={onBack}>← Back</button>}
-      </div>
-      <div style={s.tabs}>
-        {tabs.map(t => <button key={t.id} style={{ ...s.tabBtn, ...(tab === t.id ? s.tabActive : {}) }} onClick={() => setTab(t.id)}>{t.label}</button>)}
-      </div>
-      <div style={s.tabContent}>
-        {tab === 'departments' && <DepartmentsTab />}
-        {tab === 'rolemap'     && <RoleMapTab />}
-        {tab === 'config'      && <ConfigTab />}
+
+        <div className="card-body">
+          {tab === 'departments' && <DepartmentsTab />}
+          {tab === 'rolemap'     && <RoleMapTab />}
+          {tab === 'config'      && <ConfigTab />}
+        </div>
       </div>
     </div>
   );
 }
-
-// ── Styles ───────────────────────────────────────────────────────
-const s = {
-  page:      { padding: '1.5rem', maxWidth: 980, margin: '0 auto' },
-  tabs:      { display: 'flex', borderBottom: '2px solid #e0e0e0', marginBottom: '1.5rem', gap: '0.25rem' },
-  tabBtn:    { padding: '0.55rem 1.25rem', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.9rem', color: '#555', borderBottom: '3px solid transparent', marginBottom: '-2px' },
-  tabActive: { color: '#6c3483', borderBottomColor: '#6c3483', fontWeight: 700 },
-  tabContent:{},
-  card:      { border: '1px solid #e8e8e8', borderRadius: 8, padding: '1rem', marginBottom: '0.75rem', background: '#fafafa' },
-  cardHead:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' },
-  table:     { width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', background: '#fff', border: '1px solid #eee', borderRadius: 6 },
-  th:        { background: '#f5f5f5', padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #eee' },
-  td:        { padding: '0.45rem 0.75rem', verticalAlign: 'middle' },
-  input:     { padding: '0.4rem 0.6rem', border: '1px solid #ccc', borderRadius: 4, fontSize: '0.9rem', minWidth: 180 },
-  si:        { padding: '0.3rem 0.5rem', border: '1px solid #ccc', borderRadius: 4, fontSize: '0.85rem', width: '100%' },
-  code:      { background: '#f0f0f0', padding: '1px 6px', borderRadius: 3, fontFamily: 'monospace', fontSize: '0.85em' },
-  typeBadge: { background: '#e8f4fd', color: '#1a56db', padding: '1px 8px', borderRadius: 10, fontSize: '0.8rem' },
-  toggle:    { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', padding: '0 0.2rem' },
-  btn:       { padding: '0.3rem 0.75rem', background: '#1a56db', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.82rem', marginRight: '0.3rem' },
-  btnSave:   { padding: '0.3rem 0.75rem', background: '#276749', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.82rem', marginRight: '0.3rem' },
-  btnGhost:  { background: '#fff', color: '#444', border: '1px solid #ccc' },
-  btnDanger: { background: '#e53e3e', border: 'none', color: '#fff' },
-  btnSuccess:{ background: '#276749', border: 'none', color: '#fff' },
-  btnPrimary:{ padding: '0.5rem 1.2rem', background: '#6c3483', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600 },
-};
