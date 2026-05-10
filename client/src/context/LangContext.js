@@ -123,6 +123,11 @@ const T = {
     noLdapUsers:        'No users found in Active Directory.',
     noResults:          'No results found.',
     refresh:            'Refresh',
+    assignRole:         'Assign Role',
+    editRole:           'Edit Role',
+    unassigned:         'No role assigned',
+    ldapAssignTitle:    'Assign Role — Network User',
+    roleAssigned:       'Role assigned.',
 
     // Dashboard
     totalTasks:    'Total Tasks',
@@ -277,6 +282,11 @@ const T = {
     noLdapUsers:        'لم يتم العثور على مستخدمين في Active Directory.',
     noResults:          'لا توجد نتائج.',
     refresh:            'تحديث',
+    assignRole:         'تعيين دور',
+    editRole:           'تعديل الدور',
+    unassigned:         'لم يُعيَّن دور',
+    ldapAssignTitle:    'تعيين دور — مستخدم الشبكة',
+    roleAssigned:       'تم تعيين الدور.',
 
     // Dashboard
     totalTasks:    'إجمالي المهام',

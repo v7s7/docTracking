@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
-import { getUsers, getLdapUsers, createUser, updateUser, deleteUser } from '../../services/userService';
+import {
+  getUsers, getLdapUsers, createUser, updateUser, deleteUser, assignLdapRole,
+} from '../../services/userService';
 import { getDepartments } from '../../services/deptService';
 import {
   X, AlertTriangle, Users, Network, UserPlus, Search,
-  RefreshCw, CheckCircle, XCircle, Edit2, Trash2,
+  RefreshCw, CheckCircle, XCircle, Edit2, Trash2, ShieldCheck,
 } from 'lucide-react';
 
 const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
@@ -29,15 +31,106 @@ function RoleBadge({ role, t }) {
 function ActiveDot({ active, t }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600, fontSize: '0.8rem', color: active ? 'var(--success)' : 'var(--text-3)' }}>
-      {active
-        ? <CheckCircle size={13} strokeWidth={2.2} />
-        : <XCircle    size={13} strokeWidth={2.2} />
-      }
+      {active ? <CheckCircle size={13} strokeWidth={2.2} /> : <XCircle size={13} strokeWidth={2.2} />}
       {active ? t.active : t.inactive}
     </span>
   );
 }
 
+function SearchBox({ value, onChange, placeholder }) {
+  return (
+    <div style={{ position: 'relative', minWidth: 200 }}>
+      <Search size={13} strokeWidth={2} style={{ position: 'absolute', top: '50%', insetInlineStart: '0.55rem', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }} />
+      <input
+        className="form-control"
+        style={{ paddingInlineStart: '1.9rem', fontSize: '0.83rem', padding: '0.38rem 0.7rem', paddingInlineStart: '1.9rem' }}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
+function deptOptions(depts, t) {
+  return Object.entries(
+    depts.reduce((acc, d) => {
+      const key = d.ldapGroup || d.id;
+      acc[key] = acc[key] || (t.groupLabels?.[d.ldapGroup] || d.ldapGroup || d.id);
+      return acc;
+    }, {})
+  );
+}
+
+// ── Role assignment modal (for LDAP users) ───────────────────
+function LdapRoleModal({ user, depts, t, onSave, onClose }) {
+  const [role,    setRole]    = useState(user.assigned_role || 'STAFF');
+  const [dept_id, setDeptId]  = useState(user.assigned_dept || '');
+  const [busy,    setBusy]    = useState(false);
+  const [err,     setErr]     = useState('');
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setBusy(true); setErr('');
+    try {
+      await onSave({ username: user.username, full_name: user.name, email: user.email, role, dept_id });
+      onClose();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+        <div className="modal-head">
+          <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <ShieldCheck size={16} strokeWidth={1.8} style={{ color: 'var(--accent)' }} />
+            {t.ldapAssignTitle}
+          </h3>
+          <button className="modal-close" onClick={onClose}><X size={16} strokeWidth={2} /></button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            {err && (
+              <div className="alert alert-error" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <AlertTriangle size={14} strokeWidth={2} /><span>{err}</span>
+              </div>
+            )}
+            <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1.2rem', border: '1px solid var(--border)' }}>
+              <div style={{ fontWeight: 600 }}>{user.name}</div>
+              <div className="text-sm text-muted" style={{ direction: 'ltr' }}>{user.username}{user.email ? ` · ${user.email}` : ''}</div>
+              {user.department && <div className="text-sm text-muted">{user.department}</div>}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t.role} <span className="req">*</span></label>
+              <select className="form-control" value={role} onChange={e => setRole(e.target.value)} required>
+                {VALID_ROLES.map(r => <option key={r} value={r}>{t.roles?.[r] || r}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t.deptAssign}</label>
+              <select className="form-control" value={dept_id} onChange={e => setDeptId(e.target.value)}>
+                <option value="">—</option>
+                {deptOptions(depts, t).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="modal-foot">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>{t.cancel}</button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={busy}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              <ShieldCheck size={13} strokeWidth={2} />{t.save}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Local user create/edit modal ─────────────────────────────
 const blankForm = { username: '', password: '', full_name: '', email: '', role: 'STAFF', dept_id: '', is_active: true };
 
 function UserModal({ initial, depts, t, onSave, onClose }) {
@@ -61,14 +154,6 @@ function UserModal({ initial, depts, t, onSave, onClose }) {
     finally { setBusy(false); }
   }
 
-  const deptOptions = Object.entries(
-    depts.reduce((acc, d) => {
-      const key = d.ldapGroup || d.id;
-      acc[key] = acc[key] || (t.groupLabels?.[d.ldapGroup] || d.ldapGroup || d.id);
-      return acc;
-    }, {})
-  );
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-lg" onClick={e => e.stopPropagation()}>
@@ -90,26 +175,22 @@ function UserModal({ initial, depts, t, onSave, onClose }) {
                   onChange={e => set('username', e.target.value)}
                   required disabled={isEdit} dir="ltr" />
               </div>
-
               <div className="form-group">
                 <label className="form-label">{isEdit ? t.newPassword : `${t.password} *`}</label>
                 <input className="form-control" type="password" value={form.password}
                   onChange={e => set('password', e.target.value)}
                   required={!isEdit} dir="ltr" />
               </div>
-
               <div className="form-group">
                 <label className="form-label">{t.fullName} <span className="req">*</span></label>
                 <input className="form-control" value={form.full_name}
                   onChange={e => set('full_name', e.target.value)} required />
               </div>
-
               <div className="form-group">
                 <label className="form-label">{t.email}</label>
                 <input className="form-control" type="email" value={form.email}
                   onChange={e => set('email', e.target.value)} dir="ltr" />
               </div>
-
               <div className="form-group">
                 <label className="form-label">{t.role} <span className="req">*</span></label>
                 <select className="form-control" value={form.role}
@@ -117,16 +198,14 @@ function UserModal({ initial, depts, t, onSave, onClose }) {
                   {VALID_ROLES.map(r => <option key={r} value={r}>{t.roles?.[r] || r}</option>)}
                 </select>
               </div>
-
               <div className="form-group">
                 <label className="form-label">{t.deptAssign}</label>
                 <select className="form-control" value={form.dept_id}
                   onChange={e => set('dept_id', e.target.value)}>
                   <option value="">—</option>
-                  {deptOptions.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  {deptOptions(depts, t).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               </div>
-
               {isEdit && (
                 <div className="form-group">
                   <label className="form-label">{t.active}</label>
@@ -151,34 +230,31 @@ function UserModal({ initial, depts, t, onSave, onClose }) {
   );
 }
 
-// ── Searchable column header ─────────────────────────────────
-function SearchBox({ value, onChange, placeholder }) {
-  return (
-    <div style={{ position: 'relative', minWidth: 200 }}>
-      <Search size={13} strokeWidth={2} style={{ position: 'absolute', top: '50%', insetInlineStart: '0.55rem', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }} />
-      <input
-        className="form-control"
-        style={{ paddingInlineStart: '1.9rem', fontSize: '0.83rem', padding: '0.38rem 0.7rem', paddingInlineStart: '1.9rem' }}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-      />
-    </div>
-  );
-}
-
 // ── LDAP network users table ─────────────────────────────────
 function LdapUsersSection({ t }) {
-  const [users,   setUsers]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
-  const [search,  setSearch]  = useState('');
+  const [ldapUsers,  setLdapUsers]  = useState([]);
+  const [dbRecords,  setDbRecords]  = useState({});   // keyed by username
+  const [depts,      setDepts]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState('');
+  const [search,     setSearch]     = useState('');
+  const [modal,      setModal]      = useState(null); // ldap user object
+  const [msg,        setMsg]        = useState('');
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const data = await getLdapUsers();
-      setUsers(data.users || []);
+      const [ldapRes, usersRes, deptsRes] = await Promise.all([
+        getLdapUsers(),
+        getUsers(),
+        getDepartments(),
+      ]);
+      setLdapUsers(ldapRes.users || []);
+      // Build a map of username → DB record for LDAP-linked users
+      const map = {};
+      (usersRes.users || []).filter(u => u.is_ldap).forEach(u => { map[u.username] = u; });
+      setDbRecords(map);
+      setDepts(deptsRes);
     } catch (e) {
       setError(e.message);
     } finally { setLoading(false); }
@@ -186,7 +262,15 @@ function LdapUsersSection({ t }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = users.filter(u => {
+  function flash(m) { setMsg(m); setTimeout(() => setMsg(''), 3000); }
+
+  async function handleAssign(payload) {
+    const { user } = await assignLdapRole(payload);
+    setDbRecords(prev => ({ ...prev, [user.username]: user }));
+    flash(t.roleAssigned);
+  }
+
+  const filtered = ldapUsers.filter(u => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (u.name || '').toLowerCase().includes(q)
@@ -204,17 +288,25 @@ function LdapUsersSection({ t }) {
           <div>
             <div className="card-title">{t.ldapUsers}</div>
             <div className="card-subtitle">
-              {loading ? '…' : `${users.length} ${(t.users || 'users').toLowerCase()}`}
+              {loading ? '…' : `${ldapUsers.length} ${(t.users || 'users').toLowerCase()}`}
             </div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           <SearchBox value={search} onChange={setSearch} placeholder={t.search} />
-          <button className="btn btn-ghost btn-sm" onClick={load} title={t.refresh} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          <button className="btn btn-ghost btn-sm" onClick={load} title={t.refresh}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
             <RefreshCw size={14} strokeWidth={2} />
           </button>
         </div>
       </div>
+
+      {msg && (
+        <div className="alert alert-success"
+          style={{ margin: '0 1.5rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <CheckCircle size={14} strokeWidth={2} />{msg}
+        </div>
+      )}
 
       {error && (
         <div className="alert alert-error" style={{ margin: '0 1.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -222,8 +314,7 @@ function LdapUsersSection({ t }) {
           <span>
             {error.includes('NOT_CONFIGURED') || error.includes('not configured')
               ? t.ldapNotConfigured
-              : error
-            }
+              : error}
           </span>
         </div>
       )}
@@ -249,22 +340,52 @@ function LdapUsersSection({ t }) {
                 <th>{t.email}</th>
                 <th>{t.dept}</th>
                 <th>{t.ldapTitle}</th>
+                <th>{t.role}</th>
+                <th>{t.actions}</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u, i) => (
-                <tr key={u.username || i}>
-                  <td style={{ fontWeight: 500 }}>{u.name || '—'}</td>
-                  <td><code className="tag" style={{ fontSize: '0.78em' }}>{u.username}</code></td>
-                  <td className="text-sm text-muted">{u.email || '—'}</td>
-                  <td className="text-sm text-muted">{u.department || '—'}</td>
-                  <td className="text-sm text-muted">{u.title || '—'}</td>
-                </tr>
-              ))}
+              {filtered.map((u, i) => {
+                const db = dbRecords[u.username];
+                return (
+                  <tr key={u.username || i}>
+                    <td style={{ fontWeight: 500 }}>{u.name || '—'}</td>
+                    <td><code className="tag" style={{ fontSize: '0.78em' }}>{u.username}</code></td>
+                    <td className="text-sm text-muted">{u.email || '—'}</td>
+                    <td className="text-sm text-muted">{u.department || '—'}</td>
+                    <td className="text-sm text-muted">{u.title || '—'}</td>
+                    <td>
+                      {db
+                        ? <RoleBadge role={db.role} t={t} />
+                        : <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>{t.unassigned}</span>
+                      }
+                    </td>
+                    <td>
+                      <button
+                        className={`btn btn-sm ${db ? 'btn-ghost' : 'btn-primary'}`}
+                        onClick={() => setModal({ ...u, assigned_role: db?.role, assigned_dept: db?.dept_id })}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', whiteSpace: 'nowrap' }}>
+                        <ShieldCheck size={12} strokeWidth={2} />
+                        {db ? t.editRole : t.assignRole}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
+
+      {modal && (
+        <LdapRoleModal
+          user={modal}
+          depts={depts}
+          t={t}
+          onSave={handleAssign}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
   );
 }
@@ -281,7 +402,7 @@ function LocalUsersSection({ t }) {
   const load = useCallback(async () => {
     try {
       const [ud, dd] = await Promise.all([getUsers(), getDepartments()]);
-      setUsers(ud.users);
+      setUsers(ud.users.filter(u => !u.is_ldap));  // only password-based accounts
       setDepts(dd);
     } catch (_) {}
     finally { setLoading(false); }
@@ -356,9 +477,7 @@ function LocalUsersSection({ t }) {
         ) : !filtered.length ? (
           <div className="empty-state" style={{ padding: '2.5rem' }}>
             <div className="empty-icon"><Users size={28} strokeWidth={1.4} /></div>
-            <div className="empty-sub">
-              {search ? t.noResults : t.noUsers}
-            </div>
+            <div className="empty-sub">{search ? t.noResults : t.noUsers}</div>
           </div>
         ) : (
           <table>
@@ -421,7 +540,7 @@ function LocalUsersSection({ t }) {
 export default function UserManagement() {
   const { t } = useLang();
   return (
-    <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
       <LdapUsersSection t={t} />
       <LocalUsersSection t={t} />
     </div>

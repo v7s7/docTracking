@@ -13,7 +13,7 @@ const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STA
 
 function safeUser(u) {
   const { password_hash, ...rest } = u;
-  return rest;
+  return { ...rest, is_ldap: !password_hash };
 }
 
 // GET /users/ldap  — browse all Active Directory users via service account
@@ -35,6 +35,33 @@ router.get('/ldap', ...SA_ONLY, async (req, res) => {
     }
     return res.status(502).json({ success: false, message: `Could not connect to Active Directory: ${e.message}`, code });
   }
+});
+
+// POST /users/ldap-assign  — upsert a role+dept assignment for an LDAP user (no password)
+router.post('/ldap-assign', ...SA_ONLY, (req, res) => {
+  const { username, full_name, email, role, dept_id } = req.body || {};
+  if (!username || !full_name || !role) {
+    return res.status(400).json({ success: false, message: 'username, full_name and role are required.' });
+  }
+  if (!VALID_ROLES.includes(role)) {
+    return res.status(400).json({ success: false, message: `Invalid role.` });
+  }
+
+  const existing = db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim());
+  if (existing) {
+    if (existing.password_hash) {
+      return res.status(409).json({ success: false, message: 'This username belongs to a local password account.' });
+    }
+    db.prepare('UPDATE users SET full_name=?, email=?, role=?, dept_id=?, is_active=1 WHERE id=?')
+      .run(full_name, email || '', role, dept_id || '', existing.id);
+    return res.json({ success: true, user: safeUser(db.prepare('SELECT * FROM users WHERE id=?').get(existing.id)) });
+  }
+
+  const info = db.prepare(
+    'INSERT INTO users (username, password_hash, full_name, email, role, dept_id, created_by) VALUES (?, NULL, ?, ?, ?, ?, ?)'
+  ).run(username.trim(), full_name, email || '', role, dept_id || '', req.user.username);
+
+  res.status(201).json({ success: true, user: safeUser(db.prepare('SELECT * FROM users WHERE id=?').get(info.lastInsertRowid)) });
 });
 
 // GET /users

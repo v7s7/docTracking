@@ -60,19 +60,31 @@ router.post('/login', async (req, res) => {
 
   try {
     const ldapUser  = await authenticateUser(username.trim(), password);
-    const groupRole = mapGroupsToRole(ldapUser.memberOf);
     const overrides = getSuperAdminOverrides();
     const isSA      = overrides.includes(ldapUser.username.toLowerCase())
                    || overrides.includes(ldapUser.email.toLowerCase());
-    const role      = isSA ? 'SUPER_ADMIN' : groupRole;
+
+    // Check if an admin has assigned a role to this LDAP user in the DB
+    const stored = db.prepare(
+      'SELECT * FROM users WHERE username = ? AND password_hash IS NULL AND is_active = 1'
+    ).get(ldapUser.username);
+
+    // Keep name/email in sync with AD
+    if (stored) {
+      db.prepare('UPDATE users SET full_name=?, email=? WHERE id=?')
+        .run(ldapUser.name, ldapUser.email, stored.id);
+    }
+
+    const role    = isSA ? 'SUPER_ADMIN' : (stored ? stored.role : mapGroupsToRole(ldapUser.memberOf));
+    const dept_id = stored ? (stored.dept_id || '') : '';
 
     const payload = {
-      id:       null,
+      id:       stored ? stored.id : null,
       username: ldapUser.username,
       name:     ldapUser.name,
       email:    ldapUser.email,
       role,
-      dept_id:  '',
+      dept_id,
       groups:   extractGroupNames(ldapUser.memberOf),
       is_local: false,
     };
