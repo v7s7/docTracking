@@ -1,14 +1,22 @@
 const express  = require('express');
 const jwt      = require('jsonwebtoken');
 const bcrypt   = require('bcryptjs');
+const { randomUUID } = require('crypto');
 const { db }   = require('../db');
 const { authenticateUser }                   = require('../services/ldapService');
 const { mapGroupsToRole, extractGroupNames } = require('../utils/roleMapper');
 const { verifyToken }                        = require('../middleware/authMiddleware');
+const { logAudit } = require('../utils/audit');
 
 const router         = express.Router();
 const JWT_SECRET     = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
+
+function parseExpiryMs(str) {
+  const m = (str || '8h').match(/^(\d+)([smhd])$/);
+  if (!m) return 8 * 3600 * 1000;
+  return parseInt(m[1]) * { s: 1000, m: 60000, h: 3600000, d: 86400000 }[m[2]];
+}
 
 function getSuperAdminOverrides() {
   return (process.env.SUPER_ADMIN_USERS || '')
@@ -48,7 +56,12 @@ router.post('/login', async (req, res) => {
       is_local: true,
     };
 
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    const jti = randomUUID();
+    const expiresAt = new Date(Date.now() + parseExpiryMs(JWT_EXPIRES_IN)).toISOString();
+    db.prepare('INSERT OR REPLACE INTO sessions (jti, username, full_name, role, ip, user_agent, expires_at) VALUES (?,?,?,?,?,?,?)')
+      .run(jti, payload.username, payload.name, payload.role, req.ip, req.headers['user-agent']||'', expiresAt);
+    const token = jwt.sign({ ...payload, jti }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    logAudit({ username: payload.username, role: payload.role }, 'USER_LOGIN', 'user', payload.username, { method: 'local' }, req.ip);
     console.log(`[Auth] Local login OK: ${localUser.username} → role=${role}`);
     return res.json({ success: true, token, user: payload });
   }
@@ -89,7 +102,12 @@ router.post('/login', async (req, res) => {
       is_local: false,
     };
 
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    const jti = randomUUID();
+    const expiresAt = new Date(Date.now() + parseExpiryMs(JWT_EXPIRES_IN)).toISOString();
+    db.prepare('INSERT OR REPLACE INTO sessions (jti, username, full_name, role, ip, user_agent, expires_at) VALUES (?,?,?,?,?,?,?)')
+      .run(jti, payload.username, payload.name, payload.role, req.ip, req.headers['user-agent']||'', expiresAt);
+    const token = jwt.sign({ ...payload, jti }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    logAudit({ username: payload.username, role: payload.role }, 'USER_LOGIN', 'user', payload.username, { method: 'ldap' }, req.ip);
     console.log(`[Auth] LDAP login OK: ${ldapUser.username} → role=${role}`);
     return res.json({ success: true, token, user: payload });
 
@@ -117,6 +135,10 @@ router.get('/me', verifyToken, (req, res) => {
 
 // ── POST /auth/logout ────────────────────────────────────────
 router.post('/logout', verifyToken, (req, res) => {
+  if (req.user?.jti) {
+    db.prepare('DELETE FROM sessions WHERE jti = ?').run(req.user.jti);
+  }
+  logAudit(req.user, 'USER_LOGOUT', 'user', req.user.username, null, req.ip);
   console.log(`[Auth] Logout: ${req.user.username}`);
   return res.json({ success: true, message: 'Logged out.' });
 });

@@ -18,6 +18,13 @@ function verifyToken(req, res, next) {
   const token = authHeader.slice(7);
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
+    if (req.user.jti) {
+      const { db } = require('../db');
+      const sess = db.prepare('SELECT jti FROM sessions WHERE jti = ?').get(req.user.jti);
+      if (!sess) {
+        return res.status(401).json({ success: false, message: 'Session expired. Please sign in again.' });
+      }
+    }
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

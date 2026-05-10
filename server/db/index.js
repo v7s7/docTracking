@@ -75,6 +75,47 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_tasks_dept     ON tasks(current_dept_id);
   CREATE INDEX IF NOT EXISTS idx_events_task_id ON task_events(task_id);
   CREATE INDEX IF NOT EXISTS idx_notifs_dept    ON notifications(dept_id, is_read);
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    jti        TEXT PRIMARY KEY,
+    username   TEXT NOT NULL,
+    full_name  TEXT,
+    role       TEXT,
+    ip         TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    expires_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_username TEXT NOT NULL,
+    actor_role     TEXT,
+    action         TEXT NOT NULL,
+    target_type    TEXT,
+    target_id      TEXT,
+    details        TEXT,
+    ip             TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS task_templates (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,
+    type            TEXT NOT NULL DEFAULT 'incoming',
+    priority        TEXT NOT NULL DEFAULT 'normal',
+    source_entity   TEXT,
+    delivery_method TEXT,
+    expected_days   INTEGER,
+    note            TEXT,
+    created_by      TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sessions_user    ON sessions(username);
+  CREATE INDEX IF NOT EXISTS idx_audit_actor      ON audit_log(actor_username);
+  CREATE INDEX IF NOT EXISTS idx_audit_created    ON audit_log(created_at);
+  CREATE INDEX IF NOT EXISTS idx_audit_action     ON audit_log(action);
 `);
 
 // ── Serial number helper ─────────────────────────────────────

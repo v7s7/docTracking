@@ -1,6 +1,7 @@
 const express           = require('express');
 const { db, nextSerial } = require('../db');
 const { verifyToken, requireCS } = require('../middleware/authMiddleware');
+const { logAudit } = require('../utils/audit');
 
 const router = express.Router();
 const AUTH   = verifyToken;
@@ -53,6 +54,48 @@ router.get('/', AUTH, (req, res) => {
   res.json({ success: true, tasks, total });
 });
 
+// POST /tasks/bulk — bulk close or forward
+router.post('/bulk', AUTH, requireCS, (req, res) => {
+  const { action, task_ids, dept_id, note } = req.body || {};
+  if (!action || !Array.isArray(task_ids) || !task_ids.length) {
+    return res.status(400).json({ success: false, message: 'action and task_ids[] required.' });
+  }
+  if (!['close', 'forward'].includes(action)) {
+    return res.status(400).json({ success: false, message: 'action must be "close" or "forward".' });
+  }
+  if (action === 'forward' && !dept_id) {
+    return res.status(400).json({ success: false, message: 'dept_id required for forward.' });
+  }
+
+  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  let processed = 0;
+
+  db.transaction(() => {
+    for (const id of task_ids) {
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+      if (!task || task.status === 'closed') continue;
+
+      if (action === 'close') {
+        db.prepare('UPDATE tasks SET status=?, completed_at=?, updated_at=? WHERE id=?')
+          .run('closed', now, now, id);
+        db.prepare('INSERT INTO task_events (task_id, type, actor_id, actor_name, note) VALUES (?,?,?,?,?)')
+          .run(id, 'closed', req.user.id||null, req.user.name||req.user.username, note||'');
+      } else {
+        const from = task.current_dept_id;
+        db.prepare('UPDATE tasks SET current_dept_id=?, status=?, updated_at=? WHERE id=?')
+          .run(dept_id, 'assigned', now, id);
+        db.prepare('INSERT INTO task_events (task_id, type, from_dept, to_dept, actor_id, actor_name, note) VALUES (?,?,?,?,?,?,?)')
+          .run(id, 'forwarded', from, dept_id, req.user.id||null, req.user.name||req.user.username, note||'');
+        db.prepare('INSERT INTO notifications (dept_id, task_id, task_serial, task_title, type) VALUES (?,?,?,?,?)')
+          .run(dept_id, id, task.serial, task.title, 'forwarded');
+      }
+      processed++;
+    }
+  })();
+
+  res.json({ success: true, processed });
+});
+
 // ── GET /tasks/:id ───────────────────────────────────────────
 router.get('/:id', AUTH, (req, res) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
@@ -98,6 +141,7 @@ router.post('/', AUTH, requireCS, (req, res) => {
   `).run(info.lastInsertRowid, req.user.id || null, req.user.name || req.user.username, note || '');
 
   const task = withEvents(db.prepare('SELECT * FROM tasks WHERE id = ?').get(info.lastInsertRowid));
+  logAudit(req.user, 'TASK_CREATED', 'task', info.lastInsertRowid, { serial: task.serial }, req.ip);
   res.status(201).json({ success: true, task });
 });
 
@@ -152,6 +196,7 @@ router.post('/:id/forward', AUTH, requireCS, (req, res) => {
     VALUES (?, ?, ?, ?, 'forwarded')
   `).run(to_dept_id, task.id, task.serial, task.title);
 
+  logAudit(req.user, 'TASK_FORWARDED', 'task', req.params.id, { to: to_dept_id }, req.ip);
   res.json({ success: true, task: withEvents(db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id)) });
 });
 
@@ -206,6 +251,7 @@ router.post('/:id/close', AUTH, requireCS, (req, res) => {
     VALUES (?, 'closed', ?, ?, ?)
   `).run(task.id, req.user.id || null, req.user.name || req.user.username, note || '');
 
+  logAudit(req.user, 'TASK_CLOSED', 'task', req.params.id, null, req.ip);
   res.json({ success: true, task: withEvents(db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id)) });
 });
 
