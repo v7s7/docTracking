@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
 import { getDashboard } from '../../services/taskService';
+import { getDepartments } from '../../services/deptService';
+import { useAuth } from '../../context/AuthContext';
 import { isOverdue } from '../tasks/TaskList';
 import {
-  FileText, Clock, RotateCcw, CheckCircle, AlertCircle, Users, Inbox,
+  FileText, Clock, RotateCcw, CheckCircle, AlertCircle, Users, Inbox, Building2,
 } from 'lucide-react';
 
 const STATUS_COLORS = {
@@ -40,17 +42,32 @@ function PriorityDot({ priority }) {
   );
 }
 
+const CAN_FILTER = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'];
+
 export default function Dashboard({ onTaskClick }) {
-  const { t }          = useLang();
-  const [stats, setStats] = useState(null);
+  const { t }    = useLang();
+  const { user } = useAuth();
+  const canFilter = CAN_FILTER.includes(user?.role);
+
+  const [stats,   setStats]   = useState(null);
+  const [depts,   setDepts]   = useState([]);
+  const [dept,    setDept]    = useState('');   // '' = all
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getDashboard()
+    if (canFilter) getDepartments().then(setDepts).catch(() => {});
+  }, [canFilter]);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = dept ? { dept } : {};
+    getDashboard(params)
       .then(d => setStats(d.stats))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [dept]);
+
+  useEffect(() => { load(); }, [load]);
 
   if (loading) {
     return <div className="page-loading"><span className="spinner" /><span>{t.loading}</span></div>;
@@ -61,8 +78,35 @@ export default function Dashboard({ onTaskClick }) {
   const total   = Object.values(bs).reduce((s, n) => s + n, 0);
   const overdue = (stats?.recentTasks || []).filter(isOverdue).length;
 
+  const deptLabel = dept
+    ? (depts.find(d => d.id === dept)?.label || dept)
+    : t.allDepartments;
+
   return (
     <div style={{ maxWidth: 980, margin: '0 auto' }}>
+
+      {/* Dept filter for admins */}
+      {canFilter && depts.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          <Building2 size={15} strokeWidth={1.8} style={{ color: 'var(--text-3)' }} />
+          <span style={{ fontSize: '0.82rem', color: 'var(--text-2)', fontWeight: 600 }}>{t.viewingDept}</span>
+          <select
+            className="form-control"
+            style={{ width: 'auto', padding: '0.35rem 0.7rem', fontSize: '0.85rem' }}
+            value={dept}
+            onChange={e => setDept(e.target.value)}
+          >
+            <option value="">{t.allDepartments}</option>
+            {depts.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </select>
+          {dept && (
+            <span style={{ fontSize: '0.78rem', background: 'var(--accent-light)', color: 'var(--accent-hover)', borderRadius: 20, padding: '0.15rem 0.65rem', fontWeight: 600 }}>
+              {deptLabel}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Stat cards */}
       <div className="stat-grid">
         <StatCard icon={<FileText size={22} strokeWidth={1.5} />}    label={t.totalTasks}    value={total}            color="var(--primary)" />
@@ -70,7 +114,7 @@ export default function Dashboard({ onTaskClick }) {
         <StatCard icon={<RotateCcw size={22} strokeWidth={1.5} />}   label={t.returnedTasks} value={bs.returned || 0} color="var(--danger)" />
         <StatCard icon={<CheckCircle size={22} strokeWidth={1.5} />} label={t.closedTasks}   value={bs.closed || 0}   color="var(--success)" />
         {overdue > 0 && (
-          <StatCard icon={<AlertCircle size={22} strokeWidth={1.5} />} label={t.overdueTasks || 'Overdue'} value={overdue} color="var(--danger)" />
+          <StatCard icon={<AlertCircle size={22} strokeWidth={1.5} />} label={t.overdueTasks} value={overdue} color="var(--danger)" />
         )}
         {stats?.totalUsers != null && (
           <StatCard icon={<Users size={22} strokeWidth={1.5} />} label={t.totalUsers} value={stats.totalUsers} color="var(--accent)" />
@@ -82,6 +126,7 @@ export default function Dashboard({ onTaskClick }) {
         <div className="card">
           <div className="card-header">
             <div className="card-title">{t.recentTasks}</div>
+            {dept && <div className="card-subtitle">{deptLabel}</div>}
           </div>
           <div style={{ overflowX: 'auto' }}>
             {!stats?.recentTasks?.length ? (
@@ -125,21 +170,22 @@ export default function Dashboard({ onTaskClick }) {
               <div className="card-title">{t.byDept}</div>
             </div>
             <div style={{ padding: '1rem' }}>
-              {stats.byDept.map(row => (
-                <div key={row.dept_id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.6rem' }}>
-                  <div style={{ flex: 1, fontSize: '0.85rem', color: 'var(--text-2)' }}>
-                    {t.groupLabels?.[row.dept_id] || row.dept_id}
+              {stats.byDept.map(row => {
+                const max = Math.max(...stats.byDept.map(r => r.n), 1);
+                return (
+                  <div key={row.dept_id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.7rem' }}>
+                    <div style={{ flex: 1, fontSize: '0.85rem', color: 'var(--text-2)' }}>
+                      {depts.find(d => d.id === row.dept_id)?.label || t.groupLabels?.[row.dept_id] || row.dept_id}
+                    </div>
+                    <div style={{ flex: 2, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div style={{ flex: 1, height: 8, borderRadius: 99, background: 'var(--border)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', borderRadius: 99, background: 'var(--accent)', width: `${(row.n / max) * 100}%`, transition: 'width 0.4s ease' }} />
+                      </div>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent)', minWidth: 22 }}>{row.n}</span>
+                    </div>
                   </div>
-                  <div style={{ flex: 2, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{
-                      height: 8, borderRadius: 99, background: 'var(--accent)',
-                      width: `${Math.min(100, (row.n / (stats?.recentTasks?.length || 1)) * 100)}%`,
-                      minWidth: 20,
-                    }} />
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent)', minWidth: 22 }}>{row.n}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

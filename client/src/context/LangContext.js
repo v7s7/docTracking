@@ -63,6 +63,64 @@ const T = {
     customFieldsNote: 'Extra fields shown when creating a task for this department.',
     noDepts:          'No departments yet. Add one to get started.',
 
+    // Bulk actions
+    selectAll:        'Select all',
+    selected:         'selected',
+    bulkForward:      'Forward All',
+    bulkClose:        'Close All',
+    clearSelection:   'Clear',
+    bulkDone:         'Done — {n} tasks updated.',
+    selectDeptBulk:   'Forward {n} tasks to:',
+
+    // Task templates
+    templates:        'Templates',
+    templateName:     'Template Name',
+    useTemplate:      'Use Template',
+    noTemplate:       'No Template',
+    addTemplate:      'Add Template',
+    editTemplate:     'Edit Template',
+    templateSaved:    'Template saved.',
+    templateDeleted:  'Template deleted.',
+    noTemplates:      'No templates yet.',
+    expectedDays:     'Expected Days',
+    templatesNote:    'Pre-fill common task fields. Available to all staff when creating tasks.',
+
+    // Sessions
+    activeSessions:   'Active Sessions',
+    sessionsNote:     'All currently logged-in users. Force logout terminates their session immediately.',
+    forceLogout:      'Force Logout',
+    sessionTerminated:'Session terminated.',
+    noSessions:       'No active sessions.',
+    loggedInAt:       'Logged in',
+    expiresAt:        'Expires',
+    yourSession:      'You',
+
+    // Audit log
+    auditLog:         'Audit Log',
+    auditActor:       'User',
+    auditAction:      'Action',
+    auditTarget:      'Target',
+    auditTime:        'Time',
+    auditFilter:      'Filter by user…',
+    noAuditLogs:      'No log entries.',
+    auditActions: {
+      USER_LOGIN:          'Logged in',
+      USER_LOGOUT:         'Logged out',
+      TASK_CREATED:        'Task created',
+      TASK_FORWARDED:      'Task forwarded',
+      TASK_CLOSED:         'Task closed',
+      USER_CREATED:        'User created',
+      USER_UPDATED:        'User updated',
+      USER_DELETED:        'User deleted',
+      LDAP_ROLE_ASSIGNED:  'Role assigned',
+      SESSION_TERMINATED:  'Session terminated',
+    },
+
+    // Dashboard dept filter
+    allDepartments:   'All Departments',
+    viewingDept:      'Viewing:',
+    deptStats:        'Department Stats',
+
     // Navigation
     dashboard:  'Dashboard',
     tasks:      'Tasks',
@@ -240,6 +298,64 @@ const T = {
     customFields:     'الحقول المخصصة',
     customFieldsNote: 'حقول إضافية تظهر عند إنشاء مهمة لهذا القسم.',
     noDepts:          'لا توجد أقسام بعد. أضف قسماً للبدء.',
+
+    // Bulk actions
+    selectAll:        'تحديد الكل',
+    selected:         'محدد',
+    bulkForward:      'إحالة الكل',
+    bulkClose:        'إغلاق الكل',
+    clearSelection:   'إلغاء',
+    bulkDone:         'تم — {n} مهام محدّثة.',
+    selectDeptBulk:   'إحالة {n} مهام إلى:',
+
+    // Task templates
+    templates:        'القوالب',
+    templateName:     'اسم القالب',
+    useTemplate:      'استخدام قالب',
+    noTemplate:       'بدون قالب',
+    addTemplate:      'إضافة قالب',
+    editTemplate:     'تعديل القالب',
+    templateSaved:    'تم حفظ القالب.',
+    templateDeleted:  'تم حذف القالب.',
+    noTemplates:      'لا توجد قوالب بعد.',
+    expectedDays:     'الأيام المتوقعة',
+    templatesNote:    'قوالب لملء حقول المهام مسبقاً. متاحة لجميع الموظفين عند إنشاء مهمة.',
+
+    // Sessions
+    activeSessions:   'الجلسات النشطة',
+    sessionsNote:     'جميع المستخدمين الذين سجلوا الدخول حالياً. إنهاء الجلسة يُبطل صلاحيتهم فوراً.',
+    forceLogout:      'إنهاء الجلسة',
+    sessionTerminated:'تم إنهاء الجلسة.',
+    noSessions:       'لا توجد جلسات نشطة.',
+    loggedInAt:       'دخل في',
+    expiresAt:        'تنتهي في',
+    yourSession:      'أنت',
+
+    // Audit log
+    auditLog:         'سجل المراقبة',
+    auditActor:       'المستخدم',
+    auditAction:      'الإجراء',
+    auditTarget:      'الهدف',
+    auditTime:        'الوقت',
+    auditFilter:      'تصفية بالمستخدم…',
+    noAuditLogs:      'لا توجد سجلات.',
+    auditActions: {
+      USER_LOGIN:          'تسجيل دخول',
+      USER_LOGOUT:         'تسجيل خروج',
+      TASK_CREATED:        'إنشاء مهمة',
+      TASK_FORWARDED:      'إحالة مهمة',
+      TASK_CLOSED:         'إغلاق مهمة',
+      USER_CREATED:        'إنشاء مستخدم',
+      USER_UPDATED:        'تحديث مستخدم',
+      USER_DELETED:        'حذف مستخدم',
+      LDAP_ROLE_ASSIGNED:  'تعيين دور',
+      SESSION_TERMINATED:  'إنهاء جلسة',
+    },
+
+    // Dashboard dept filter
+    allDepartments:   'جميع الأقسام',
+    viewingDept:      'عرض:',
+    deptStats:        'إحصائيات القسم',
 
     // Navigation
     dashboard:  'لوحة المتابعة',

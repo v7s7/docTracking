@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
+import { useAuth } from '../../context/AuthContext';
 import * as api from '../../services/adminService';
 import { getUsers } from '../../services/userService';
+import { getTemplates, createTemplate, updateTemplate, deleteTemplate } from '../../services/templateService';
+import { getSessions, forceLogout as forceLogoutApi } from '../../services/sessionService';
+import { getAuditLog } from '../../services/auditService';
 import {
   AlertTriangle, CheckCircle, Building2, Key, HardDrive,
   ChevronDown, ChevronRight, Plus, Edit2, Trash2, Info,
-  Users, Settings2,
+  Users, Settings2, LayoutTemplate, Monitor, Activity,
+  LogOut, RefreshCw, ChevronLeft, Filter,
 } from 'lucide-react';
 
 const FIELD_TYPES  = ['text', 'number', 'textarea', 'select', 'date', 'email', 'checkbox'];
@@ -140,7 +145,6 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
 
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 10, marginBottom: '0.6rem', background: 'var(--surface)', overflow: 'hidden' }}>
-      {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem', flexWrap: 'wrap' }}>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 0, display: 'flex' }}
           onClick={() => setOpen(p => !p)}>
@@ -205,7 +209,6 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
 
       <Flash msg={err} />
 
-      {/* Expanded: custom fields */}
       {open && (
         <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
           <button
@@ -279,7 +282,7 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
 // ── Departments tab ──────────────────────────────────────────
 function DepartmentsTab({ t }) {
   const [depts,    setDepts]    = useState([]);
-  const [userMap,  setUserMap]  = useState({}); // dept_id → count
+  const [userMap,  setUserMap]  = useState({});
   const [adding,   setAdding]   = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newGroup, setNewGroup] = useState('');
@@ -327,7 +330,6 @@ function DepartmentsTab({ t }) {
 
       <Flash msg={err} />
 
-      {/* Add form */}
       {adding && (
         <div style={{ border: '1px solid var(--primary)', borderRadius: 10, padding: '1rem', marginBottom: '0.75rem', background: 'var(--primary-light)' }}>
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -359,7 +361,6 @@ function DepartmentsTab({ t }) {
         </div>
       )}
 
-      {/* Dept list */}
       {depts.length === 0 && !adding ? (
         <div className="empty-state" style={{ padding: '2.5rem' }}>
           <div className="empty-icon"><Building2 size={28} strokeWidth={1.4} /></div>
@@ -466,7 +467,6 @@ function AutoRolesTab({ t }) {
               </tr>
             ))}
 
-            {/* Inline add row */}
             <tr style={{ background: 'var(--surface-2)' }}>
               <td style={{ padding: '0.5rem 0.75rem' }}>
                 <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
@@ -556,32 +556,490 @@ function BackupTab({ t }) {
   );
 }
 
+// ── Templates tab ────────────────────────────────────────────
+const blankTpl = { name: '', type: 'incoming', priority: 'normal', source_entity: '', delivery_method: '', expected_days: '', note: '' };
+
+function TemplatesTab({ t }) {
+  const [templates, setTemplates] = useState([]);
+  const [adding,    setAdding]    = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form,      setForm]      = useState({ ...blankTpl });
+  const [msg,       setMsg]       = useState({ text: '', type: 'success' });
+  const [loading,   setLoading]   = useState(true);
+
+  const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { const r = await getTemplates(); setTemplates(r.templates || []); }
+    catch (_) {}
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function flash(text, type = 'success') {
+    setMsg({ text, type });
+    setTimeout(() => setMsg({ text: '', type: 'success' }), 3000);
+  }
+
+  function startAdd() { setForm({ ...blankTpl }); setEditingId(null); setAdding(true); }
+  function startEdit(tpl) {
+    setForm({ name: tpl.name, type: tpl.type || 'incoming', priority: tpl.priority || 'normal',
+      source_entity: tpl.source_entity || '', delivery_method: tpl.delivery_method || '',
+      expected_days: tpl.expected_days ?? '', note: tpl.note || '' });
+    setEditingId(tpl.id); setAdding(true);
+  }
+  function cancel() { setAdding(false); setEditingId(null); }
+
+  async function handleSave() {
+    if (!form.name.trim()) return;
+    const body = { ...form, expected_days: form.expected_days ? Number(form.expected_days) : null };
+    try {
+      if (editingId) {
+        const { template } = await updateTemplate(editingId, body);
+        setTemplates(p => p.map(x => x.id === editingId ? template : x));
+      } else {
+        const { template } = await createTemplate(body);
+        setTemplates(p => [...p, template]);
+      }
+      flash(t.templateSaved); cancel();
+    } catch (e) { flash(e.message, 'error'); }
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm(t.confirmDel)) return;
+    try {
+      await deleteTemplate(id);
+      setTemplates(p => p.filter(x => x.id !== id));
+      flash(t.templateDeleted);
+    } catch (e) { flash(e.message, 'error'); }
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.6rem' }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.templates}</h3>
+          <p className="text-sm text-muted" style={{ margin: '0.15rem 0 0' }}>{t.templatesNote}</p>
+        </div>
+        {!adding && (
+          <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+            onClick={startAdd}>
+            <Plus size={14} strokeWidth={2.5} />{t.addTemplate}
+          </button>
+        )}
+      </div>
+
+      <Flash msg={msg.text} type={msg.type} />
+
+      {/* Add / Edit form */}
+      {adding && (
+        <div style={{ border: '1px solid var(--primary)', borderRadius: 10, padding: '1.1rem', marginBottom: '1rem', background: 'var(--primary-light)' }}>
+          <h4 style={{ margin: '0 0 0.85rem', fontSize: '0.9rem', fontWeight: 700 }}>
+            {editingId ? t.editTemplate : t.addTemplate}
+          </h4>
+          <div className="form-grid">
+            <div className="form-group full-width">
+              <label className="form-label">{t.templateName} <span className="req">*</span></label>
+              <input className="form-control" value={form.name} onChange={e => setF('name', e.target.value)} autoFocus />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t.taskType}</label>
+              <select className="form-control" value={form.type} onChange={e => setF('type', e.target.value)}>
+                <option value="incoming">{t.types?.incoming}</option>
+                <option value="outgoing">{t.types?.outgoing}</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t.taskPriority}</label>
+              <select className="form-control" value={form.priority} onChange={e => setF('priority', e.target.value)}>
+                {['low','normal','high','urgent'].map(p => (
+                  <option key={p} value={p}>{t.priorities?.[p] || p}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t.taskSource}</label>
+              <input className="form-control" value={form.source_entity} onChange={e => setF('source_entity', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t.taskDelivery}</label>
+              <select className="form-control" value={form.delivery_method} onChange={e => setF('delivery_method', e.target.value)}>
+                <option value="">—</option>
+                <option value="email">Email</option>
+                <option value="manual">Manual</option>
+                <option value="mail">Mail</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t.expectedDays}</label>
+              <input className="form-control" type="number" min="1" value={form.expected_days}
+                onChange={e => setF('expected_days', e.target.value)} placeholder="e.g. 3" dir="ltr" />
+            </div>
+            <div className="form-group full-width">
+              <label className="form-label">{t.taskNote}</label>
+              <textarea className="form-control" rows={2} value={form.note} onChange={e => setF('note', e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={!form.name.trim()}>{t.save}</button>
+            <button className="btn btn-ghost btn-sm" onClick={cancel}>{t.cancel}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Templates list */}
+      {loading ? (
+        <div className="page-loading" style={{ height: 120 }}><span className="spinner" /></div>
+      ) : templates.length === 0 ? (
+        <div className="empty-state" style={{ padding: '2.5rem' }}>
+          <div className="empty-icon"><LayoutTemplate size={28} strokeWidth={1.4} /></div>
+          <div className="empty-sub">{t.noTemplates}</div>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>{t.templateName}</th>
+                <th>{t.taskType}</th>
+                <th>{t.taskPriority}</th>
+                <th>{t.expectedDays}</th>
+                <th>{t.taskNote}</th>
+                <th>{t.actions}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {templates.map(tpl => (
+                <tr key={tpl.id}>
+                  <td style={{ fontWeight: 600 }}>{tpl.name}</td>
+                  <td>
+                    <span style={{ background: 'var(--accent-light)', color: 'var(--accent-hover)', padding: '1px 8px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 600 }}>
+                      {t.types?.[tpl.type] || tpl.type}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>{t.priorities?.[tpl.priority] || tpl.priority}</td>
+                  <td style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>{tpl.expected_days ? `${tpl.expected_days}d` : '—'}</td>
+                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.82rem', color: 'var(--text-3)' }}>
+                    {tpl.note || '—'}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '0.3rem' }}>
+                      <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                        onClick={() => startEdit(tpl)}>
+                        <Edit2 size={11} strokeWidth={2} />{t.edit}
+                      </button>
+                      <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                        onClick={() => handleDelete(tpl.id)}>
+                        <Trash2 size={11} strokeWidth={2} />{t.del}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Sessions tab ─────────────────────────────────────────────
+function SessionsTab({ t }) {
+  const { user }    = useAuth();
+  const [sessions,  setSessions]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [flash,     setFlash]     = useState({ text: '', type: 'success' });
+
+  function showFlash(text, type = 'success') {
+    setFlash({ text, type });
+    setTimeout(() => setFlash({ text: '', type: 'success' }), 3000);
+  }
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { const { sessions: s } = await getSessions(); setSessions(s || []); }
+    catch (e) { showFlash(e.message, 'error'); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleForceLogout(jti) {
+    if (!window.confirm(t.forceLogout + '?')) return;
+    try {
+      await forceLogoutApi(jti);
+      setSessions(p => p.filter(s => s.jti !== jti));
+      showFlash(t.sessionTerminated);
+    } catch (e) { showFlash(e.message, 'error'); }
+  }
+
+  function fmt(dt) {
+    if (!dt) return '—';
+    return new Date(dt).toLocaleString();
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.6rem' }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.activeSessions}</h3>
+          <p className="text-sm text-muted" style={{ margin: '0.15rem 0 0' }}>{t.sessionsNote}</p>
+        </div>
+        <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+          onClick={load}>
+          <RefreshCw size={13} strokeWidth={2} />{t.refresh}
+        </button>
+      </div>
+
+      <Flash msg={flash.text} type={flash.type} />
+
+      {loading ? (
+        <div className="page-loading" style={{ height: 120 }}><span className="spinner" /></div>
+      ) : sessions.length === 0 ? (
+        <div className="empty-state" style={{ padding: '2.5rem' }}>
+          <div className="empty-icon"><Monitor size={28} strokeWidth={1.4} /></div>
+          <div className="empty-sub">{t.noSessions}</div>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>{t.fullName || 'Name'}</th>
+                <th>{t.username}</th>
+                <th>{t.role}</th>
+                <th>IP</th>
+                <th>{t.loggedInAt}</th>
+                <th>{t.expiresAt}</th>
+                <th>{t.actions}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map(s => {
+                const isYou = s.username === user?.username;
+                return (
+                  <tr key={s.jti} style={{ background: isYou ? 'var(--primary-light)' : undefined }}>
+                    <td style={{ fontWeight: 500 }}>
+                      {s.full_name || s.username}
+                      {isYou && (
+                        <span style={{ marginInlineStart: '0.4rem', background: 'var(--primary)', color: '#fff', borderRadius: 99, fontSize: '0.68rem', padding: '1px 7px', fontWeight: 700 }}>
+                          {t.yourSession}
+                        </span>
+                      )}
+                    </td>
+                    <td><code className="tag">{s.username}</code></td>
+                    <td><RoleBadge role={s.role} t={t} /></td>
+                    <td style={{ fontSize: '0.82rem', color: 'var(--text-2)', fontFamily: 'monospace' }}>{s.ip || '—'}</td>
+                    <td style={{ fontSize: '0.82rem', color: 'var(--text-2)' }}>{fmt(s.created_at)}</td>
+                    <td style={{ fontSize: '0.82rem', color: 'var(--text-2)' }}>{fmt(s.expires_at)}</td>
+                    <td>
+                      {!isYou && (
+                        <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                          onClick={() => handleForceLogout(s.jti)}>
+                          <LogOut size={11} strokeWidth={2} />{t.forceLogout}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Audit Log tab ────────────────────────────────────────────
+const AUDIT_ACTIONS = [
+  'USER_LOGIN','USER_LOGOUT','TASK_CREATED','TASK_FORWARDED','TASK_CLOSED',
+  'USER_CREATED','USER_UPDATED','USER_DELETED','LDAP_ROLE_ASSIGNED','SESSION_TERMINATED',
+];
+const PAGE_SIZE = 25;
+
+function AuditLogTab({ t }) {
+  const [logs,    setLogs]    = useState([]);
+  const [total,   setTotal]   = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [actor,   setActor]   = useState('');
+  const [action,  setAction]  = useState('');
+  const [page,    setPage]    = useState(0);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const params = { limit: PAGE_SIZE, offset: page * PAGE_SIZE };
+    if (actor.trim())  params.actor  = actor.trim();
+    if (action)        params.action = action;
+    try {
+      const { logs: rows, total: tot } = await getAuditLog(params);
+      setLogs(rows || []);
+      setTotal(tot || 0);
+    } catch (_) {}
+    finally { setLoading(false); }
+  }, [actor, action, page]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(0); }, [actor, action]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  function actionLabel(a) {
+    return t.auditActions?.[a] || a;
+  }
+
+  function fmt(dt) {
+    if (!dt) return '—';
+    return new Date(dt).toLocaleString();
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.6rem' }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.auditLog}</h3>
+          <p className="text-sm text-muted" style={{ margin: '0.15rem 0 0' }}>
+            {total} {t.auditLog?.toLowerCase()}
+          </p>
+        </div>
+        <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+          onClick={load}>
+          <RefreshCw size={13} strokeWidth={2} />{t.refresh}
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <Filter size={14} strokeWidth={1.8} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+        <div style={{ position: 'relative' }}>
+          <input
+            className="form-control"
+            style={{ minWidth: 180, padding: '0.38rem 0.7rem', fontSize: '0.85rem' }}
+            placeholder={t.auditFilter}
+            value={actor}
+            onChange={e => setActor(e.target.value)}
+          />
+        </div>
+        <select
+          className="form-control"
+          style={{ width: 'auto', padding: '0.38rem 0.7rem', fontSize: '0.85rem' }}
+          value={action}
+          onChange={e => setAction(e.target.value)}
+        >
+          <option value="">— {t.auditAction} —</option>
+          {AUDIT_ACTIONS.map(a => (
+            <option key={a} value={a}>{actionLabel(a)}</option>
+          ))}
+        </select>
+        {(actor || action) && (
+          <button className="btn btn-ghost btn-sm" onClick={() => { setActor(''); setAction(''); }}>
+            ✕ {t.clearSelection || 'Clear'}
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="page-loading" style={{ height: 120 }}><span className="spinner" /></div>
+      ) : logs.length === 0 ? (
+        <div className="empty-state" style={{ padding: '2.5rem' }}>
+          <div className="empty-icon"><Activity size={28} strokeWidth={1.4} /></div>
+          <div className="empty-sub">{t.noAuditLogs}</div>
+        </div>
+      ) : (
+        <>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>{t.auditActor}</th>
+                  <th>{t.role}</th>
+                  <th>{t.auditAction}</th>
+                  <th>{t.auditTarget}</th>
+                  <th>{t.auditTime}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map(row => (
+                  <tr key={row.id}>
+                    <td>
+                      <span style={{ fontWeight: 600 }}>{row.actor_username}</span>
+                    </td>
+                    <td>
+                      {row.actor_role ? <RoleBadge role={row.actor_role} t={t} /> : <span className="text-muted">—</span>}
+                    </td>
+                    <td>
+                      <span style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '1px 8px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {actionLabel(row.action)}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: '0.82rem', color: 'var(--text-2)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {row.target_id || '—'}
+                    </td>
+                    <td style={{ fontSize: '0.82rem', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
+                      {fmt(row.created_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '1rem' }}>
+              <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                onClick={() => setPage(p => p - 1)} disabled={page === 0}>
+                <ChevronLeft size={14} strokeWidth={2} />
+              </button>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>
+                {page + 1} / {totalPages}
+              </span>
+              <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1}>
+                <ChevronRight size={14} strokeWidth={2} />
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main panel ───────────────────────────────────────────────
 export default function SuperAdminPanel() {
   const { t } = useLang();
   const [tab, setTab] = useState('departments');
 
   const tabs = [
-    { id: 'departments', icon: <Building2  size={15} strokeWidth={1.8} />, label: t.deptFields },
-    { id: 'autoroles',   icon: <Key        size={15} strokeWidth={1.8} />, label: t.roleMaps },
-    { id: 'backup',      icon: <HardDrive  size={15} strokeWidth={1.8} />, label: t.config },
+    { id: 'departments', icon: <Building2      size={15} strokeWidth={1.8} />, label: t.deptFields },
+    { id: 'autoroles',   icon: <Key            size={15} strokeWidth={1.8} />, label: t.roleMaps },
+    { id: 'templates',   icon: <LayoutTemplate size={15} strokeWidth={1.8} />, label: t.templates },
+    { id: 'sessions',    icon: <Monitor        size={15} strokeWidth={1.8} />, label: t.activeSessions },
+    { id: 'audit',       icon: <Activity       size={15} strokeWidth={1.8} />, label: t.auditLog },
+    { id: 'backup',      icon: <HardDrive      size={15} strokeWidth={1.8} />, label: t.config },
   ];
 
   return (
     <div style={{ maxWidth: 980, margin: '0 auto' }}>
       <div style={{ marginBottom: '1.5rem' }}>
         <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--primary)' }}>{t.adminPanel}</h2>
-        <p className="text-sm text-muted" style={{ marginTop: '0.2rem' }}>{t.deptFields} · {t.roleMaps} · {t.config}</p>
+        <p className="text-sm text-muted" style={{ marginTop: '0.2rem' }}>
+          {t.deptFields} · {t.roleMaps} · {t.templates} · {t.activeSessions} · {t.auditLog} · {t.config}
+        </p>
       </div>
 
       <div className="card">
-        <div style={{ padding: '0 1.5rem' }}>
-          <div className="admin-tabs">
+        <div style={{ padding: '0 1.5rem', overflowX: 'auto' }}>
+          <div className="admin-tabs" style={{ minWidth: 'max-content' }}>
             {tabs.map(tb => (
               <button key={tb.id}
                 className={`admin-tab${tab === tb.id ? ' active' : ''}`}
                 onClick={() => setTab(tb.id)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}>
                 {tb.icon}{tb.label}
               </button>
             ))}
@@ -590,6 +1048,9 @@ export default function SuperAdminPanel() {
         <div className="card-body">
           {tab === 'departments' && <DepartmentsTab t={t} />}
           {tab === 'autoroles'   && <AutoRolesTab  t={t} />}
+          {tab === 'templates'   && <TemplatesTab  t={t} />}
+          {tab === 'sessions'    && <SessionsTab   t={t} />}
+          {tab === 'audit'       && <AuditLogTab   t={t} />}
           {tab === 'backup'      && <BackupTab     t={t} />}
         </div>
       </div>

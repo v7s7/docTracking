@@ -19,5 +19,6 @@ export const updateTask  = (id, body)    => req(`/tasks/${id}`, { method: 'PUT',
 export const forwardTask = (id, body)    => req(`/tasks/${id}/forward`, { method: 'POST', body: JSON.stringify(body) });
 export const returnTask  = (id, body)    => req(`/tasks/${id}/return`, { method: 'POST', body: JSON.stringify(body) });
 export const closeTask   = (id, body)    => req(`/tasks/${id}/close`, { method: 'POST', body: JSON.stringify(body) });
-export const addComment  = (id, note)    => req(`/tasks/${id}/comment`, { method: 'POST', body: JSON.stringify({ note }) });
-export const getDashboard = ()           => req('/dashboard');
+export const addComment   = (id, note)    => req(`/tasks/${id}/comment`, { method: 'POST', body: JSON.stringify({ note }) });
+export const getDashboard = (params = {}) => req(`/dashboard?${new URLSearchParams(params)}`);
+export const bulkAction   = (body)        => req('/tasks/bulk', { method: 'POST', body: JSON.stringify(body) });
