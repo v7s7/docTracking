@@ -128,6 +128,17 @@ const T = {
     unassigned:         'No role assigned',
     ldapAssignTitle:    'Assign Role — Network User',
     roleAssigned:       'Role assigned.',
+    rolesGuide:         'Roles Reference',
+    rolesGuideNote:     'Assigned across all accounts (AD + local)',
+    assigned:           'assigned',
+    roleDesc: {
+      SUPER_ADMIN:      'Full system access — manage users, settings, and all tasks across every department.',
+      ADMIN:            'View and manage all tasks across all departments. Cannot manage users or system settings.',
+      CUSTOMER_SERVICE: 'Create tasks and route them. Sees all tasks across all departments.',
+      MANAGER:          'View and route tasks within their assigned department only.',
+      STAFF:            'View and act on tasks within their assigned department only.',
+      READONLY:         'View tasks in their department only. No create or action permissions.',
+    },
 
     // Dashboard
     totalTasks:    'Total Tasks',
@@ -287,6 +298,17 @@ const T = {
     unassigned:         'لم يُعيَّن دور',
     ldapAssignTitle:    'تعيين دور — مستخدم الشبكة',
     roleAssigned:       'تم تعيين الدور.',
+    rolesGuide:         'دليل الأدوار',
+    rolesGuideNote:     'الأدوار المُعيَّنة في جميع الحسابات (الشبكة + المحلية)',
+    assigned:           'مُعيَّن',
+    roleDesc: {
+      SUPER_ADMIN:      'صلاحية كاملة — إدارة المستخدمين والإعدادات وجميع المهام في جميع الأقسام.',
+      ADMIN:            'عرض وإدارة جميع المهام في جميع الأقسام. لا يمكنه إدارة المستخدمين أو الإعدادات.',
+      CUSTOMER_SERVICE: 'إنشاء المهام وتحويلها. يرى جميع المهام في جميع الأقسام.',
+      MANAGER:          'عرض المهام وتحويلها داخل قسمه المُعيَّن فقط.',
+      STAFF:            'عرض المهام والعمل عليها داخل قسمه المُعيَّن فقط.',
+      READONLY:         'عرض المهام في قسمه فقط. لا صلاحية للإنشاء أو اتخاذ أي إجراء.',
+    },
 
     // Dashboard
     totalTasks:    'إجمالي المهام',

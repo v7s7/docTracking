@@ -231,7 +231,7 @@ function UserModal({ initial, depts, t, onSave, onClose }) {
 }
 
 // ── LDAP network users table ─────────────────────────────────
-function LdapUsersSection({ t }) {
+function LdapUsersSection({ t, onAssigned }) {
   const [ldapUsers,  setLdapUsers]  = useState([]);
   const [dbRecords,  setDbRecords]  = useState({});   // keyed by username
   const [depts,      setDepts]      = useState([]);
@@ -268,6 +268,7 @@ function LdapUsersSection({ t }) {
     const { user } = await assignLdapRole(payload);
     setDbRecords(prev => ({ ...prev, [user.username]: user }));
     flash(t.roleAssigned);
+    onAssigned?.();
   }
 
   const filtered = ldapUsers.filter(u => {
@@ -391,7 +392,7 @@ function LdapUsersSection({ t }) {
 }
 
 // ── Local users table ────────────────────────────────────────
-function LocalUsersSection({ t }) {
+function LocalUsersSection({ t, onChanged }) {
   const [users,   setUsers]   = useState([]);
   const [depts,   setDepts]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -422,6 +423,7 @@ function LocalUsersSection({ t }) {
       setUsers(p => p.map(u => u.id === user.id ? user : u));
       flash(t.userUpdated);
     }
+    onChanged?.();
   }
 
   async function handleDelete(u) {
@@ -430,6 +432,7 @@ function LocalUsersSection({ t }) {
       await deleteUser(u.id);
       setUsers(p => p.filter(x => x.id !== u.id));
       flash(t.userDeleted);
+      onChanged?.();
     } catch (e) { flash(`ERR:${e.message}`); }
   }
 
@@ -536,13 +539,74 @@ function LocalUsersSection({ t }) {
   );
 }
 
+// ── Roles reference guide ────────────────────────────────────
+const ROLE_ORDER = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
+
+function RolesGuide({ t, dbUsers }) {
+  const counts = ROLE_ORDER.reduce((acc, r) => {
+    acc[r] = dbUsers.filter(u => u.role === r).length;
+    return acc;
+  }, {});
+
+  return (
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      <div className="card-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <ShieldCheck size={18} strokeWidth={1.7} style={{ color: 'var(--primary)' }} />
+          <div>
+            <div className="card-title">{t.rolesGuide}</div>
+            <div className="card-subtitle">{t.rolesGuideNote}</div>
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '0.75rem', padding: '0 1.5rem 1.5rem' }}>
+        {ROLE_ORDER.map(role => (
+          <div key={role} style={{
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            padding: '0.85rem 1rem',
+            background: 'var(--surface-2)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.4rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <RoleBadge role={role} t={t} />
+              {counts[role] > 0 && (
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-2)', background: 'var(--border)', borderRadius: 20, padding: '0.1rem 0.55rem' }}>
+                  {counts[role]} {t.assigned}
+                </span>
+              )}
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-2)', margin: 0, lineHeight: 1.5 }}>
+              {t.roleDesc?.[role]}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────
 export default function UserManagement() {
   const { t } = useLang();
+  const [dbUsers, setDbUsers] = useState([]);
+
+  // Shared fetch so RolesGuide counts stay in sync with both tables
+  useEffect(() => {
+    getUsers().then(r => setDbUsers(r.users || [])).catch(() => {});
+  }, []);
+
+  function refreshDbUsers() {
+    getUsers().then(r => setDbUsers(r.users || [])).catch(() => {});
+  }
+
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-      <LdapUsersSection t={t} />
-      <LocalUsersSection t={t} />
+      <RolesGuide t={t} dbUsers={dbUsers} />
+      <LdapUsersSection t={t} onAssigned={refreshDbUsers} />
+      <LocalUsersSection t={t} onChanged={refreshDbUsers} />
     </div>
   );
 }
