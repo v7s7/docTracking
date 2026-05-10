@@ -3,6 +3,7 @@ const express = require('express');
 const bcrypt  = require('bcryptjs');
 const { db }  = require('../db');
 const { verifyToken, requireRole } = require('../middleware/authMiddleware');
+const { browseAllUsers } = require('../services/ldapService');
 
 const router    = express.Router();
 const SA_ONLY   = [verifyToken, requireRole('SUPER_ADMIN')];
@@ -14,6 +15,24 @@ function safeUser(u) {
   const { password_hash, ...rest } = u;
   return rest;
 }
+
+// GET /users/ldap  — browse all Active Directory users via service account
+router.get('/ldap', ...SA_ONLY, async (req, res) => {
+  if (!process.env.LDAP_URL) {
+    return res.json({ success: true, users: [], note: 'LDAP not configured.' });
+  }
+  try {
+    const users = await browseAllUsers();
+    return res.json({ success: true, users });
+  } catch (e) {
+    const code = e.code || 'LDAP_ERROR';
+    console.warn('[LDAP Browse]', code, e.message);
+    if (code === 'NOT_CONFIGURED') {
+      return res.status(503).json({ success: false, message: e.message, code });
+    }
+    return res.status(502).json({ success: false, message: 'Could not connect to Active Directory.', code });
+  }
+});
 
 // GET /users
 router.get('/', ...SA_ONLY, (req, res) => {

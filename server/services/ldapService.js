@@ -124,4 +124,61 @@ async function authenticateUser(username, password) {
   throw Object.assign(new Error(lastError ? lastError.message : 'Authentication failed'), { code });
 }
 
-module.exports = { authenticateUser };
+/**
+ * Browses all user accounts in Active Directory using a service account.
+ * Requires LDAP_BIND_DN and LDAP_BIND_PASSWORD in environment.
+ * Filters out computer accounts and disabled users.
+ */
+async function browseAllUsers() {
+  const bindDN  = process.env.LDAP_BIND_DN;
+  const bindPwd = process.env.LDAP_BIND_PASSWORD;
+
+  if (!bindDN || !bindPwd) {
+    throw Object.assign(
+      new Error('LDAP service account not configured (set LDAP_BIND_DN and LDAP_BIND_PASSWORD).'),
+      { code: 'NOT_CONFIGURED' }
+    );
+  }
+
+  const cfg    = getLdapConfig();
+  const client = createLdapClient(cfg.url);
+
+  await bindClient(client, bindDN, bindPwd);
+
+  return new Promise((resolve, reject) => {
+    const users = [];
+    const opts  = {
+      scope:      'sub',
+      // Active user accounts only (not computers, not disabled)
+      filter:     '(&(objectClass=user)(!(objectClass=computer))(sAMAccountName=*))',
+      attributes: ['sAMAccountName', 'displayName', 'cn', 'mail', 'department', 'title', 'userAccountControl'],
+      sizeLimit:  2000,
+    };
+
+    client.search(cfg.baseDN, opts, (err, res) => {
+      if (err) { client.unbind(() => {}); return reject(err); }
+
+      res.on('searchEntry', (entry) => {
+        const o   = entry.object;
+        const uac = parseInt(o.userAccountControl || '0', 10);
+        if ((uac & 2) !== 0) return; // skip disabled accounts
+        users.push({
+          username:   o.sAMAccountName || '',
+          name:       o.displayName   || o.cn || '',
+          email:      o.mail          || '',
+          department: o.department    || '',
+          title:      o.title         || '',
+        });
+      });
+
+      res.on('error', (e) => { client.unbind(() => {}); reject(e); });
+
+      res.on('end', () => {
+        client.unbind(() => {});
+        resolve(users.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+      });
+    });
+  });
+}
+
+module.exports = { authenticateUser, browseAllUsers };

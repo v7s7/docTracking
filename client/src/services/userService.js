@@ -12,7 +12,8 @@ async function req(path, opts = {}) {
   return data;
 }
 
-export const getUsers    = ()         => req('/users');
-export const createUser  = (body)     => req('/users', { method: 'POST', body: JSON.stringify(body) });
-export const updateUser  = (id, body) => req(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) });
-export const deleteUser  = (id)       => req(`/users/${id}`, { method: 'DELETE' });
+export const getUsers      = ()         => req('/users');
+export const getLdapUsers  = ()         => req('/users/ldap');
+export const createUser    = (body)     => req('/users', { method: 'POST', body: JSON.stringify(body) });
+export const updateUser    = (id, body) => req(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+export const deleteUser    = (id)       => req(`/users/${id}`, { method: 'DELETE' });
