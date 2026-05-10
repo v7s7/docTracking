@@ -115,7 +115,6 @@ const T = {
     userCreated:  'User created.',
     userUpdated:  'User updated.',
     userDeleted:  'User deleted.',
-    password:     'Password',
 
     // Dashboard
     totalTasks:    'Total Tasks',
@@ -262,7 +261,6 @@ const T = {
     userCreated:  'تم إنشاء المستخدم.',
     userUpdated:  'تم تحديث المستخدم.',
     userDeleted:  'تم حذف المستخدم.',
-    password:     'كلمة المرور',
 
     // Dashboard
     totalTasks:    'إجمالي المهام',
