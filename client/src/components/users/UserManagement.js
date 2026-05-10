@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
 import { getUsers, createUser, updateUser, deleteUser } from '../../services/userService';
 import { getDepartments } from '../../services/deptService';
+import { X, AlertTriangle, Users, Check } from 'lucide-react';
 
 const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
 
@@ -50,11 +51,11 @@ function UserModal({ initial, depts, t, onSave, onClose }) {
       <div className="modal-box modal-lg" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3 className="modal-title">{isEdit ? t.editUser : t.addUser}</h3>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}><X size={16} strokeWidth={2} /></button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            {err && <div className="alert alert-error" style={{ marginBottom: '1rem' }}><span>⚠</span><span>{err}</span></div>}
+            {err && <div className="alert alert-error" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><AlertTriangle size={14} strokeWidth={2} /><span>{err}</span></div>}
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">{t.username} <span className="req">*</span></label>
@@ -155,7 +156,7 @@ export default function UserManagement() {
       await deleteUser(u.id);
       setUsers(p => p.filter(x => x.id !== u.id));
       flash(t.userDeleted);
-    } catch (e) { flash(`⚠ ${e.message}`); }
+    } catch (e) { flash(`ERR:${e.message}`); }
   }
 
   return (
@@ -170,8 +171,9 @@ export default function UserManagement() {
         </div>
 
         {msg && (
-          <div className={`alert ${msg.startsWith('⚠') ? 'alert-error' : 'alert-success'}`} style={{ margin: '0 1.5rem 0.5rem' }}>
-            {msg}
+          <div className={`alert ${msg.startsWith('ERR:') ? 'alert-error' : 'alert-success'}`} style={{ margin: '0 1.5rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {msg.startsWith('ERR:') && <AlertTriangle size={14} strokeWidth={2} />}
+            {msg.replace('ERR:', '')}
           </div>
         )}
 
@@ -179,7 +181,7 @@ export default function UserManagement() {
           {loading ? (
             <div className="page-loading" style={{ height: 200 }}><span className="spinner" /></div>
           ) : !users.length ? (
-            <div className="empty-state"><div className="empty-icon">👥</div><div className="empty-sub">{t.noUsers}</div></div>
+            <div className="empty-state"><div className="empty-icon"><Users size={28} strokeWidth={1.4} /></div><div className="empty-sub">{t.noUsers}</div></div>
           ) : (
             <table>
               <thead>

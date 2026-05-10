@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLang } from '../../context/LangContext';
+import { Landmark, AlertTriangle } from 'lucide-react';
 
 export default function LoginPage() {
   const { login }                   = useAuth();
@@ -32,7 +33,7 @@ export default function LoginPage() {
       {/* ── Brand panel ── */}
       <div className="login-brand">
         <div className="login-brand-inner">
-          <div className="login-logo-ring">🕌</div>
+          <div className="login-logo-ring"><Landmark size={36} strokeWidth={1.4} /></div>
           <div className="login-org-name">{t.orgName}</div>
           <div className="login-org-sub" style={{ marginTop: '0.4rem' }}>{t.appName}</div>
           <div className="login-brand-features">
@@ -78,8 +79,8 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="alert alert-error" role="alert">
-              <span>⚠</span>
+            <div className="alert alert-error" role="alert" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <AlertTriangle size={15} strokeWidth={2} />
               <span>{error}</span>
             </div>
           )}

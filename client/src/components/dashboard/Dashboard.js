@@ -2,19 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useLang } from '../../context/LangContext';
 import { getDashboard } from '../../services/taskService';
 import { isOverdue } from '../tasks/TaskList';
+import {
+  FileText, Clock, RotateCcw, CheckCircle, AlertCircle, Users, Inbox,
+} from 'lucide-react';
 
 const STATUS_COLORS = {
-  new:         { bg: '#FFF0F0', color: '#C41E1E', icon: '🔴' },
-  assigned:    { bg: '#FFFBEA', color: '#B7791F', icon: '🟡' },
-  in_progress: { bg: '#EAF4EA', color: '#2D6E2D', icon: '🟢' },
-  returned:    { bg: '#FFF5F5', color: '#9A1818', icon: '↩️' },
-  closed:      { bg: '#F0FFF4', color: '#276749', icon: '✅' },
+  new:         { bg: '#FFF0F0', color: '#C41E1E' },
+  assigned:    { bg: '#FFFBEA', color: '#B7791F' },
+  in_progress: { bg: '#EAF4EA', color: '#2D6E2D' },
+  returned:    { bg: '#FFF5F5', color: '#9A1818' },
+  closed:      { bg: '#F0FFF4', color: '#276749' },
 };
 
 function StatCard({ icon, label, value, color = 'var(--primary)' }) {
   return (
     <div className="stat-card" style={{ borderTop: `3px solid ${color}` }}>
-      <div className="stat-icon">{icon}</div>
+      <div className="stat-icon" style={{ color }}>{icon}</div>
       <div className="stat-value" style={{ color }}>{value ?? '—'}</div>
       <div className="stat-label">{label}</div>
     </div>
@@ -25,7 +28,7 @@ function StatusPill({ status, t }) {
   const c = STATUS_COLORS[status] || { bg: '#f0f0f0', color: '#666' };
   return (
     <span style={{ background: c.bg, color: c.color, padding: '2px 10px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 700 }}>
-      {c.icon} {t.statuses?.[status] || status}
+      {t.statuses?.[status] || status}
     </span>
   );
 }
@@ -33,7 +36,7 @@ function StatusPill({ status, t }) {
 function PriorityDot({ priority }) {
   const colors = { low: '#718096', normal: '#276749', high: '#B7791F', urgent: '#C53030' };
   return (
-    <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors[priority] || '#ccc', display: 'inline-block', marginInlineEnd: '0.35rem' }} />
+    <span style={{ width: 7, height: 7, borderRadius: '50%', background: colors[priority] || '#ccc', display: 'inline-block', marginInlineEnd: '0.4rem', flexShrink: 0 }} />
   );
 }
 
@@ -62,15 +65,15 @@ export default function Dashboard({ onTaskClick }) {
     <div style={{ maxWidth: 980, margin: '0 auto' }}>
       {/* Stat cards */}
       <div className="stat-grid">
-        <StatCard icon="📋" label={t.totalTasks}    value={total}            color="var(--primary)" />
-        <StatCard icon="⏳" label={t.openTasks}     value={open}             color="var(--warning)" />
-        <StatCard icon="↩️" label={t.returnedTasks} value={bs.returned || 0} color="var(--danger)" />
-        <StatCard icon="✅" label={t.closedTasks}   value={bs.closed || 0}   color="var(--success)" />
+        <StatCard icon={<FileText size={22} strokeWidth={1.5} />}    label={t.totalTasks}    value={total}            color="var(--primary)" />
+        <StatCard icon={<Clock size={22} strokeWidth={1.5} />}       label={t.openTasks}     value={open}             color="var(--warning)" />
+        <StatCard icon={<RotateCcw size={22} strokeWidth={1.5} />}   label={t.returnedTasks} value={bs.returned || 0} color="var(--danger)" />
+        <StatCard icon={<CheckCircle size={22} strokeWidth={1.5} />} label={t.closedTasks}   value={bs.closed || 0}   color="var(--success)" />
         {overdue > 0 && (
-          <StatCard icon="⚠️" label={t.overdueTasks || 'Overdue'} value={overdue} color="var(--danger)" />
+          <StatCard icon={<AlertCircle size={22} strokeWidth={1.5} />} label={t.overdueTasks || 'Overdue'} value={overdue} color="var(--danger)" />
         )}
         {stats?.totalUsers != null && (
-          <StatCard icon="👥" label={t.totalUsers} value={stats.totalUsers} color="var(--accent)" />
+          <StatCard icon={<Users size={22} strokeWidth={1.5} />} label={t.totalUsers} value={stats.totalUsers} color="var(--accent)" />
         )}
       </div>
 
@@ -83,7 +86,7 @@ export default function Dashboard({ onTaskClick }) {
           <div style={{ overflowX: 'auto' }}>
             {!stats?.recentTasks?.length ? (
               <div className="empty-state" style={{ padding: '2rem' }}>
-                <div className="empty-icon">📭</div>
+                <div className="empty-icon"><Inbox size={28} strokeWidth={1.4} /></div>
                 <div className="empty-sub">{t.noTasks}</div>
               </div>
             ) : (
@@ -101,7 +104,9 @@ export default function Dashboard({ onTaskClick }) {
                     <tr key={task.id} style={{ cursor: 'pointer' }} onClick={() => onTaskClick?.(task.id)}>
                       <td><code className="tag">{task.serial}</code></td>
                       <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        <PriorityDot priority={task.priority} />{task.title}
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          <PriorityDot priority={task.priority} />{task.title}
+                        </span>
                       </td>
                       <td><StatusPill status={task.status} t={t} /></td>
                       <td className="text-muted text-sm">{t.priorities?.[task.priority] || task.priority}</td>
@@ -123,7 +128,7 @@ export default function Dashboard({ onTaskClick }) {
               {stats.byDept.map(row => (
                 <div key={row.dept_id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.6rem' }}>
                   <div style={{ flex: 1, fontSize: '0.85rem', color: 'var(--text-2)' }}>
-                    {t.groupLabels?.[row.dept_id] || row.dept_id || 'خدمة العملاء'}
+                    {t.groupLabels?.[row.dept_id] || row.dept_id}
                   </div>
                   <div style={{ flex: 2, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{

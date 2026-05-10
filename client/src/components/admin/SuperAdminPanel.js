@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
 import * as api from '../../services/adminService';
+import { AlertTriangle, Check, Building2, Key, Settings } from 'lucide-react';
 
 const FIELD_TYPES = ['text', 'number', 'textarea', 'select', 'date', 'email', 'checkbox'];
 const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'READONLY'];
@@ -25,8 +26,8 @@ function RoleBadge({ role }) {
 function Alert({ msg, type = 'error' }) {
   if (!msg) return null;
   return (
-    <div className={`alert alert-${type}`} style={{ marginBottom: '0.9rem' }}>
-      <span>{type === 'error' ? '⚠' : '✓'}</span>
+    <div className={`alert alert-${type}`} style={{ marginBottom: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      {type === 'error' ? <AlertTriangle size={14} strokeWidth={2} /> : <Check size={14} strokeWidth={2} />}
       <span>{msg}</span>
     </div>
   );
@@ -216,7 +217,7 @@ function DeptCard({ dept, onUpdated, onDeleted }) {
                             {f.type}
                           </span>
                         </td>
-                        <td style={{ textAlign: 'center' }}>{f.required ? '✓' : '—'}</td>
+                        <td style={{ textAlign: 'center' }}>{f.required ? <Check size={14} strokeWidth={2.5} style={{ color: 'var(--success)' }} /> : '—'}</td>
                         <td style={{ color: 'var(--text-2)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {Array.isArray(f.options) ? f.options.join(', ') : (f.placeholder || <span style={{ color: '#ccc' }}>—</span>)}
                         </td>
@@ -469,9 +470,9 @@ export default function SuperAdminPanel() {
   const [tab, setTab] = useState('departments');
 
   const tabs = [
-    { id: 'departments', label: `🏢 ${t.deptFields}` },
-    { id: 'rolemap',     label: `🔑 ${t.roleMaps}` },
-    { id: 'config',      label: `⚙ ${t.config}` },
+    { id: 'departments', icon: <Building2 size={15} strokeWidth={1.8} />, label: t.deptFields },
+    { id: 'rolemap',     icon: <Key       size={15} strokeWidth={1.8} />, label: t.roleMaps },
+    { id: 'config',      icon: <Settings  size={15} strokeWidth={1.8} />, label: t.config },
   ];
 
   return (
@@ -489,8 +490,9 @@ export default function SuperAdminPanel() {
                 key={tab_.id}
                 className={`admin-tab${tab === tab_.id ? ' active' : ''}`}
                 onClick={() => setTab(tab_.id)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
               >
-                {tab_.label}
+                {tab_.icon}{tab_.label}
               </button>
             ))}
           </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
 import { getTasks } from '../../services/taskService';
+import { AlertTriangle, Search, Inbox } from 'lucide-react';
 
 const STATUS_COLORS = {
   new:         { bg: '#FFF0F0', color: '#C41E1E' },
@@ -42,8 +43,8 @@ export function PriorityBadge({ priority, t }) {
 
 export function OverduePill({ t }) {
   return (
-    <span style={{ background: '#FFF5F5', color: '#C53030', border: '1px solid #FEB2B2', padding: '1px 8px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700, marginInlineStart: '0.35rem' }}>
-      ⚠ {t.overdue || 'Overdue'}
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', background: '#FFF5F5', color: '#C53030', border: '1px solid #FEB2B2', padding: '1px 7px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700, marginInlineStart: '0.35rem' }}>
+      <AlertTriangle size={10} strokeWidth={2.5} />{t.overdue || 'Overdue'}
     </span>
   );
 }
@@ -81,13 +82,16 @@ export default function TaskList({ onSelect, createButton }) {
             <div className="card-subtitle">{total} {t.tasks.toLowerCase()}</div>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <input
-              className="form-control"
-              style={{ minWidth: 180, padding: '0.4rem 0.7rem', fontSize: '0.85rem' }}
-              placeholder={`🔍 ${t.search || '…'}`}
-              value={filters.search}
-              onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
-            />
+            <div style={{ position: 'relative' }}>
+              <Search size={14} strokeWidth={2} style={{ position: 'absolute', top: '50%', insetInlineStart: '0.6rem', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }} />
+              <input
+                className="form-control"
+                style={{ minWidth: 180, padding: '0.4rem 0.7rem', paddingInlineStart: '2rem', fontSize: '0.85rem' }}
+                placeholder={t.search || '…'}
+                value={filters.search}
+                onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
+              />
+            </div>
             <select
               className="form-control"
               style={{ width: 'auto', padding: '0.4rem 0.7rem', fontSize: '0.85rem' }}
@@ -109,7 +113,7 @@ export default function TaskList({ onSelect, createButton }) {
             </div>
           ) : !tasks.length ? (
             <div className="empty-state">
-              <div className="empty-icon">📭</div>
+              <div className="empty-icon"><Inbox size={28} strokeWidth={1.4} /></div>
               <div className="empty-sub">{t.noTasks}</div>
             </div>
           ) : (

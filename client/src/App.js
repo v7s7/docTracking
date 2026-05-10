@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LangProvider, useLang } from './context/LangContext';
+import {
+  LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, Building2,
+} from 'lucide-react';
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
 import Dashboard from './components/dashboard/Dashboard';
@@ -18,11 +21,11 @@ function isSuperAdmin(r) { return r === 'SUPER_ADMIN'; }
 // ── Nav items per role ───────────────────────────────────────
 function navItems(role, t) {
   const items = [
-    { id: 'dashboard', icon: '📊', label: t.dashboard },
-    { id: 'tasks',     icon: '📋', label: t.tasks },
+    { id: 'dashboard', icon: <LayoutDashboard size={17} strokeWidth={1.8} />, label: t.dashboard },
+    { id: 'tasks',     icon: <ClipboardList   size={17} strokeWidth={1.8} />, label: t.tasks },
   ];
-  if (isSuperAdmin(role)) items.push({ id: 'users', icon: '👥', label: t.users });
-  if (isSuperAdmin(role)) items.push({ id: 'settings', icon: '⚙', label: t.settings });
+  if (isSuperAdmin(role)) items.push({ id: 'users',    icon: <Users    size={17} strokeWidth={1.8} />, label: t.users });
+  if (isSuperAdmin(role)) items.push({ id: 'settings', icon: <Settings size={17} strokeWidth={1.8} />, label: t.settings });
   return items;
 }
 
@@ -37,7 +40,9 @@ function Header({ user, onTaskClick }) {
   return (
     <header className="app-header">
       <div className="header-brand">
-        <div className="header-logo">🕌</div>
+        <div className="header-logo">
+          <Building2 size={18} strokeWidth={1.6} />
+        </div>
         <div>
           <div className="header-title">{t.orgName}</div>
           <div className="header-subtitle">{t.appName}</div>
@@ -58,7 +63,9 @@ function Header({ user, onTaskClick }) {
             <span className="user-role-badge">{t.roles?.[user?.role] || user?.role}</span>
           </div>
         </div>
-        <button className="btn-header" onClick={logout}>{t.signOut}</button>
+        <button className="btn-header" onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <LogOut size={14} strokeWidth={2} />{t.signOut}
+        </button>
       </div>
     </header>
   );
@@ -81,7 +88,7 @@ function Sidebar({ activeView, onNav, user }) {
           tabIndex={0}
           onKeyDown={e => e.key === 'Enter' && onNav(item.id)}
         >
-          <span style={{ fontSize: '1rem' }}>{item.icon}</span>
+          <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{item.icon}</span>
           <span>{item.label}</span>
         </div>
       ))}
@@ -93,12 +100,11 @@ function Sidebar({ activeView, onNav, user }) {
 function AppShell() {
   const { user, loading } = useAuth();
   const { t }             = useLang();
-  const [view, setView]   = useState('dashboard');  // dashboard | tasks | users | settings
-  const [taskId, setTaskId] = useState(null);         // non-null → showing TaskDetail
+  const [view, setView]   = useState('dashboard');
+  const [taskId, setTaskId] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [refresh, setRefresh]       = useState(0);
 
-  // Pre-load departments for sidebar (unused here but keeps cache warm)
   useEffect(() => { if (user) getDepartments().catch(() => {}); }, [user]);
 
   const handleNavAndClearTask = useCallback((v) => {
@@ -125,7 +131,6 @@ function AppShell() {
         <Sidebar activeView={taskId ? 'tasks' : view} onNav={handleNavAndClearTask} user={user} />
 
         <main className="app-main">
-          {/* Task detail (overrides view) */}
           {taskId ? (
             <TaskDetail
               taskId={taskId}
@@ -146,7 +151,7 @@ function AppShell() {
             <SuperAdminPanel />
           ) : (
             <div className="empty-state">
-              <div className="empty-icon">🔒</div>
+              <div className="empty-icon"><Lock size={32} strokeWidth={1.5} /></div>
               <div className="empty-sub">Access denied.</div>
             </div>
           )}

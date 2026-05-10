@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLang } from '../../context/LangContext';
 import { createTask } from '../../services/taskService';
+import { X, AlertTriangle } from 'lucide-react';
 
 export default function CreateTaskModal({ onClose, onCreated }) {
   const { t } = useLang();
@@ -30,11 +31,11 @@ export default function CreateTaskModal({ onClose, onCreated }) {
       <div className="modal-box modal-lg" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3 className="modal-title">{t.createTask}</h3>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}><X size={16} strokeWidth={2} /></button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            {err && <div className="alert alert-error" style={{ marginBottom: '1rem' }}><span>⚠</span><span>{err}</span></div>}
+            {err && <div className="alert alert-error" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><AlertTriangle size={14} strokeWidth={2} /><span>{err}</span></div>}
 
             <div className="form-grid">
               <div className="form-group full-width">

@@ -4,16 +4,19 @@ import { useAuth } from '../../context/AuthContext';
 import { getTask, forwardTask, returnTask, closeTask, addComment } from '../../services/taskService';
 import { getDepartments } from '../../services/deptService';
 import { StatusBadge, PriorityBadge } from './TaskList';
+import {
+  PlusCircle, ArrowRight, RotateCcw, MessageSquare, CheckCircle,
+  ChevronLeft, X, Send, AlertTriangle, Clock,
+} from 'lucide-react';
 
 const EVENT_ICONS = {
-  created:   '🆕',
-  forwarded: '➡️',
-  returned:  '↩️',
-  commented: '💬',
-  closed:    '✅',
+  created:   <PlusCircle    size={14} strokeWidth={1.8} />,
+  forwarded: <ArrowRight    size={14} strokeWidth={1.8} />,
+  returned:  <RotateCcw     size={14} strokeWidth={1.8} />,
+  commented: <MessageSquare size={14} strokeWidth={1.8} />,
+  closed:    <CheckCircle   size={14} strokeWidth={1.8} />,
 };
 
-// Calculate days between two ISO date strings (rounded to 1 decimal)
 function daysBetween(from, to) {
   const ms = new Date(to) - new Date(from);
   if (isNaN(ms) || ms < 0) return null;
@@ -27,7 +30,7 @@ function Modal({ title, onClose, children }) {
       <div className="modal-box" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3 className="modal-title">{title}</h3>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}><X size={16} strokeWidth={2} /></button>
         </div>
         <div className="modal-body">{children}</div>
       </div>
@@ -43,7 +46,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]     = useState(false);
   const [msg, setMsg]       = useState('');
-  const [modal, setModal]   = useState(null); // 'forward' | 'return' | 'close' | 'comment'
+  const [modal, setModal]   = useState(null);
   const [note, setNote]     = useState('');
   const [toDept, setToDept] = useState('');
 
@@ -72,7 +75,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
       setToDept('');
       flash(successMsg);
       onUpdate?.();
-    } catch (e) { flash(`⚠ ${e.message}`); }
+    } catch (e) { flash(`ERR:${e.message}`); }
     finally { setBusy(false); }
   }
 
@@ -83,17 +86,19 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
   const canForward = isCS && task.status !== 'closed';
   const canReturn  = !isCS && task.status !== 'closed' && task.status !== 'new';
   const canComment = task.status !== 'closed';
+  const isErr = msg.startsWith('ERR:');
 
   return (
     <div style={{ maxWidth: 820, margin: '0 auto' }}>
       {/* Back */}
-      <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ marginBottom: '1rem' }}>
-        ← {t.tasks}
+      <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ marginBottom: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+        <ChevronLeft size={15} strokeWidth={2} />{t.tasks}
       </button>
 
       {msg && (
-        <div className={`alert ${msg.startsWith('⚠') ? 'alert-error' : 'alert-success'}`} style={{ marginBottom: '1rem' }}>
-          {msg}
+        <div className={`alert ${isErr ? 'alert-error' : 'alert-success'}`} style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {isErr && <AlertTriangle size={15} strokeWidth={2} />}
+          {isErr ? msg.replace('ERR:', '') : msg}
         </div>
       )}
 
@@ -110,23 +115,23 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             {canForward && (
-              <button className="btn btn-primary btn-sm" onClick={() => setModal('forward')} disabled={busy}>
-                ➡ {t.forwardTask}
+              <button className="btn btn-primary btn-sm" onClick={() => setModal('forward')} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Send size={13} strokeWidth={2} />{t.forwardTask}
               </button>
             )}
             {canReturn && (
-              <button className="btn btn-secondary btn-sm" onClick={() => setModal('return')} disabled={busy}>
-                ↩ {t.returnToCS}
+              <button className="btn btn-secondary btn-sm" onClick={() => setModal('return')} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <RotateCcw size={13} strokeWidth={2} />{t.returnToCS}
               </button>
             )}
             {canClose && (
-              <button className="btn btn-danger btn-sm" onClick={() => setModal('close')} disabled={busy}>
-                ✕ {t.closeTask}
+              <button className="btn btn-danger btn-sm" onClick={() => setModal('close')} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <X size={13} strokeWidth={2} />{t.closeTask}
               </button>
             )}
             {canComment && (
-              <button className="btn btn-ghost btn-sm" onClick={() => setModal('comment')} disabled={busy}>
-                💬 {t.addComment}
+              <button className="btn btn-ghost btn-sm" onClick={() => setModal('comment')} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <MessageSquare size={13} strokeWidth={2} />{t.addComment}
               </button>
             )}
           </div>
@@ -144,7 +149,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
               task.completed_at && [t.taskCompleted, task.completed_at?.slice(0, 16)],
             ].filter(Boolean).map(([label, val]) => (
               <div key={label}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
                 <div style={{ marginTop: '0.2rem', fontSize: '0.9rem' }}>{val}</div>
               </div>
             ))}
@@ -169,7 +174,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
                   : null;
                 return (
                   <div key={ev.id} className={`timeline-item${i === task.events.length - 1 ? ' last' : ''}`}>
-                    <div className="timeline-dot">{EVENT_ICONS[ev.type] || '•'}</div>
+                    <div className="timeline-dot">{EVENT_ICONS[ev.type] || <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />}</div>
                     <div className="timeline-content">
                       <div style={{ fontWeight: 600, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         {t.eventTypes?.[ev.type] || ev.type}
@@ -177,8 +182,8 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
                           <span style={{ fontWeight: 400, color: 'var(--accent)' }}>{t.groupLabels?.[ev.to_dept] || ev.to_dept}</span>
                         )}
                         {held && (
-                          <span style={{ fontSize: '0.72rem', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-3)', padding: '1px 7px', borderRadius: 99, fontWeight: 500 }}>
-                            ⏱ {held}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.72rem', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-3)', padding: '1px 7px', borderRadius: 99, fontWeight: 500 }}>
+                            <Clock size={10} strokeWidth={2} />{held}
                           </span>
                         )}
                       </div>
@@ -213,9 +218,9 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>{t.cancel}</button>
-            <button className="btn btn-primary btn-sm" disabled={!toDept || busy}
+            <button className="btn btn-primary btn-sm" disabled={!toDept || busy} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
               onClick={() => act(() => forwardTask(task.id, { to_dept_id: toDept, note }), t.taskForwarded)}>
-              ➡ {t.forwardTask}
+              <Send size={13} strokeWidth={2} />{t.forwardTask}
             </button>
           </div>
         </Modal>
@@ -230,9 +235,9 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>{t.cancel}</button>
-            <button className="btn btn-secondary btn-sm" disabled={busy}
+            <button className="btn btn-secondary btn-sm" disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
               onClick={() => act(() => returnTask(task.id, { note }), t.taskReturned)}>
-              ↩ {t.returnToCS}
+              <RotateCcw size={13} strokeWidth={2} />{t.returnToCS}
             </button>
           </div>
         </Modal>
@@ -247,9 +252,9 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>{t.cancel}</button>
-            <button className="btn btn-danger btn-sm" disabled={busy}
+            <button className="btn btn-danger btn-sm" disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
               onClick={() => act(() => closeTask(task.id, { note }), t.taskClosed)}>
-              ✕ {t.closeTask}
+              <X size={13} strokeWidth={2} />{t.closeTask}
             </button>
           </div>
         </Modal>
@@ -263,9 +268,9 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>{t.cancel}</button>
-            <button className="btn btn-primary btn-sm" disabled={!note.trim() || busy}
+            <button className="btn btn-primary btn-sm" disabled={!note.trim() || busy} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
               onClick={() => act(() => addComment(task.id, note), t.commentAdded)}>
-              💬 {t.addComment}
+              <MessageSquare size={13} strokeWidth={2} />{t.addComment}
             </button>
           </div>
         </Modal>

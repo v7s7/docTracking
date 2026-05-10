@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
 import { getNotifications, markAllRead, markOneRead } from '../../services/notificationService';
+import { Bell, ArrowRight, RotateCcw } from 'lucide-react';
 
-const POLL_MS = 30_000; // poll every 30 seconds
+const POLL_MS = 30_000;
 
-const TYPE_ICONS = { forwarded: '➡️', returned: '↩️' };
+const TYPE_ICONS = {
+  forwarded: <ArrowRight size={15} strokeWidth={1.8} />,
+  returned:  <RotateCcw  size={15} strokeWidth={1.8} />,
+};
 
 export default function NotificationBell({ onTaskClick }) {
   const { t }                   = useLang();
@@ -21,20 +25,17 @@ export default function NotificationBell({ onTaskClick }) {
     } catch (_) {}
   }, []);
 
-  // Initial load + polling
   useEffect(() => {
     load();
     const id = setInterval(load, POLL_MS);
     return () => clearInterval(id);
   }, [load]);
 
-  // Refresh on window focus
   useEffect(() => {
     window.addEventListener('focus', load);
     return () => window.removeEventListener('focus', load);
   }, [load]);
 
-  // Close panel on outside click
   useEffect(() => {
     if (!open) return;
     function handler(e) {
@@ -43,10 +44,6 @@ export default function NotificationBell({ onTaskClick }) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
-
-  async function handleOpen() {
-    setOpen(p => !p);
-  }
 
   async function handleMarkAll() {
     await markAllRead();
@@ -69,17 +66,17 @@ export default function NotificationBell({ onTaskClick }) {
       {/* Bell button */}
       <button
         className="btn-header"
-        onClick={handleOpen}
-        style={{ position: 'relative', padding: '0.35rem 0.65rem', fontSize: '1.1rem', lineHeight: 1 }}
+        onClick={() => setOpen(p => !p)}
+        style={{ position: 'relative', padding: '0.35rem 0.65rem', lineHeight: 1, display: 'flex', alignItems: 'center' }}
         aria-label={t.notifications || 'Notifications'}
       >
-        🔔
+        <Bell size={17} strokeWidth={1.8} />
         {unread > 0 && (
           <span style={{
             position: 'absolute', top: -4, insetInlineEnd: -4,
             background: '#C53030', color: '#fff',
             borderRadius: '50%', width: 18, height: 18,
-            fontSize: '0.65rem', fontWeight: 800,
+            fontSize: '0.62rem', fontWeight: 800,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid var(--primary)',
           }}>
@@ -119,7 +116,9 @@ export default function NotificationBell({ onTaskClick }) {
           <div style={{ maxHeight: 360, overflowY: 'auto' }}>
             {!items.length ? (
               <div className="empty-state" style={{ padding: '2rem 1rem' }}>
-                <div className="empty-icon" style={{ fontSize: '1.5rem' }}>🔔</div>
+                <div className="empty-icon" style={{ fontSize: '1.5rem' }}>
+                  <Bell size={28} strokeWidth={1.4} style={{ color: 'var(--text-3)' }} />
+                </div>
                 <div className="empty-sub">{t.noNotifications || 'No notifications yet.'}</div>
               </div>
             ) : items.map(item => (
@@ -137,8 +136,8 @@ export default function NotificationBell({ onTaskClick }) {
                   transition: 'background 0.15s',
                 }}
               >
-                <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: '0.1rem' }}>
-                  {TYPE_ICONS[item.type] || '����'}
+                <span style={{ color: item.is_read ? 'var(--text-3)' : 'var(--primary)', flexShrink: 0, marginTop: '0.1rem' }}>
+                  {TYPE_ICONS[item.type] || <Bell size={15} strokeWidth={1.8} />}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '0.82rem', fontWeight: item.is_read ? 400 : 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
