@@ -115,6 +115,14 @@ const T = {
     userCreated:  'User created.',
     userUpdated:  'User updated.',
     userDeleted:  'User deleted.',
+    ldapUsers:          'Network Users (Active Directory)',
+    ldapNotConfigured:  'LDAP service account not configured. Set LDAP_BIND_DN and LDAP_BIND_PASSWORD in the server .env file.',
+    ldapTitle:          'Job Title',
+    localUsers:         'Local Users',
+    localUsersNote:     'Manually added accounts with password login',
+    noLdapUsers:        'No users found in Active Directory.',
+    noResults:          'No results found.',
+    refresh:            'Refresh',
 
     // Dashboard
     totalTasks:    'Total Tasks',
@@ -261,6 +269,14 @@ const T = {
     userCreated:  'تم إنشاء المستخدم.',
     userUpdated:  'تم تحديث المستخدم.',
     userDeleted:  'تم حذف المستخدم.',
+    ldapUsers:          'مستخدمو الشبكة (Active Directory)',
+    ldapNotConfigured:  'لم يتم تكوين حساب خدمة LDAP. أضف LDAP_BIND_DN و LDAP_BIND_PASSWORD في ملف .env الخاص بالخادم.',
+    ldapTitle:          'المسمى الوظيفي',
+    localUsers:         'المستخدمون المحليون',
+    localUsersNote:     'حسابات مضافة يدوياً بكلمة مرور',
+    noLdapUsers:        'لم يتم العثور على مستخدمين في Active Directory.',
+    noResults:          'لا توجد نتائج.',
+    refresh:            'تحديث',
 
     // Dashboard
     totalTasks:    'إجمالي المهام',
