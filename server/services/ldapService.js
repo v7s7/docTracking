@@ -3,13 +3,18 @@ const { getLdapConfig, createLdapClient } = require('../config/ldap');
 
 // Attempt to bind with a given DN + password.
 // Returns the connected (and bound) client on success.
+// Also listens for the 'error' event that ldapjs emits on TCP failures
+// (ECONNREFUSED, ETIMEDOUT) which never reach the bind callback.
 function bindClient(client, dn, password) {
   return new Promise((resolve, reject) => {
+    function fail(err) {
+      client.unbind(() => {});
+      reject(err);
+    }
+    client.once('error', fail);
     client.bind(dn, password, (err) => {
-      if (err) {
-        client.unbind(() => {});
-        return reject(err);
-      }
+      client.removeListener('error', fail);
+      if (err) return fail(err);
       resolve(client);
     });
   });
@@ -155,8 +160,11 @@ async function browseAllUsers() {
       sizeLimit:  2000,
     };
 
+    function fail(e) { client.unbind(() => {}); reject(e); }
+    client.once('error', fail);
+
     client.search(cfg.baseDN, opts, (err, res) => {
-      if (err) { client.unbind(() => {}); return reject(err); }
+      if (err) { client.removeListener('error', fail); return fail(err); }
 
       res.on('searchEntry', (entry) => {
         const o   = entry.object;
@@ -171,9 +179,10 @@ async function browseAllUsers() {
         });
       });
 
-      res.on('error', (e) => { client.unbind(() => {}); reject(e); });
+      res.on('error', (e) => { client.removeListener('error', fail); fail(e); });
 
       res.on('end', () => {
+        client.removeListener('error', fail);
         client.unbind(() => {});
         resolve(users.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
       });

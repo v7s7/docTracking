@@ -30,7 +30,10 @@ router.get('/ldap', ...SA_ONLY, async (req, res) => {
     if (code === 'NOT_CONFIGURED') {
       return res.status(503).json({ success: false, message: e.message, code });
     }
-    return res.status(502).json({ success: false, message: 'Could not connect to Active Directory.', code });
+    if (code === 49 || e.message?.includes('Invalid Credentials') || e.message?.includes('invalidCredentials')) {
+      return res.status(502).json({ success: false, message: 'LDAP service account credentials are invalid.', code: 'INVALID_CREDENTIALS' });
+    }
+    return res.status(502).json({ success: false, message: `Could not connect to Active Directory: ${e.message}`, code });
   }
 });
 
