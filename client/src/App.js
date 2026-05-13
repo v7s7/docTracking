@@ -115,7 +115,7 @@ function AppShell() {
   if (loading) return <div className="page-loading"><span className="spinner" /><span>{t.loading}</span></div>;
   if (!user)   return <LoginPage />;
 
-  const canCreateTask = isCS(user.role);
+  const canCreateTask = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF'].includes(user.role);
 
   const createBtn = canCreateTask ? (
     <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
