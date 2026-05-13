@@ -9,14 +9,14 @@ import {
   RefreshCw, CheckCircle, XCircle, Edit2, Trash2, ShieldCheck,
 } from 'lucide-react';
 
-// Dropdown order: most-common role first so STAFF is visible at the top
-const VALID_ROLES = ['STAFF', 'CUSTOMER_SERVICE', 'MANAGER', 'ADMIN', 'SUPER_ADMIN', 'READONLY'];
+// Dropdown order: most-common role first. ADMIN is hidden from assignment UI.
+const VALID_ROLES = ['STAFF', 'MANAGER', 'CUSTOMER_SERVICE', 'SUPER_ADMIN', 'READONLY'];
 
 const ROLE_COLORS = {
   SUPER_ADMIN:      '#7B1414',
   ADMIN:            '#C41E1E',
   CUSTOMER_SERVICE: '#2D6E2D',
-  MANAGER:          '#245724',
+  MANAGER:          '#1a5c8a',
   STAFF:            '#B7791F',
   READONLY:         '#718096',
 };
@@ -572,7 +572,7 @@ function LocalUsersSection({ t, onChanged }) {
 }
 
 // ── Roles reference guide ────────────────────────────────────
-const ROLE_ORDER = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
+const ROLE_ORDER = ['SUPER_ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
 
 function RolesGuide({ t, dbUsers }) {
   const counts = ROLE_ORDER.reduce((acc, r) => {
