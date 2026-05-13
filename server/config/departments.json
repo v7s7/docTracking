@@ -180,20 +180,20 @@
           "key": "recipient_contact",
           "label": "رقم تواصل المستلم",
           "type": "text",
-          "required": false,
+          "required": true,
           "placeholder": "رقم الهاتف"
         },
         {
           "key": "recipient_signature",
           "label": "توقيع المستلم",
           "type": "checkbox",
-          "required": false
+          "required": true
         },
         {
           "key": "notes",
           "label": "ملاحظات",
           "type": "textarea",
-          "required": false,
+          "required": true,
           "placeholder": "أي ملاحظات إضافية"
         }
       ]
@@ -364,13 +364,13 @@
           "key": "tenant_signature",
           "label": "توقيع المستأجر",
           "type": "checkbox",
-          "required": false
+          "required": true
         },
         {
           "key": "notes",
           "label": "ملاحظات",
           "type": "textarea",
-          "required": false,
+          "required": true,
           "placeholder": "أي ملاحظات إضافية"
         }
       ]

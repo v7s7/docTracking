@@ -55,4 +55,11 @@ function requireCS(req, res, next) {
   return res.status(403).json({ success: false, message: 'Customer Service access required.' });
 }
 
-module.exports = { verifyToken, requireRole, requireCS, ROLE_WEIGHT };
+// Any authenticated staff member (STAFF and above) can create tasks
+function requireStaff(req, res, next) {
+  const w = ROLE_WEIGHT[req.user?.role] || 0;
+  if (w >= ROLE_WEIGHT.STAFF) return next();
+  return res.status(403).json({ success: false, message: 'Staff access required.' });
+}
+
+module.exports = { verifyToken, requireRole, requireCS, requireStaff, ROLE_WEIGHT };

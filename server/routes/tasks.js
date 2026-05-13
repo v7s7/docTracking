@@ -1,6 +1,6 @@
 const express           = require('express');
 const { db, nextSerial } = require('../db');
-const { verifyToken, requireCS } = require('../middleware/authMiddleware');
+const { verifyToken, requireCS, requireStaff } = require('../middleware/authMiddleware');
 const { logAudit } = require('../utils/audit');
 
 const router = express.Router();
@@ -109,8 +109,8 @@ router.get('/:id', AUTH, (req, res) => {
   res.json({ success: true, task: withEvents(task) });
 });
 
-// ── POST /tasks — create (CS or above) ───────────────────────
-router.post('/', AUTH, requireCS, (req, res) => {
+// ── POST /tasks — create (any staff or above) ────────────────
+router.post('/', AUTH, requireStaff, (req, res) => {
   const {
     title, type = 'incoming', priority = 'normal',
     source_entity, delivery_method, expected_at, extra_data, note,
