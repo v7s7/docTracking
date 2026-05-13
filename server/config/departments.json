@@ -9,9 +9,9 @@
         {
           "key": "serial_number",
           "label": "رقم التسلسل",
-          "type": "number",
+          "type": "text",
           "required": true,
-          "placeholder": "أدخل رقم التسلسل"
+          "auto": true
         },
         {
           "key": "transaction_type",
@@ -124,9 +124,9 @@
         {
           "key": "serial_number",
           "label": "رقم التسلسل",
-          "type": "number",
+          "type": "text",
           "required": true,
-          "placeholder": "رقم التسلسل"
+          "auto": true
         },
         {
           "key": "check_number",
@@ -193,7 +193,7 @@
           "key": "notes",
           "label": "ملاحظات",
           "type": "textarea",
-          "required": true,
+          "required": false,
           "placeholder": "أي ملاحظات إضافية"
         }
       ]
@@ -370,7 +370,7 @@
           "key": "notes",
           "label": "ملاحظات",
           "type": "textarea",
-          "required": true,
+          "required": false,
           "placeholder": "أي ملاحظات إضافية"
         }
       ]

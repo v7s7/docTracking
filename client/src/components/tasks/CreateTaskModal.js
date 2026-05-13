@@ -34,7 +34,8 @@ function shortLabel(label) {
 }
 
 function DeptField({ field, value, onChange }) {
-  const { key, label, type, placeholder, options } = field;
+  const { key, label, type, placeholder, options, required } = field;
+  const req = required !== false; // default true unless explicitly false
 
   if (type === 'checkbox') {
     return (
@@ -47,7 +48,7 @@ function DeptField({ field, value, onChange }) {
           style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }}
         />
         <label htmlFor={`df_${key}`} style={{ fontWeight: 500, cursor: 'pointer', margin: 0, fontSize: '0.9rem' }}>
-          {label} <span className="req">*</span>
+          {label} {req && <span className="req">*</span>}
         </label>
       </div>
     );
@@ -56,14 +57,13 @@ function DeptField({ field, value, onChange }) {
   if (type === 'textarea') {
     return (
       <div className="form-group full-width">
-        <label className="form-label">{label} <span className="req">*</span></label>
+        <label className="form-label">{label} {req && <span className="req">*</span>}</label>
         <textarea
           className="form-control"
           rows={3}
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder || ''}
-          required
         />
       </div>
     );
@@ -72,8 +72,8 @@ function DeptField({ field, value, onChange }) {
   if (type === 'select') {
     return (
       <div className="form-group">
-        <label className="form-label">{label} <span className="req">*</span></label>
-        <select className="form-control" value={value} onChange={e => onChange(e.target.value)} required>
+        <label className="form-label">{label} {req && <span className="req">*</span>}</label>
+        <select className="form-control" value={value} onChange={e => onChange(e.target.value)} required={req}>
           <option value="">— اختر —</option>
           {(options || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
         </select>
@@ -84,14 +84,14 @@ function DeptField({ field, value, onChange }) {
   if (type === 'date') {
     return (
       <div className="form-group">
-        <label className="form-label">{label} <span className="req">*</span></label>
+        <label className="form-label">{label} {req && <span className="req">*</span>}</label>
         <input
           className="form-control"
           type="date"
           value={value}
           onChange={e => onChange(e.target.value)}
           dir="ltr"
-          required
+          required={req}
         />
       </div>
     );
@@ -100,7 +100,7 @@ function DeptField({ field, value, onChange }) {
   // text / number
   return (
     <div className="form-group">
-      <label className="form-label">{label} <span className="req">*</span></label>
+      <label className="form-label">{label} {req && <span className="req">*</span>}</label>
       <input
         className="form-control"
         type="text"
@@ -108,7 +108,7 @@ function DeptField({ field, value, onChange }) {
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder || ''}
-        required
+        required={req}
       />
     </div>
   );
@@ -137,7 +137,7 @@ export default function CreateTaskModal({ onClose, onCreated }) {
 
   function initExtra(dc) {
     const init = {};
-    dc.fields.forEach(f => { init[f.key] = f.type === 'checkbox' ? false : ''; });
+    dc.fields.filter(f => !f.auto).forEach(f => { init[f.key] = f.type === 'checkbox' ? false : ''; });
     setExtra(init);
   }
 
@@ -195,11 +195,13 @@ export default function CreateTaskModal({ onClose, onCreated }) {
 
   function isDeptFormValid() {
     if (!selectedForm) return false;
-    return selectedForm.fields.every(f => {
-      const val = extra[f.key];
-      if (f.type === 'checkbox') return val === true;
-      return val !== undefined && String(val).trim() !== '';
-    });
+    return selectedForm.fields
+      .filter(f => !f.auto && f.required !== false)
+      .every(f => {
+        const val = extra[f.key];
+        if (f.type === 'checkbox') return val === true;
+        return val !== undefined && String(val).trim() !== '';
+      });
   }
 
   async function handleSubmit(e) {
@@ -330,7 +332,7 @@ export default function CreateTaskModal({ onClose, onCreated }) {
               )}
 
               <div className="form-grid">
-                {selectedForm.fields.map(field => (
+                {selectedForm.fields.filter(f => !f.auto).map(field => (
                   <DeptField
                     key={field.key}
                     field={field}

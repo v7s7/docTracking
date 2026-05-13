@@ -2,6 +2,7 @@ const express           = require('express');
 const { db, nextSerial } = require('../db');
 const { verifyToken, requireCS, requireStaff } = require('../middleware/authMiddleware');
 const { logAudit } = require('../utils/audit');
+const { readConfig }    = require('../services/configService');
 
 const router = express.Router();
 const AUTH   = verifyToken;
@@ -121,6 +122,18 @@ router.post('/', AUTH, requireStaff, (req, res) => {
   const serial = nextSerial();
   const now    = new Date().toISOString();
 
+  // Auto-populate fields marked auto:true in the dept form config
+  let finalExtra = extra_data || null;
+  if (finalExtra && finalExtra._form_id) {
+    try {
+      const { departments } = readConfig();
+      const formDept = departments.find(d => d.id === finalExtra._form_id);
+      if (formDept) {
+        formDept.fields.filter(f => f.auto).forEach(f => { finalExtra[f.key] = serial; });
+      }
+    } catch (_) {}
+  }
+
   const info = db.prepare(`
     INSERT INTO tasks
       (serial, title, type, priority, status, source_entity, delivery_method,
@@ -130,7 +143,7 @@ router.post('/', AUTH, requireStaff, (req, res) => {
     serial, title.trim(), type, priority,
     source_entity || '', delivery_method || '',
     '',                   // starts unassigned (at CS)
-    expected_at || '', extra_data ? JSON.stringify(extra_data) : null,
+    expected_at || '', finalExtra ? JSON.stringify(finalExtra) : null,
     req.user.id || null, req.user.name || req.user.username,
     now,
   );
