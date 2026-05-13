@@ -257,8 +257,14 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
             <label className="form-label">{t.selectDeptFwd}</label>
             <select className="form-control" value={toDept} onChange={e => setToDept(e.target.value)}>
               <option value="">— {t.selectDeptFwd} —</option>
-              {depts.map(d => (
-                <option key={d.id} value={d.ldapGroup || d.id}>{d.label}</option>
+              {Object.entries(
+                depts.reduce((acc, d) => {
+                  const key = d.ldapGroup || d.id;
+                  if (!acc[key]) acc[key] = t.groupLabels?.[key] || d.label.split('–')[0].trim();
+                  return acc;
+                }, {})
+              ).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
               ))}
             </select>
           </div>

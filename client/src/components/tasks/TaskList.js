@@ -84,7 +84,15 @@ function BulkForwardModal({ count, t, onConfirm, onClose }) {
             <label className="form-label">{t.deptAssign} *</label>
             <select className="form-control" value={dept} onChange={e => setDept(e.target.value)} required>
               <option value="">—</option>
-              {depts.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+              {Object.entries(
+                depts.reduce((acc, d) => {
+                  const key = d.ldapGroup || d.id;
+                  if (!acc[key]) acc[key] = t.groupLabels?.[key] || d.label.split('–')[0].trim();
+                  return acc;
+                }, {})
+              ).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
             </select>
           </div>
           <div className="form-group">
