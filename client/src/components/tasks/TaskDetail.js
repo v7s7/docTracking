@@ -6,7 +6,7 @@ import { getDepartments } from '../../services/deptService';
 import { StatusBadge, PriorityBadge } from './TaskList';
 import {
   PlusCircle, ArrowRight, RotateCcw, MessageSquare, CheckCircle,
-  ChevronLeft, X, Send, AlertTriangle, Clock,
+  ChevronLeft, X, Send, AlertTriangle, Clock, Inbox,
 } from 'lucide-react';
 
 const EVENT_ICONS = {
@@ -86,6 +86,10 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
   const canForward = isCS && task.status !== 'closed';
   const canReturn  = !isCS && task.status !== 'closed' && task.status !== 'new';
   const canComment = task.status !== 'closed';
+  const hasReceivedComment = task.events?.some(
+    ev => ev.type === 'commented' && (ev.note === 'Received' || ev.note === 'تم الاستلام')
+  );
+  const canMarkReceived = canComment && !hasReceivedComment;
   const isErr = msg.startsWith('ERR:');
 
   return (
@@ -127,6 +131,20 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
             {canClose && (
               <button className="btn btn-danger btn-sm" onClick={() => setModal('close')} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                 <X size={13} strokeWidth={2} />{t.closeTask}
+              </button>
+            )}
+            {canMarkReceived && (
+              <button
+                className="btn btn-sm"
+                onClick={() => act(() => addComment(task.id, t.markReceived), t.receivedAdded)}
+                disabled={busy}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                  background: '#0e7490', color: '#fff', border: 'none',
+                  fontWeight: 600, letterSpacing: '0.01em',
+                }}
+              >
+                <Inbox size={13} strokeWidth={2} />{t.markReceived}
               </button>
             )}
             {canComment && (
