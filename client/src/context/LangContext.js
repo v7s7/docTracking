@@ -202,11 +202,13 @@ const T = {
     roleDesc: {
       SUPER_ADMIN:      'Full system access — manage users, settings, and all tasks across every department.',
       ADMIN:            'View and manage all tasks across all departments. Cannot manage users or system settings.',
-      CUSTOMER_SERVICE: 'Create tasks and route them. Sees all tasks across all departments.',
-      MANAGER:          'View and route tasks within their assigned department only.',
-      STAFF:            'View and act on tasks within their assigned department only.',
-      READONLY:         'View tasks in their department only. No create or action permissions.',
+      CUSTOMER_SERVICE: 'Create tasks and route them to departments. Sees all tasks across all departments. No department assignment needed.',
+      MANAGER:          'Create tasks for Customer Service using their department\'s forms. Can return tasks assigned to their department. Requires a department assignment.',
+      STAFF:            'Create tasks for Customer Service using their department\'s forms. View and act on tasks assigned to their department. Requires a department assignment.',
+      READONLY:         'View tasks in their department only. No create or action permissions. Requires a department assignment.',
     },
+    deptHint:        'Determines which form the user sees when creating a task.',
+    deptNotRequired: 'Not required for this role — this role has access to all departments.',
 
     // Dashboard
     totalTasks:    'Total Tasks',
@@ -440,11 +442,13 @@ const T = {
     roleDesc: {
       SUPER_ADMIN:      'صلاحية كاملة — إدارة المستخدمين والإعدادات وجميع المهام في جميع الأقسام.',
       ADMIN:            'عرض وإدارة جميع المهام في جميع الأقسام. لا يمكنه إدارة المستخدمين أو الإعدادات.',
-      CUSTOMER_SERVICE: 'إنشاء المهام وتحويلها. يرى جميع المهام في جميع الأقسام.',
-      MANAGER:          'عرض المهام وتحويلها داخل قسمه المُعيَّن فقط.',
-      STAFF:            'عرض المهام والعمل عليها داخل قسمه المُعيَّن فقط.',
-      READONLY:         'عرض المهام في قسمه فقط. لا صلاحية للإنشاء أو اتخاذ أي إجراء.',
+      CUSTOMER_SERVICE: 'إنشاء المهام وتحويلها للأقسام. يرى جميع المهام في جميع الأقسام. لا يحتاج إلى تعيين قسم.',
+      MANAGER:          'ينشئ مهاماً لخدمة العملاء عبر نموذج قسمه. يُعيد المهام المُحالة لقسمه. يشترط تعيين القسم.',
+      STAFF:            'ينشئ مهاماً لخدمة العملاء عبر نموذج قسمه. يعمل على المهام المُحالة لقسمه. يشترط تعيين القسم.',
+      READONLY:         'عرض المهام في قسمه فقط. لا صلاحية للإنشاء أو اتخاذ أي إجراء. يشترط تعيين القسم.',
     },
+    deptHint:        'يحدد النموذج الذي يراه المستخدم عند إنشاء مهمة جديدة.',
+    deptNotRequired: 'لا يلزم لهذا الدور — يملك صلاحية الوصول لجميع الأقسام.',
 
     // Dashboard
     totalTasks:    'إجمالي المهام',

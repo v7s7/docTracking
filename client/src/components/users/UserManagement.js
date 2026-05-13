@@ -62,6 +62,9 @@ function deptOptions(depts, t) {
   );
 }
 
+// Roles that use dept-specific task forms and need a dept assigned
+const DEPT_ROLES = ['STAFF', 'MANAGER', 'READONLY'];
+
 // ── Role assignment modal (for LDAP users) ───────────────────
 function LdapRoleModal({ user, depts, t, onSave, onClose }) {
   const [role,    setRole]    = useState(user.assigned_role || 'STAFF');
@@ -110,11 +113,25 @@ function LdapRoleModal({ user, depts, t, onSave, onClose }) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">{t.deptAssign}</label>
-              <select className="form-control" value={dept_id} onChange={e => setDeptId(e.target.value)}>
-                <option value="">—</option>
-                {deptOptions(depts, t).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
+              <label className="form-label">
+                {t.deptAssign}
+                {DEPT_ROLES.includes(role) && <span className="req"> *</span>}
+              </label>
+              {DEPT_ROLES.includes(role) ? (
+                <>
+                  <select className="form-control" value={dept_id} onChange={e => setDeptId(e.target.value)} required>
+                    <option value="">—</option>
+                    {deptOptions(depts, t).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.3rem' }}>
+                    {t.deptHint}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-3)', padding: '0.4rem 0', fontStyle: 'italic' }}>
+                  {t.deptNotRequired}
+                </div>
+              )}
             </div>
           </div>
           <div className="modal-foot">
@@ -199,12 +216,26 @@ function UserModal({ initial, depts, t, onSave, onClose }) {
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">{t.deptAssign}</label>
-                <select className="form-control" value={form.dept_id}
-                  onChange={e => set('dept_id', e.target.value)}>
-                  <option value="">—</option>
-                  {deptOptions(depts, t).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <label className="form-label">
+                  {t.deptAssign}
+                  {DEPT_ROLES.includes(form.role) && <span className="req"> *</span>}
+                </label>
+                {DEPT_ROLES.includes(form.role) ? (
+                  <>
+                    <select className="form-control" value={form.dept_id}
+                      onChange={e => set('dept_id', e.target.value)} required>
+                      <option value="">—</option>
+                      {deptOptions(depts, t).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.3rem' }}>
+                      {t.deptHint}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-3)', padding: '0.4rem 0', fontStyle: 'italic' }}>
+                    {t.deptNotRequired}
+                  </div>
+                )}
               </div>
               {isEdit && (
                 <div className="form-group">

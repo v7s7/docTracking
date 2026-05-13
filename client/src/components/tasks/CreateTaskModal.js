@@ -144,7 +144,10 @@ export default function CreateTaskModal({ onClose, onCreated }) {
   useEffect(() => {
     getTemplates().then(r => setTemplates(r.templates || [])).catch(() => {});
 
-    if (!user?.dept_id) return;
+    // Only STAFF and MANAGER get dept-specific forms.
+    // CS / Admin / SuperAdmin always use the generic form.
+    const GENERIC_ROLES = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'];
+    if (!user?.dept_id || GENERIC_ROLES.includes(user?.role)) return;
 
     getDepartments()
       .then(depts => {
