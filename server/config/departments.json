@@ -364,13 +364,13 @@
           "key": "tenant_signature",
           "label": "توقيع المستأجر",
           "type": "checkbox",
-          "required": false
+          "required": true
         },
         {
           "key": "notes",
           "label": "ملاحظات",
           "type": "textarea",
-          "required": false,
+          "required": true,
           "placeholder": "أي ملاحظات إضافية"
         }
       ]
