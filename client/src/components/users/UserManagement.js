@@ -9,7 +9,8 @@ import {
   RefreshCw, CheckCircle, XCircle, Edit2, Trash2, ShieldCheck,
 } from 'lucide-react';
 
-const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
+// Dropdown order: most-common role first so STAFF is visible at the top
+const VALID_ROLES = ['STAFF', 'CUSTOMER_SERVICE', 'MANAGER', 'ADMIN', 'SUPER_ADMIN', 'READONLY'];
 
 const ROLE_COLORS = {
   SUPER_ADMIN:      '#7B1414',
