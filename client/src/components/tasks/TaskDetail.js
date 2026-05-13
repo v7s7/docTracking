@@ -172,6 +172,38 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
               </div>
             ))}
           </div>
+
+          {/* Dept form data */}
+          {(() => {
+            let ed = null;
+            try { ed = task.extra_data ? (typeof task.extra_data === 'string' ? JSON.parse(task.extra_data) : task.extra_data) : null; } catch (_) {}
+            if (!ed || !ed._form_id) return null;
+            const formDept = depts.find(d => d.id === ed._form_id);
+            if (!formDept) return null;
+            return (
+              <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border)', paddingTop: '1.1rem' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.8rem' }}>
+                  {formDept.label}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.85rem' }}>
+                  {formDept.fields.map(f => {
+                    if (f.key === '_form_id') return null;
+                    const val = ed[f.key];
+                    if (val === undefined || val === null || val === '') return null;
+                    let display;
+                    if (f.type === 'checkbox') display = val ? '✓ نعم' : '✗ لا';
+                    else display = String(val);
+                    return (
+                      <div key={f.key}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{f.label}</div>
+                        <div style={{ marginTop: '0.2rem', fontSize: '0.9rem', wordBreak: 'break-word' }}>{display}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
