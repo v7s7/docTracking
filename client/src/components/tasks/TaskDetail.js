@@ -7,25 +7,27 @@ import { StatusBadge, PriorityBadge } from './TaskList';
 import {
   PlusCircle, ArrowRight, RotateCcw, MessageSquare, CheckCircle,
   ChevronLeft, X, Send, AlertTriangle, Clock, PlayCircle,
-  Building2, RefreshCw,
+  Building2, RefreshCw, Users,
 } from 'lucide-react';
 
 const EVENT_ICONS = {
-  created:     <PlusCircle    size={14} strokeWidth={1.8} />,
-  forwarded:   <Send          size={14} strokeWidth={1.8} />,
-  returned:    <RotateCcw     size={14} strokeWidth={1.8} />,
-  accepted:    <PlayCircle    size={14} strokeWidth={1.8} />,
-  commented:   <MessageSquare size={14} strokeWidth={1.8} />,
-  closed:      <CheckCircle   size={14} strokeWidth={1.8} />,
+  created:      <PlusCircle    size={14} strokeWidth={1.8} />,
+  forwarded:    <Send          size={14} strokeWidth={1.8} />,
+  returned:     <RotateCcw     size={14} strokeWidth={1.8} />,
+  accepted:     <PlayCircle    size={14} strokeWidth={1.8} />,
+  commented:    <MessageSquare size={14} strokeWidth={1.8} />,
+  consultation: <Users         size={14} strokeWidth={1.8} />,
+  closed:       <CheckCircle   size={14} strokeWidth={1.8} />,
 };
 
 const EVENT_COLORS = {
-  created:   'var(--accent)',
-  forwarded: '#0e7490',
-  returned:  '#b45309',
-  accepted:  '#15803d',
-  commented: 'var(--text-3)',
-  closed:    'var(--success)',
+  created:      'var(--accent)',
+  forwarded:    '#0e7490',
+  returned:     '#b45309',
+  accepted:     '#15803d',
+  commented:    'var(--text-3)',
+  consultation: '#7c3aed',
+  closed:       'var(--success)',
 };
 
 function daysBetween(from, to) {
@@ -114,6 +116,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
   const [modal,   setModal]   = useState(null);
   const [note,    setNote]    = useState('');
   const [toDept,  setToDept]  = useState('');
+  const [tagDept, setTagDept] = useState('');
 
   const isCS = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(user?.role);
 
@@ -138,6 +141,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
       setModal(null);
       setNote('');
       setToDept('');
+      setTagDept('');
       flash(successMsg);
       onUpdate?.();
     } catch (e) { flash(`ERR:${e.message}`); }
@@ -361,12 +365,13 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
                     <div className="timeline-content">
                       <div style={{ fontWeight: 600, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <span style={{ color }}>
-                          {ev.type === 'created'   && 'تم الإنشاء'}
-                          {ev.type === 'forwarded'  && 'أُرسل إلى'}
-                          {ev.type === 'returned'   && 'أُعيد إلى خدمة العملاء'}
-                          {ev.type === 'accepted'   && 'تم الاستلام / بدء التنفيذ'}
-                          {ev.type === 'commented'  && 'ملاحظة'}
-                          {ev.type === 'closed'     && 'تم الإغلاق'}
+                          {ev.type === 'created'      && 'تم الإنشاء'}
+                          {ev.type === 'forwarded'    && 'أُرسل إلى'}
+                          {ev.type === 'returned'     && 'أُعيد إلى خدمة العملاء'}
+                          {ev.type === 'accepted'     && 'تم الاستلام / بدء التنفيذ'}
+                          {ev.type === 'commented'    && 'ملاحظة'}
+                          {ev.type === 'consultation' && 'استشارة →'}
+                          {ev.type === 'closed'       && 'تم الإغلاق'}
                         </span>
                         {ev.type === 'forwarded' && ev.to_dept && (
                           <span style={{ fontWeight: 700, color: '#0e7490' }}>
@@ -376,6 +381,16 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
                         {ev.type === 'returned' && ev.from_dept && (
                           <span style={{ fontWeight: 400, color: '#b45309', fontSize: '0.82rem' }}>
                             من {deptLabel(ev.from_dept)}
+                          </span>
+                        )}
+                        {ev.type === 'consultation' && ev.to_dept && (
+                          <span style={{ fontWeight: 700, color: '#7c3aed' }}>
+                            {deptLabel(ev.to_dept)}
+                          </span>
+                        )}
+                        {ev.type === 'consultation' && (
+                          <span style={{ fontSize: '0.7rem', background: '#f5f3ff', border: '1px solid #c4b5fd', color: '#6d28d9', padding: '1px 7px', borderRadius: 99, fontWeight: 600 }}>
+                            استشارة
                           </span>
                         )}
                         {cycleLabel && (
@@ -483,12 +498,30 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
             <label className="form-label">{t.taskNote} <span className="req">*</span></label>
             <textarea className="form-control" rows={4} value={note} onChange={e => setNote(e.target.value)} placeholder="…" autoFocus />
           </div>
+          <div className="form-group" style={{ marginBottom: '1rem' }}>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Users size={13} strokeWidth={2} style={{ color: '#7c3aed' }} />
+              استشارة قسم (اختياري)
+            </label>
+            <select className="form-control" value={tagDept} onChange={e => setTagDept(e.target.value)}>
+              <option value="">— بدون استشارة —</option>
+              {depts.filter(d => (d.services || []).length > 0).map(d => (
+                <option key={d.id} value={d.id}>{d.label}</option>
+              ))}
+            </select>
+            {tagDept && (
+              <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Users size={12} strokeWidth={2} />
+                سيتم إشعار {depts.find(d => d.id === tagDept)?.label} بهذه الملاحظة
+              </div>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>{t.cancel}</button>
             <button className="btn btn-primary btn-sm" disabled={!note.trim() || busy}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-              onClick={() => act(() => addComment(task.id, note), t.commentAdded)}>
-              <MessageSquare size={13} strokeWidth={2} />{t.addComment}
+              onClick={() => act(() => addComment(task.id, note, tagDept || undefined), t.commentAdded)}>
+              <MessageSquare size={13} strokeWidth={2} />{tagDept ? 'إرسال استشارة' : t.addComment}
             </button>
           </div>
         </Modal>

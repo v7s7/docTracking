@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
+import { useAuth } from '../../context/AuthContext';
 import { getTasks, bulkAction } from '../../services/taskService';
 import { getDepartments } from '../../services/deptService';
-import { AlertTriangle, Search, Inbox, Send, X, CheckSquare } from 'lucide-react';
+import { AlertTriangle, Search, Inbox, Send, X, CheckSquare, Clock, RotateCcw } from 'lucide-react';
 
 const STATUS_COLORS = {
   new:         { bg: '#FFF0F0', color: '#C41E1E' },
@@ -50,16 +51,24 @@ export function OverduePill({ t }) {
   );
 }
 
-// ── Bulk forward dept picker modal ───────────────────────────
-function BulkForwardModal({ count, t, onConfirm, onClose }) {
-  const [depts,  setDepts]  = useState([]);
-  const [dept,   setDept]   = useState('');
-  const [note,   setNote]   = useState('');
-  const [busy,   setBusy]   = useState(false);
+// Duration since last update
+function sinceNow(dateStr) {
+  if (!dateStr) return null;
+  const ms = Date.now() - new Date(dateStr).getTime();
+  if (ms < 0) return null;
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60)  return `${mins}د`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs  < 24)  return `${hrs}س`;
+  const days = Math.floor(hrs / 24);
+  return `${days} يوم`;
+}
 
-  useEffect(() => {
-    getDepartments().then(setDepts).catch(() => {});
-  }, []);
+// Bulk forward modal
+function BulkForwardModal({ count, depts, t, onConfirm, onClose }) {
+  const [dept,  setDept]  = useState('');
+  const [note,  setNote]  = useState('');
+  const [busy,  setBusy]  = useState(false);
 
   async function handleConfirm() {
     if (!dept) return;
@@ -84,7 +93,9 @@ function BulkForwardModal({ count, t, onConfirm, onClose }) {
             <label className="form-label">{t.deptAssign} *</label>
             <select className="form-control" value={dept} onChange={e => setDept(e.target.value)} required>
               <option value="">—</option>
-              {depts.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+              {depts.filter(d => (d.services || []).length > 0).map(d => (
+                <option key={d.id} value={d.id}>{d.label}</option>
+              ))}
             </select>
           </div>
           <div className="form-group">
@@ -105,44 +116,74 @@ function BulkForwardModal({ count, t, onConfirm, onClose }) {
 }
 
 export default function TaskList({ onSelect, createButton }) {
-  const { t } = useLang();
-  const [tasks,     setTasks]     = useState([]);
-  const [total,     setTotal]     = useState(0);
-  const [loading,   setLoading]   = useState(true);
-  const [filters,   setFilters]   = useState({ status: '', search: '' });
-  const [selected,  setSelected]  = useState(new Set());
-  const [showFwd,   setShowFwd]   = useState(false);
-  const [flash,     setFlash]     = useState('');
+  const { t }    = useLang();
+  const { user } = useAuth();
+  const isCS = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(user?.role);
+
+  const [tasks,        setTasks]        = useState([]);
+  const [total,        setTotal]        = useState(0);
+  const [statusCounts, setStatusCounts] = useState({});
+  const [depts,        setDepts]        = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [activeTab,    setActiveTab]    = useState('all');
+  const [search,       setSearch]       = useState('');
+  const [selected,     setSelected]     = useState(new Set());
+  const [showFwd,      setShowFwd]      = useState(false);
+  const [flash,        setFlash]        = useState('');
+
+  // Tab → status filter mapping
+  const TAB_STATUS = {
+    all:        '',
+    pending:    'new',       // at CS, not yet sent (CS view) / or all new for depts
+    returned:   'returned',
+    with_dept:  'assigned',
+    in_progress:'in_progress',
+    closed:     'closed',
+  };
+
+  const csTabs = [
+    { id: 'all',         label: 'الكل' },
+    { id: 'returned',    label: 'مُعادة',       alert: true },
+    { id: 'pending',     label: 'للإرسال' },
+    { id: 'with_dept',   label: 'عند القسم' },
+    { id: 'in_progress', label: 'قيد التنفيذ' },
+    { id: 'closed',      label: 'مغلقة' },
+  ];
+
+  const deptTabs = [
+    { id: 'all',         label: 'الكل' },
+    { id: 'with_dept',   label: 'بانتظار الاستلام', alert: false },
+    { id: 'in_progress', label: 'قيد التنفيذ',      alert: false },
+    { id: 'closed',      label: 'مغلقة' },
+  ];
+
+  const tabs = isCS ? csTabs : deptTabs;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
-      if (filters.status) params.status = filters.status;
-      if (filters.search) params.search = filters.search;
+      const statusFilter = TAB_STATUS[activeTab];
+      if (statusFilter)   params.status = statusFilter;
+      if (search.trim())  params.search = search.trim();
       const data = await getTasks(params);
-      setTasks(data.tasks);
-      setTotal(data.total);
+      setTasks(data.tasks || []);
+      setTotal(data.total || 0);
+      setStatusCounts(data.statusCounts || {});
     } catch (_) {}
     finally { setLoading(false); }
-  }, [filters]);
+  }, [activeTab, search]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setSelected(new Set()); }, [filters]);
+  useEffect(() => { getDepartments().then(d => setDepts(d || [])).catch(() => {}); }, []);
+  useEffect(() => { setSelected(new Set()); }, [activeTab, search]);
 
   function showFlash(msg) { setFlash(msg); setTimeout(() => setFlash(''), 3000); }
 
-  const openTasks = tasks.filter(t => t.status !== 'closed');
-  const allOpen   = openTasks.length > 0 && openTasks.every(t => selected.has(t.id));
+  const openTasks = tasks.filter(tk => tk.status !== 'closed');
+  const allOpen   = openTasks.length > 0 && openTasks.every(tk => selected.has(tk.id));
 
-  function toggleAll() {
-    if (allOpen) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(openTasks.map(t => t.id)));
-    }
-  }
-
+  function toggleAll()   { setSelected(allOpen ? new Set() : new Set(openTasks.map(tk => tk.id))); }
   function toggleOne(id) {
     setSelected(prev => {
       const next = new Set(prev);
@@ -156,8 +197,7 @@ export default function TaskList({ onSelect, createButton }) {
     try {
       const { processed } = await bulkAction({ action: 'close', task_ids: [...selected] });
       showFlash((t.bulkDone || 'Done — {n} tasks updated.').replace('{n}', processed));
-      setSelected(new Set());
-      load();
+      setSelected(new Set()); load();
     } catch (e) { showFlash(`ERR:${e.message}`); }
   }
 
@@ -165,21 +205,24 @@ export default function TaskList({ onSelect, createButton }) {
     try {
       const { processed } = await bulkAction({ action: 'forward', task_ids: [...selected], dept_id, note });
       showFlash((t.bulkDone || 'Done — {n} tasks updated.').replace('{n}', processed));
-      setSelected(new Set());
-      setShowFwd(false);
-      load();
+      setSelected(new Set()); setShowFwd(false); load();
     } catch (e) { showFlash(`ERR:${e.message}`); }
   }
 
-  const statusOptions = ['', 'new', 'assigned', 'in_progress', 'returned', 'closed'];
+  function deptLabel(id) {
+    if (!id) return 'خدمة العملاء';
+    return depts.find(d => d.id === id)?.label || id;
+  }
+
+  const returnedCount = statusCounts['returned'] || 0;
 
   return (
     <div style={{ maxWidth: 1040, margin: '0 auto' }}>
       <div className="card">
-        <div className="card-header">
+        <div className="card-header" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <div className="card-title">{t.tasks}</div>
-            <div className="card-subtitle">{total} {t.tasks.toLowerCase()}</div>
+            <div className="card-subtitle">{total} {t.tasks?.toLowerCase()}</div>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ position: 'relative' }}>
@@ -187,29 +230,61 @@ export default function TaskList({ onSelect, createButton }) {
               <input
                 className="form-control"
                 style={{ minWidth: 180, padding: '0.4rem 0.7rem', paddingInlineStart: '2rem', fontSize: '0.85rem' }}
-                placeholder={t.search || '…'}
-                value={filters.search}
-                onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
+                placeholder={t.search || 'بحث…'}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
               />
             </div>
-            <select
-              className="form-control"
-              style={{ width: 'auto', padding: '0.4rem 0.7rem', fontSize: '0.85rem' }}
-              value={filters.status}
-              onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}
-            >
-              {statusOptions.map(s => (
-                <option key={s} value={s}>{s ? (t.statuses?.[s] || s) : `— ${t.taskStatus} —`}</option>
-              ))}
-            </select>
             {createButton}
           </div>
         </div>
 
-        {/* Flash message */}
+        {/* Status tabs */}
+        <div style={{ padding: '0 1.5rem', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
+          <div style={{ display: 'flex', gap: '0', minWidth: 'max-content' }}>
+            {tabs.map(tab => {
+              const statusKey = TAB_STATUS[tab.id];
+              const count = tab.id === 'all'
+                ? Object.values(statusCounts).reduce((a, b) => a + b, 0)
+                : (statusKey ? (statusCounts[statusKey] || 0) : 0);
+              const isActive = activeTab === tab.id;
+              const isAlert  = tab.alert && count > 0;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    padding: '0.65rem 1rem', background: 'none', border: 'none',
+                    borderBottom: isActive ? '2px solid var(--primary)' : '2px solid transparent',
+                    cursor: 'pointer', fontWeight: isActive ? 700 : 400, fontSize: '0.85rem',
+                    color: isActive ? 'var(--primary)' : isAlert ? '#C53030' : 'var(--text-2)',
+                    transition: 'color 0.1s', display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tab.id === 'returned' && isAlert && (
+                    <RotateCcw size={13} strokeWidth={2.5} style={{ color: '#C53030' }} />
+                  )}
+                  {tab.label}
+                  {count > 0 && (
+                    <span style={{
+                      background: isAlert ? '#C53030' : isActive ? 'var(--primary)' : 'var(--surface-2)',
+                      color: (isAlert || isActive) ? '#fff' : 'var(--text-3)',
+                      borderRadius: 99, fontSize: '0.68rem', fontWeight: 700,
+                      padding: '1px 6px', lineHeight: 1.5, minWidth: 18, textAlign: 'center',
+                    }}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {flash && (
           <div className={`alert ${flash.startsWith('ERR:') ? 'alert-error' : 'alert-success'}`}
-            style={{ margin: '0 1.5rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            style={{ margin: '0.5rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {flash.replace('ERR:', '')}
           </div>
         )}
@@ -230,56 +305,93 @@ export default function TaskList({ onSelect, createButton }) {
                 <tr>
                   <th style={{ width: 36, textAlign: 'center' }}>
                     <input type="checkbox" checked={allOpen} onChange={toggleAll}
-                      style={{ accentColor: 'var(--primary)', cursor: 'pointer' }}
-                      title={t.selectAll} />
+                      style={{ accentColor: 'var(--primary)', cursor: 'pointer' }} />
                   </th>
                   <th>{t.taskSerial}</th>
                   <th>{t.taskTitle}</th>
                   <th>{t.taskStatus}</th>
                   <th>{t.taskPriority}</th>
                   <th>{t.taskAssigned}</th>
-                  <th>{t.taskExpected}</th>
+                  <th style={{ minWidth: 90 }}>المدة</th>
                 </tr>
               </thead>
               <tbody>
                 {tasks.map(task => {
-                  const overdue  = isOverdue(task);
-                  const isClosed = task.status === 'closed';
-                  const isSelected = selected.has(task.id);
+                  const overdue     = isOverdue(task);
+                  const isClosed    = task.status === 'closed';
+                  const isReturned  = task.status === 'returned';
+                  const isSelected  = selected.has(task.id);
+                  const duration    = sinceNow(task.updated_at);
+
                   return (
-                    <tr
-                      key={task.id}
-                      style={{
-                        cursor: 'pointer',
-                        background: isSelected ? 'var(--primary-light)' : overdue ? '#fff8f8' : undefined,
-                        borderInlineStart: isSelected ? '3px solid var(--primary)' : overdue ? '3px solid #C53030' : '3px solid transparent',
-                      }}
-                      onClick={() => onSelect?.(task.id)}
-                    >
-                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                        {!isClosed && (
-                          <input type="checkbox" checked={isSelected}
-                            onChange={() => toggleOne(task.id)}
-                            style={{ accentColor: 'var(--primary)', cursor: 'pointer' }} />
-                        )}
-                      </td>
-                      <td><code className="tag">{task.serial}</code></td>
-                      <td style={{ maxWidth: 260 }}>
-                        <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {task.title}
-                          {overdue && <OverduePill t={t} />}
-                        </div>
-                        {task.source_entity && <div className="text-sm text-muted">{task.source_entity}</div>}
-                      </td>
-                      <td><StatusBadge status={task.status} t={t} /></td>
-                      <td><PriorityBadge priority={task.priority} t={t} /></td>
-                      <td className="text-sm text-muted">
-                        {task.current_dept_id ? (t.groupLabels?.[task.current_dept_id] || task.current_dept_id) : '—'}
-                      </td>
-                      <td className="text-sm" style={{ color: overdue ? 'var(--danger)' : 'var(--text-3)', fontWeight: overdue ? 600 : 400 }}>
-                        {task.expected_at || '—'}
-                      </td>
-                    </tr>
+                    <React.Fragment key={task.id}>
+                      <tr
+                        style={{
+                          cursor: 'pointer',
+                          background: isSelected
+                            ? 'var(--primary-light)'
+                            : isReturned ? '#fff8f0'
+                            : overdue   ? '#fff8f8'
+                            : undefined,
+                          borderInlineStart: isSelected   ? '3px solid var(--primary)'
+                            : isReturned ? '3px solid #d97706'
+                            : overdue   ? '3px solid #C53030'
+                            : '3px solid transparent',
+                        }}
+                        onClick={() => onSelect?.(task.id)}
+                      >
+                        <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                          {!isClosed && (
+                            <input type="checkbox" checked={isSelected} onChange={() => toggleOne(task.id)}
+                              style={{ accentColor: 'var(--primary)', cursor: 'pointer' }} />
+                          )}
+                        </td>
+                        <td><code className="tag">{task.serial}</code></td>
+                        <td style={{ maxWidth: 260 }}>
+                          <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {task.title}
+                            {overdue && <OverduePill t={t} />}
+                          </div>
+                          {task.source_entity && (
+                            <div className="text-sm text-muted">{task.source_entity}</div>
+                          )}
+                        </td>
+                        <td><StatusBadge status={task.status} t={t} /></td>
+                        <td><PriorityBadge priority={task.priority} t={t} /></td>
+                        <td className="text-sm" style={{ color: 'var(--text-2)' }}>
+                          {deptLabel(task.current_dept_id)}
+                        </td>
+                        <td>
+                          {duration && (
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '0.2rem',
+                              fontSize: '0.75rem',
+                              color: overdue ? '#C53030' : 'var(--text-3)',
+                              fontWeight: overdue ? 700 : 400,
+                            }}>
+                              <Clock size={11} strokeWidth={2} />{duration}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                      {/* Return note row — shown when task is returned */}
+                      {isReturned && task.last_return_note && (
+                        <tr style={{
+                          background: '#fffbf2',
+                          borderInlineStart: '3px solid #d97706',
+                        }}>
+                          <td />
+                          <td colSpan={6} style={{ paddingTop: 0, paddingBottom: '0.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', fontSize: '0.8rem', color: '#92400e', paddingInlineStart: '0.25rem' }}>
+                              <RotateCcw size={12} strokeWidth={2} style={{ flexShrink: 0, marginTop: 2 }} />
+                              <span>
+                                <strong>{task.returned_by_name || 'القسم'}:</strong> {task.last_return_note}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -288,7 +400,7 @@ export default function TaskList({ onSelect, createButton }) {
         </div>
       </div>
 
-      {/* Floating bulk action bar */}
+      {/* Floating bulk bar */}
       {selected.size > 0 && (
         <div style={{
           position: 'fixed', bottom: '1.5rem', left: '50%', transform: 'translateX(-50%)',
@@ -301,14 +413,18 @@ export default function TaskList({ onSelect, createButton }) {
             {selected.size} {t.selected}
           </span>
           <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.2)' }} />
-          <button onClick={() => setShowFwd(true)}
-            style={{ background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 7, padding: '0.4rem 0.9rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.83rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-            <Send size={13} strokeWidth={2} />{t.bulkForward}
-          </button>
-          <button onClick={handleBulkClose}
-            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 7, padding: '0.4rem 0.9rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.83rem' }}>
-            {t.bulkClose}
-          </button>
+          {isCS && (
+            <button onClick={() => setShowFwd(true)}
+              style={{ background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 7, padding: '0.4rem 0.9rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.83rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Send size={13} strokeWidth={2} />{t.bulkForward}
+            </button>
+          )}
+          {isCS && (
+            <button onClick={handleBulkClose}
+              style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 7, padding: '0.4rem 0.9rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.83rem' }}>
+              {t.bulkClose}
+            </button>
+          )}
           <button onClick={() => setSelected(new Set())}
             style={{ background: 'none', color: 'rgba(255,255,255,0.6)', border: 'none', cursor: 'pointer', padding: '0.2rem', display: 'flex' }}>
             <X size={16} strokeWidth={2} />
@@ -317,7 +433,7 @@ export default function TaskList({ onSelect, createButton }) {
       )}
 
       {showFwd && (
-        <BulkForwardModal count={selected.size} t={t}
+        <BulkForwardModal count={selected.size} depts={depts} t={t}
           onConfirm={handleBulkForward}
           onClose={() => setShowFwd(false)} />
       )}
