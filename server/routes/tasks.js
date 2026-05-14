@@ -217,12 +217,50 @@ router.post('/:id/forward', AUTH, requireCS, (req, res) => {
   res.json({ success: true, task: withEvents(db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id)) });
 });
 
+// ── POST /tasks/:id/accept — dept accepts (in_progress) ──────
+router.post('/:id/accept', AUTH, (req, res) => {
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  if (!task) return res.status(404).json({ success: false, message: 'Task not found.' });
+  if (task.status === 'closed') {
+    return res.status(400).json({ success: false, message: 'Task is already closed.' });
+  }
+  if (task.status === 'in_progress') {
+    return res.status(400).json({ success: false, message: 'Task is already in progress.' });
+  }
+
+  // Only the dept the task is currently at may accept it
+  const user = req.user;
+  const isCS = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(user.role);
+  if (!isCS && task.current_dept_id !== (user.dept_id || '')) {
+    return res.status(403).json({ success: false, message: 'This task is not assigned to your department.' });
+  }
+
+  db.prepare(`
+    UPDATE tasks SET status = 'in_progress', updated_at = datetime('now','localtime')
+    WHERE id = ?
+  `).run(task.id);
+
+  db.prepare(`
+    INSERT INTO task_events (task_id, type, actor_id, actor_name, note)
+    VALUES (?, 'accepted', ?, ?, ?)
+  `).run(task.id, user.id || null, user.name || user.username, '');
+
+  res.json({ success: true, task: withEvents(db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id)) });
+});
+
 // ── POST /tasks/:id/return — dept returns to CS ───────────────
 router.post('/:id/return', AUTH, (req, res) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
   if (!task) return res.status(404).json({ success: false, message: 'Task not found.' });
   if (task.status === 'closed') {
     return res.status(400).json({ success: false, message: 'Task is already closed.' });
+  }
+
+  // Non-CS users may only return tasks that are currently at their own department
+  const user = req.user;
+  const isCS = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(user.role);
+  if (!isCS && task.current_dept_id !== (user.dept_id || '')) {
+    return res.status(403).json({ success: false, message: 'This task is not assigned to your department.' });
   }
 
   const { note } = req.body || {};
@@ -236,9 +274,9 @@ router.post('/:id/return', AUTH, (req, res) => {
   db.prepare(`
     INSERT INTO task_events (task_id, type, from_dept, to_dept, actor_id, actor_name, note)
     VALUES (?, 'returned', ?, 'customer_service', ?, ?, ?)
-  `).run(task.id, fromDept, req.user.id || null, req.user.name || req.user.username, note || '');
+  `).run(task.id, fromDept, user.id || null, user.name || user.username, note || '');
 
-  // Notify CS that the task was returned
+  // Notify CS
   db.prepare(`
     INSERT INTO notifications (dept_id, task_id, task_serial, task_title, type)
     VALUES ('customer_service', ?, ?, ?, 'returned')
