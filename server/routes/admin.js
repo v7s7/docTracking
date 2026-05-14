@@ -1,7 +1,5 @@
 // server/routes/admin.js
 // All routes here are gated behind SUPER_ADMIN.
-// They provide full runtime control over departments, workflow fields,
-// LDAP group→role mappings, and the full config export/import.
 const express = require('express');
 const { verifyToken, requireRole } = require('../middleware/authMiddleware');
 const { readConfig, writeConfig }  = require('../services/configService');
@@ -9,14 +7,14 @@ const { readConfig, writeConfig }  = require('../services/configService');
 const router    = express.Router();
 const SUPER_ONLY = [verifyToken, requireRole('SUPER_ADMIN')];
 
+const VALID_FIELD_TYPES = ['text', 'number', 'textarea', 'select', 'date', 'email', 'checkbox'];
+
 // ── Full config export/import ─────────────────────────────────────────────
 
-// GET /admin/config — download the entire config as JSON
 router.get('/config', ...SUPER_ONLY, (req, res) => {
   res.json({ success: true, config: readConfig() });
 });
 
-// PUT /admin/config — replace the entire config (bulk import / restore from backup)
 router.put('/config', ...SUPER_ONLY, (req, res) => {
   const { config } = req.body || {};
   if (!config || !Array.isArray(config.departments) || typeof config.roleGroupMap !== 'object') {
@@ -33,7 +31,7 @@ router.get('/departments', ...SUPER_ONLY, (req, res) => {
 });
 
 router.post('/departments', ...SUPER_ONLY, (req, res) => {
-  const { label, ldapGroup, fields } = req.body || {};
+  const { label, ldapGroup } = req.body || {};
   if (!label) return res.status(400).json({ success: false, message: '`label` is required.' });
 
   const id  = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -43,7 +41,7 @@ router.post('/departments', ...SUPER_ONLY, (req, res) => {
     return res.status(409).json({ success: false, message: `Department id "${id}" already exists.` });
   }
 
-  const dept = { id, label: label.trim(), ldapGroup: (ldapGroup || '').trim(), fields: fields || [] };
+  const dept = { id, label: label.trim(), ldapGroup: (ldapGroup || '').trim(), services: [] };
   cfg.departments.push(dept);
   writeConfig(cfg);
   res.status(201).json({ success: true, department: dept });
@@ -54,9 +52,8 @@ router.put('/departments/:id', ...SUPER_ONLY, (req, res) => {
   const idx = cfg.departments.findIndex(d => d.id === req.params.id);
   if (idx === -1) return res.status(404).json({ success: false, message: 'Department not found.' });
 
-  // Protect the id; allow updating label, ldapGroup (fields managed separately)
   const { label, ldapGroup } = req.body || {};
-  if (label)      cfg.departments[idx].label     = label.trim();
+  if (label)               cfg.departments[idx].label     = label.trim();
   if (ldapGroup !== undefined) cfg.departments[idx].ldapGroup = ldapGroup.trim();
   writeConfig(cfg);
   res.json({ success: true, department: cfg.departments[idx] });
@@ -73,72 +70,145 @@ router.delete('/departments/:id', ...SUPER_ONLY, (req, res) => {
   res.json({ success: true });
 });
 
-// ── Fields (per department) ───────────────────────────────────────────────
+// ── Services (per department) ─────────────────────────────────────────────
 
-router.get('/departments/:id/fields', ...SUPER_ONLY, (req, res) => {
+router.get('/departments/:id/services', ...SUPER_ONLY, (req, res) => {
   const dept = readConfig().departments.find(d => d.id === req.params.id);
   if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
-  res.json({ success: true, fields: dept.fields });
+  res.json({ success: true, services: dept.services || [] });
 });
 
-router.post('/departments/:id/fields', ...SUPER_ONLY, (req, res) => {
-  const { key, label, type, required, options, placeholder } = req.body || {};
-  if (!key || !label || !type) {
-    return res.status(400).json({ success: false, message: '`key`, `label`, and `type` are required.' });
-  }
-
-  const VALID_TYPES = ['text', 'number', 'textarea', 'select', 'date', 'email', 'checkbox'];
-  if (!VALID_TYPES.includes(type)) {
-    return res.status(400).json({ success: false, message: `Invalid type. Must be one of: ${VALID_TYPES.join(', ')}.` });
-  }
+router.post('/departments/:id/services', ...SUPER_ONLY, (req, res) => {
+  const { label, description } = req.body || {};
+  if (!label) return res.status(400).json({ success: false, message: '`label` is required.' });
 
   const cfg  = readConfig();
   const dept = cfg.departments.find(d => d.id === req.params.id);
   if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
-  if (dept.fields.find(f => f.key === key)) {
-    return res.status(409).json({ success: false, message: `Field "${key}" already exists in this department.` });
+
+  if (!dept.services) dept.services = [];
+
+  const id = (req.params.id + '_' + label).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  if (dept.services.find(s => s.id === id)) {
+    return res.status(409).json({ success: false, message: `Service id "${id}" already exists.` });
+  }
+
+  const service = {
+    id,
+    label: label.trim(),
+    description: (description || '').trim(),
+    fields: [],
+  };
+  dept.services.push(service);
+  writeConfig(cfg);
+  res.status(201).json({ success: true, service });
+});
+
+router.put('/departments/:id/services/:svcId', ...SUPER_ONLY, (req, res) => {
+  const cfg  = readConfig();
+  const dept = cfg.departments.find(d => d.id === req.params.id);
+  if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
+
+  const idx = (dept.services || []).findIndex(s => s.id === req.params.svcId);
+  if (idx === -1) return res.status(404).json({ success: false, message: 'Service not found.' });
+
+  const { label, description } = req.body || {};
+  if (label       !== undefined) dept.services[idx].label       = label.trim();
+  if (description !== undefined) dept.services[idx].description = description.trim();
+  writeConfig(cfg);
+  res.json({ success: true, service: dept.services[idx] });
+});
+
+router.delete('/departments/:id/services/:svcId', ...SUPER_ONLY, (req, res) => {
+  const cfg  = readConfig();
+  const dept = cfg.departments.find(d => d.id === req.params.id);
+  if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
+
+  const before = (dept.services || []).length;
+  dept.services = (dept.services || []).filter(s => s.id !== req.params.svcId);
+  if (dept.services.length === before) {
+    return res.status(404).json({ success: false, message: 'Service not found.' });
+  }
+  writeConfig(cfg);
+  res.json({ success: true });
+});
+
+// ── Fields (per service) ──────────────────────────────────────────────────
+
+function findService(cfg, deptId, svcId) {
+  const dept = cfg.departments.find(d => d.id === deptId);
+  if (!dept) return { err: 'Department not found.' };
+  const svc = (dept.services || []).find(s => s.id === svcId);
+  if (!svc) return { err: 'Service not found.' };
+  return { dept, svc };
+}
+
+router.get('/departments/:id/services/:svcId/fields', ...SUPER_ONLY, (req, res) => {
+  const { err, svc } = findService(readConfig(), req.params.id, req.params.svcId);
+  if (err) return res.status(404).json({ success: false, message: err });
+  res.json({ success: true, fields: svc.fields || [] });
+});
+
+router.post('/departments/:id/services/:svcId/fields', ...SUPER_ONLY, (req, res) => {
+  const { key, label, type, required, options, placeholder } = req.body || {};
+  if (!key || !label || !type) {
+    return res.status(400).json({ success: false, message: '`key`, `label`, and `type` are required.' });
+  }
+  if (!VALID_FIELD_TYPES.includes(type)) {
+    return res.status(400).json({ success: false, message: `Invalid type. Must be one of: ${VALID_FIELD_TYPES.join(', ')}.` });
+  }
+
+  const cfg = readConfig();
+  const { err, svc } = findService(cfg, req.params.id, req.params.svcId);
+  if (err) return res.status(404).json({ success: false, message: err });
+
+  if (!svc.fields) svc.fields = [];
+  if (svc.fields.find(f => f.key === key)) {
+    return res.status(409).json({ success: false, message: `Field "${key}" already exists in this service.` });
   }
 
   const field = {
-    key:      key.trim(),
-    label:    label.trim(),
+    key: key.trim(),
+    label: label.trim(),
     type,
     required: !!required,
     ...(type === 'select' && options ? { options: (Array.isArray(options) ? options : options.split(',').map(x => x.trim()).filter(Boolean)) } : {}),
     ...(placeholder ? { placeholder } : {}),
   };
-  dept.fields.push(field);
+  svc.fields.push(field);
   writeConfig(cfg);
   res.status(201).json({ success: true, field });
 });
 
-router.put('/departments/:id/fields/:key', ...SUPER_ONLY, (req, res) => {
-  const cfg  = readConfig();
-  const dept = cfg.departments.find(d => d.id === req.params.id);
-  if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
-  const fidx = dept.fields.findIndex(f => f.key === req.params.key);
+router.put('/departments/:id/services/:svcId/fields/:key', ...SUPER_ONLY, (req, res) => {
+  const cfg = readConfig();
+  const { err, svc } = findService(cfg, req.params.id, req.params.svcId);
+  if (err) return res.status(404).json({ success: false, message: err });
+
+  const fidx = (svc.fields || []).findIndex(f => f.key === req.params.key);
   if (fidx === -1) return res.status(404).json({ success: false, message: 'Field not found.' });
 
   const { label, type, required, options, placeholder } = req.body || {};
-  const updated = { ...dept.fields[fidx] };
-  if (label     !== undefined) updated.label    = label.trim();
-  if (type      !== undefined) updated.type     = type;
-  if (required  !== undefined) updated.required = !!required;
-  if (options   !== undefined) updated.options  = Array.isArray(options) ? options : options.split(',').map(x => x.trim()).filter(Boolean);
+  const updated = { ...svc.fields[fidx] };
+  if (label       !== undefined) updated.label    = label.trim();
+  if (type        !== undefined) updated.type     = type;
+  if (required    !== undefined) updated.required = !!required;
+  if (options     !== undefined) updated.options  = Array.isArray(options) ? options : options.split(',').map(x => x.trim()).filter(Boolean);
   if (placeholder !== undefined) updated.placeholder = placeholder;
 
-  dept.fields[fidx] = updated;
+  svc.fields[fidx] = updated;
   writeConfig(cfg);
   res.json({ success: true, field: updated });
 });
 
-router.delete('/departments/:id/fields/:key', ...SUPER_ONLY, (req, res) => {
-  const cfg  = readConfig();
-  const dept = cfg.departments.find(d => d.id === req.params.id);
-  if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
-  const before = dept.fields.length;
-  dept.fields = dept.fields.filter(f => f.key !== req.params.key);
-  if (dept.fields.length === before) {
+router.delete('/departments/:id/services/:svcId/fields/:key', ...SUPER_ONLY, (req, res) => {
+  const cfg = readConfig();
+  const { err, svc } = findService(cfg, req.params.id, req.params.svcId);
+  if (err) return res.status(404).json({ success: false, message: err });
+
+  const before = (svc.fields || []).length;
+  svc.fields = (svc.fields || []).filter(f => f.key !== req.params.key);
+  if (svc.fields.length === before) {
     return res.status(404).json({ success: false, message: 'Field not found.' });
   }
   writeConfig(cfg);
@@ -153,7 +223,6 @@ router.get('/role-map', ...SUPER_ONLY, (req, res) => {
   res.json({ success: true, roleGroupMap: readConfig().roleGroupMap || {} });
 });
 
-// PUT /admin/role-map  { ldapGroup, role }  — add or update a single entry
 router.put('/role-map', ...SUPER_ONLY, (req, res) => {
   const { ldapGroup, role } = req.body || {};
   if (!ldapGroup || !VALID_ROLES.includes(role)) {
@@ -169,7 +238,6 @@ router.put('/role-map', ...SUPER_ONLY, (req, res) => {
   res.json({ success: true, roleGroupMap: cfg.roleGroupMap });
 });
 
-// DELETE /admin/role-map/:group — remove a mapping
 router.delete('/role-map/:group', ...SUPER_ONLY, (req, res) => {
   const cfg = readConfig();
   cfg.roleGroupMap = cfg.roleGroupMap || {};
