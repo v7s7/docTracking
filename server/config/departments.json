@@ -1,377 +1,187 @@
 {
-  "_note": "Edit this file directly (then restart) OR use PUT /admin/config at runtime. Super Admin panel writes here live.",
+  "_note": "Edit via Super Admin panel or PUT /admin/config. Each department has 'services', each service has 'fields'.",
   "departments": [
     {
-      "id": "cs_correspondence",
-      "label": "خدمة العملاء – المراسلات الرسمية",
+      "id": "customer_service",
+      "label": "خدمة العملاء",
       "ldapGroup": "customer_service",
-      "fields": [
+      "services": [
         {
-          "key": "serial_number",
-          "label": "رقم التسلسل",
-          "type": "number",
-          "required": true,
-          "placeholder": "أدخل رقم التسلسل"
+          "id": "cs_correspondence",
+          "label": "المراسلات الرسمية",
+          "description": "تسجيل وتتبع المراسلات الرسمية الواردة والصادرة",
+          "fields": [
+            { "key": "serial_number", "label": "رقم التسلسل", "type": "number", "required": true, "placeholder": "أدخل رقم التسلسل" },
+            { "key": "transaction_type", "label": "نوع المعاملة", "type": "select", "required": true, "options": ["صادر", "وارد"] },
+            { "key": "doc_date", "label": "تاريخ الكتاب", "type": "date", "required": true },
+            { "key": "sender_recipient", "label": "الجهة المرسلة / المرسل إليها", "type": "text", "required": true, "placeholder": "اسم الجهة" },
+            { "key": "subject", "label": "موضوع الكتاب", "type": "textarea", "required": true, "placeholder": "موضوع المراسلة" },
+            { "key": "delivery_method", "label": "طريقة الاستلام / التسليم", "type": "select", "required": true, "options": ["يدوي", "بريد", "إيميل"] },
+            { "key": "receipt_date", "label": "تاريخ الاستلام / التسليم", "type": "date", "required": true },
+            { "key": "recipient_name", "label": "اسم المستلم", "type": "text", "required": true, "placeholder": "اسم المستلم" },
+            { "key": "recipient_signature", "label": "توقيع المستلم", "type": "checkbox", "required": false }
+          ]
         },
         {
-          "key": "transaction_type",
-          "label": "نوع المعاملة",
-          "type": "select",
-          "required": true,
-          "options": ["صادر", "وارد"]
-        },
-        {
-          "key": "doc_date",
-          "label": "تاريخ الكتاب",
-          "type": "date",
-          "required": true
-        },
-        {
-          "key": "sender_recipient",
-          "label": "الجهة المرسلة / المرسل إليها",
-          "type": "text",
-          "required": true,
-          "placeholder": "اسم الجهة"
-        },
-        {
-          "key": "subject",
-          "label": "موضوع الكتاب",
-          "type": "textarea",
-          "required": true,
-          "placeholder": "موضوع المراسلة"
-        },
-        {
-          "key": "delivery_method",
-          "label": "طريقة الاستلام / التسليم",
-          "type": "select",
-          "required": true,
-          "options": ["يدوي", "بريد", "إيميل"]
-        },
-        {
-          "key": "receipt_date",
-          "label": "تاريخ الاستلام / التسليم",
-          "type": "date",
-          "required": true
-        },
-        {
-          "key": "recipient_name",
-          "label": "اسم المستلم",
-          "type": "text",
-          "required": true,
-          "placeholder": "اسم المستلم"
-        },
-        {
-          "key": "recipient_signature",
-          "label": "توقيع المستلم",
-          "type": "checkbox",
-          "required": false
+          "id": "cs_inquiries",
+          "label": "الاستفسارات العامة",
+          "description": "تسجيل الاستفسارات العامة الواردة من المراجعين",
+          "fields": [
+            { "key": "inquiry_date", "label": "تاريخ الاستفسار", "type": "date", "required": true },
+            { "key": "inquirer_name", "label": "اسم المستفسر", "type": "text", "required": true, "placeholder": "اسم المستفسر" },
+            { "key": "requested_dept", "label": "قسم المطلوب", "type": "text", "required": true, "placeholder": "القسم المعني بالاستفسار" },
+            { "key": "contact_number", "label": "رقم التواصل", "type": "text", "required": true, "placeholder": "رقم الهاتف" },
+            { "key": "inquiry_details", "label": "تفاصيل الاستفسار", "type": "textarea", "required": true, "placeholder": "اكتب تفاصيل الاستفسار" },
+            { "key": "dept_replied", "label": "هل تم الرد عليه من قبل القسم", "type": "select", "required": true, "options": ["لا", "نعم"] }
+          ]
         }
       ]
     },
     {
-      "id": "cs_inquiries",
-      "label": "خدمة العملاء – الاستفسارات العامة",
-      "ldapGroup": "customer_service",
-      "fields": [
-        {
-          "key": "inquiry_date",
-          "label": "تاريخ الاستفسار",
-          "type": "date",
-          "required": true
-        },
-        {
-          "key": "inquirer_name",
-          "label": "اسم المستفسر",
-          "type": "text",
-          "required": true,
-          "placeholder": "اسم المستفسر"
-        },
-        {
-          "key": "requested_dept",
-          "label": "قسم المطلوب",
-          "type": "text",
-          "required": true,
-          "placeholder": "القسم المعني بالاستفسار"
-        },
-        {
-          "key": "contact_number",
-          "label": "رقم التواصل",
-          "type": "text",
-          "required": true,
-          "placeholder": "رقم الهاتف"
-        },
-        {
-          "key": "inquiry_details",
-          "label": "تفاصيل الاستفسار",
-          "type": "textarea",
-          "required": true,
-          "placeholder": "اكتب تفاصيل الاستفسار"
-        },
-        {
-          "key": "dept_replied",
-          "label": "هل تم الرد عليه من قبل القسم",
-          "type": "select",
-          "required": true,
-          "options": ["لا", "نعم"]
-        }
-      ]
-    },
-    {
-      "id": "accounts_checks",
-      "label": "قسم الحسابات – تسليم الشيكات",
+      "id": "accounts_dept",
+      "label": "قسم الحسابات",
       "ldapGroup": "accounts_dept",
-      "fields": [
+      "services": [
         {
-          "key": "serial_number",
-          "label": "رقم التسلسل",
-          "type": "number",
-          "required": true,
-          "placeholder": "رقم التسلسل"
+          "id": "accounts_checks",
+          "label": "تسليم الشيكات",
+          "description": "تسليم الشيكات للمستحقين من الأفراد والشركات والجهات ذات العلاقة",
+          "fields": [
+            { "key": "serial_number", "label": "رقم التسلسل", "type": "number", "required": true, "placeholder": "رقم التسلسل" },
+            { "key": "check_number", "label": "رقم الشيك", "type": "text", "required": true, "placeholder": "رقم الشيك" },
+            { "key": "amount", "label": "المبلغ", "type": "number", "required": true, "placeholder": "0.000" },
+            { "key": "beneficiary_name", "label": "اسم المستفيد", "type": "text", "required": true, "placeholder": "اسم المستفيد" },
+            { "key": "beneficiary_type", "label": "نوع المستفيد", "type": "select", "required": true, "options": ["فرد", "شركة", "جهة"] },
+            { "key": "delivery_method", "label": "طريقة التسليم", "type": "select", "required": true, "options": ["يدوي", "مندوب"] },
+            { "key": "delivery_date", "label": "تاريخ التسليم", "type": "date", "required": true },
+            { "key": "recipient_name", "label": "اسم المستلم", "type": "text", "required": true, "placeholder": "اسم المستلم" },
+            { "key": "recipient_contact", "label": "رقم تواصل المستلم", "type": "text", "required": true, "placeholder": "رقم الهاتف" },
+            { "key": "recipient_signature", "label": "توقيع المستلم", "type": "checkbox", "required": true },
+            { "key": "notes", "label": "ملاحظات", "type": "textarea", "required": false, "placeholder": "أي ملاحظات إضافية" }
+          ]
         },
         {
-          "key": "check_number",
-          "label": "رقم الشيك",
-          "type": "text",
-          "required": true,
-          "placeholder": "رقم الشيك"
-        },
-        {
-          "key": "amount",
-          "label": "المبلغ",
-          "type": "number",
-          "required": true,
-          "placeholder": "0.000"
-        },
-        {
-          "key": "beneficiary_name",
-          "label": "اسم المستفيد",
-          "type": "text",
-          "required": true,
-          "placeholder": "اسم المستفيد"
-        },
-        {
-          "key": "beneficiary_type",
-          "label": "نوع المستفيد",
-          "type": "select",
-          "required": true,
-          "options": ["فرد", "شركة", "جهة"]
-        },
-        {
-          "key": "delivery_method",
-          "label": "طريقة التسليم",
-          "type": "select",
-          "required": true,
-          "options": ["يدوي", "مندوب"]
-        },
-        {
-          "key": "delivery_date",
-          "label": "تاريخ التسليم",
-          "type": "date",
-          "required": true
-        },
-        {
-          "key": "recipient_name",
-          "label": "اسم المستلم",
-          "type": "text",
-          "required": true,
-          "placeholder": "اسم المستلم"
-        },
-        {
-          "key": "recipient_contact",
-          "label": "رقم تواصل المستلم",
-          "type": "text",
-          "required": true,
-          "placeholder": "رقم الهاتف"
-        },
-        {
-          "key": "recipient_signature",
-          "label": "توقيع المستلم",
-          "type": "checkbox",
-          "required": true
-        },
-        {
-          "key": "notes",
-          "label": "ملاحظات",
-          "type": "textarea",
-          "required": true,
-          "placeholder": "أي ملاحظات إضافية"
+          "id": "accounts_payment_orders",
+          "label": "أذون الصرف",
+          "description": "معالجة وإصدار أذون الصرف للمستحقين",
+          "fields": [
+            { "key": "order_number", "label": "رقم إذن الصرف", "type": "text", "required": true, "placeholder": "رقم الإذن" },
+            { "key": "amount", "label": "المبلغ", "type": "number", "required": true, "placeholder": "0.000" },
+            { "key": "beneficiary_name", "label": "اسم المستفيد", "type": "text", "required": true, "placeholder": "اسم المستفيد" },
+            { "key": "purpose", "label": "الغرض من الصرف", "type": "textarea", "required": true, "placeholder": "وصف الغرض" },
+            { "key": "notes", "label": "ملاحظات", "type": "textarea", "required": false, "placeholder": "أي ملاحظات إضافية" }
+          ]
         }
       ]
     },
     {
-      "id": "banks_social_research",
-      "label": "قسم المصارف – البحوث الاجتماعية",
+      "id": "banks_dept",
+      "label": "قسم المصارف",
       "ldapGroup": "banks_dept",
-      "fields": [
+      "services": [
         {
-          "key": "research_date",
-          "label": "تاريخ البحث الاجتماعي",
-          "type": "date",
-          "required": true
+          "id": "banks_marriage_grant",
+          "label": "إعانة زواج",
+          "description": "تقديم طلبات إعانة الزواج للمستحقين",
+          "fields": [
+            { "key": "applicant_name", "label": "اسم مقدم الطلب", "type": "text", "required": true, "placeholder": "الاسم الكامل" },
+            { "key": "personal_id", "label": "الرقم الشخصي", "type": "text", "required": true, "placeholder": "الرقم الشخصي" },
+            { "key": "contact_number", "label": "رقم التواصل", "type": "text", "required": true, "placeholder": "رقم الهاتف" },
+            { "key": "marriage_date", "label": "تاريخ الزواج", "type": "date", "required": true },
+            { "key": "notes", "label": "ملاحظات", "type": "textarea", "required": false, "placeholder": "أي ملاحظات إضافية" }
+          ]
         },
         {
-          "key": "head_of_household",
-          "label": "اسم رب الأسرة",
-          "type": "text",
-          "required": true,
-          "placeholder": "الاسم الكامل"
+          "id": "banks_social_research",
+          "label": "البحوث الاجتماعية",
+          "description": "إجراء البحوث الاجتماعية للأسر المتعففة",
+          "fields": [
+            { "key": "research_date", "label": "تاريخ البحث الاجتماعي", "type": "date", "required": true },
+            { "key": "head_of_household", "label": "اسم رب الأسرة", "type": "text", "required": true, "placeholder": "الاسم الكامل" },
+            { "key": "contact_number", "label": "رقم التواصل", "type": "text", "required": true, "placeholder": "رقم الهاتف" },
+            { "key": "researcher_name", "label": "اسم الباحث", "type": "text", "required": true, "placeholder": "اسم الباحث الاجتماعي" }
+          ]
         },
         {
-          "key": "contact_number",
-          "label": "رقم التواصل",
-          "type": "text",
-          "required": true,
-          "placeholder": "رقم الهاتف"
-        },
-        {
-          "key": "researcher_name",
-          "label": "اسم الباحث",
-          "type": "text",
-          "required": true,
-          "placeholder": "اسم الباحث الاجتماعي"
+          "id": "banks_student_contracts",
+          "label": "عقود الطلبة الجامعيين",
+          "description": "توقيع عقود الطلبة الجامعيين",
+          "fields": [
+            { "key": "contract_date", "label": "تاريخ توقيع العقد", "type": "date", "required": true },
+            { "key": "student_name", "label": "اسم الطالب", "type": "text", "required": true, "placeholder": "الاسم الكامل" },
+            { "key": "personal_id", "label": "الرقم الشخصي", "type": "text", "required": true, "placeholder": "الرقم الشخصي" },
+            { "key": "contact_number", "label": "رقم التواصل", "type": "text", "required": true, "placeholder": "رقم الهاتف" },
+            { "key": "university", "label": "الجامعة", "type": "text", "required": true, "placeholder": "اسم الجامعة" },
+            { "key": "specialization", "label": "التخصص", "type": "text", "required": true, "placeholder": "التخصص الدراسي" },
+            { "key": "academic_level", "label": "المرحلة الدراسية", "type": "select", "required": true, "options": ["دبلوم", "بكالوريوس", "ماجستير"] },
+            { "key": "signing_date", "label": "تاريخ التوقيع", "type": "date", "required": true },
+            { "key": "is_signed", "label": "تم التوقيع", "type": "select", "required": true, "options": ["لا", "نعم"] },
+            { "key": "employee_name", "label": "اسم الموظف", "type": "text", "required": true, "placeholder": "اسم الموظف المسؤول" }
+          ]
         }
       ]
     },
     {
-      "id": "banks_student_contracts",
-      "label": "قسم المصارف – عقود الطلبة الجامعيين",
-      "ldapGroup": "banks_dept",
-      "fields": [
-        {
-          "key": "contract_date",
-          "label": "تاريخ توقيع العقد",
-          "type": "date",
-          "required": true
-        },
-        {
-          "key": "student_name",
-          "label": "اسم الطالب",
-          "type": "text",
-          "required": true,
-          "placeholder": "الاسم الكامل"
-        },
-        {
-          "key": "personal_id",
-          "label": "الرقم الشخصي",
-          "type": "text",
-          "required": true,
-          "placeholder": "الرقم الشخصي"
-        },
-        {
-          "key": "contact_number",
-          "label": "رقم التواصل",
-          "type": "text",
-          "required": true,
-          "placeholder": "رقم الهاتف"
-        },
-        {
-          "key": "university",
-          "label": "الجامعة",
-          "type": "text",
-          "required": true,
-          "placeholder": "اسم الجامعة"
-        },
-        {
-          "key": "specialization",
-          "label": "التخصص",
-          "type": "text",
-          "required": true,
-          "placeholder": "التخصص الدراسي"
-        },
-        {
-          "key": "academic_level",
-          "label": "المرحلة الدراسية",
-          "type": "select",
-          "required": true,
-          "options": ["دبلوم", "بكالوريوس", "ماجستير"]
-        },
-        {
-          "key": "signing_date",
-          "label": "تاريخ التوقيع",
-          "type": "date",
-          "required": true
-        },
-        {
-          "key": "is_signed",
-          "label": "تم التوقيع",
-          "type": "select",
-          "required": true,
-          "options": ["لا", "نعم"]
-        },
-        {
-          "key": "employee_name",
-          "label": "اسم الموظف",
-          "type": "text",
-          "required": true,
-          "placeholder": "اسم الموظف المسؤول"
-        }
-      ]
-    },
-    {
-      "id": "asset_development_leases",
-      "label": "قسم تنمية الأصول الوقفية – عقود الإيجار",
+      "id": "asset_development_dept",
+      "label": "قسم تنمية الأصول الوقفية",
       "ldapGroup": "asset_development_dept",
-      "fields": [
+      "services": [
         {
-          "key": "contract_number",
-          "label": "رقم العقد",
-          "type": "text",
-          "required": true,
-          "placeholder": "رقم العقد"
+          "id": "asset_development_leases",
+          "label": "عقود الإيجار",
+          "description": "تسجيل عقود الإيجار لتنمية الأصول الوقفية",
+          "fields": [
+            { "key": "contract_number", "label": "رقم العقد", "type": "text", "required": true, "placeholder": "رقم العقد" },
+            { "key": "transfer_date", "label": "تاريخ تحويل العقد", "type": "date", "required": true },
+            { "key": "contract_owner_name", "label": "اسم صاحب العقد", "type": "text", "required": true, "placeholder": "الاسم الكامل" },
+            { "key": "personal_id", "label": "الرقم الشخصي", "type": "text", "required": true, "placeholder": "الرقم الشخصي" },
+            { "key": "contact_number", "label": "رقم التواصل", "type": "text", "required": true, "placeholder": "رقم الهاتف" },
+            { "key": "property_type", "label": "نوع العقار", "type": "select", "required": true, "options": ["محل", "شقة", "أرض", "مبنى"] },
+            { "key": "is_signed", "label": "تم التوقيع", "type": "select", "required": true, "options": ["لا", "نعم"] },
+            { "key": "tenant_signature", "label": "توقيع المستأجر", "type": "checkbox", "required": true },
+            { "key": "notes", "label": "ملاحظات", "type": "textarea", "required": false, "placeholder": "أي ملاحظات إضافية" }
+          ]
         },
         {
-          "key": "transfer_date",
-          "label": "تاريخ تحويل العقد",
-          "type": "date",
-          "required": true
+          "id": "asset_maintenance",
+          "label": "طلبات الصيانة",
+          "description": "تسجيل طلبات صيانة الأصول الوقفية",
+          "fields": [
+            { "key": "property_id", "label": "رقم العقار", "type": "text", "required": true, "placeholder": "رقم تعريف العقار" },
+            { "key": "maintenance_type", "label": "نوع الصيانة", "type": "select", "required": true, "options": ["كهرباء", "سباكة", "مدني", "أخرى"] },
+            { "key": "description", "label": "وصف المشكلة", "type": "textarea", "required": true, "placeholder": "وصف المشكلة بالتفصيل" },
+            { "key": "notes", "label": "ملاحظات", "type": "textarea", "required": false, "placeholder": "أي ملاحظات إضافية" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hr_dept",
+      "label": "قسم الموارد البشرية",
+      "ldapGroup": "hr_dept",
+      "services": [
+        {
+          "id": "hr_leave_request",
+          "label": "طلب إجازة",
+          "description": "تقديم طلبات الإجازة السنوية والإجازات الأخرى",
+          "fields": [
+            { "key": "employee_name", "label": "اسم الموظف", "type": "text", "required": true, "placeholder": "الاسم الكامل" },
+            { "key": "leave_type", "label": "نوع الإجازة", "type": "select", "required": true, "options": ["سنوية", "مرضية", "أمومة", "طارئة"] },
+            { "key": "start_date", "label": "تاريخ البداية", "type": "date", "required": true },
+            { "key": "end_date", "label": "تاريخ النهاية", "type": "date", "required": true },
+            { "key": "notes", "label": "سبب الإجازة", "type": "textarea", "required": false, "placeholder": "يُذكر السبب عند الحاجة" }
+          ]
         },
         {
-          "key": "contract_owner_name",
-          "label": "اسم صاحب العقد",
-          "type": "text",
-          "required": true,
-          "placeholder": "الاسم الكامل"
-        },
-        {
-          "key": "personal_id",
-          "label": "الرقم الشخصي",
-          "type": "text",
-          "required": true,
-          "placeholder": "الرقم الشخصي"
-        },
-        {
-          "key": "contact_number",
-          "label": "رقم التواصل",
-          "type": "text",
-          "required": true,
-          "placeholder": "رقم الهاتف"
-        },
-        {
-          "key": "property_type",
-          "label": "نوع العقار",
-          "type": "select",
-          "required": true,
-          "options": ["محل", "شقة", "أرض", "مبنى"]
-        },
-        {
-          "key": "is_signed",
-          "label": "تم التوقيع",
-          "type": "select",
-          "required": true,
-          "options": ["لا", "نعم"]
-        },
-        {
-          "key": "tenant_signature",
-          "label": "توقيع المستأجر",
-          "type": "checkbox",
-          "required": true
-        },
-        {
-          "key": "notes",
-          "label": "ملاحظات",
-          "type": "textarea",
-          "required": true,
-          "placeholder": "أي ملاحظات إضافية"
+          "id": "hr_recruitment",
+          "label": "طلب توظيف",
+          "description": "تقديم طلبات التوظيف وإضافة موظفين جدد",
+          "fields": [
+            { "key": "position", "label": "المسمى الوظيفي", "type": "text", "required": true, "placeholder": "المسمى الوظيفي المطلوب" },
+            { "key": "department", "label": "القسم", "type": "text", "required": true, "placeholder": "القسم المعني" },
+            { "key": "qualifications", "label": "المؤهلات المطلوبة", "type": "textarea", "required": true, "placeholder": "المؤهلات والخبرات المطلوبة" },
+            { "key": "notes", "label": "ملاحظات إضافية", "type": "textarea", "required": false, "placeholder": "أي ملاحظات" }
+          ]
         }
       ]
     }

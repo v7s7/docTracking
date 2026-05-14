@@ -114,34 +114,51 @@ router.post('/', AUTH, requireStaff, (req, res) => {
   const {
     title, type = 'incoming', priority = 'normal',
     source_entity, delivery_method, expected_at, extra_data, note,
+    target_dept_id,  // CS can set this to immediately route to a department
   } = req.body || {};
 
   if (!title) return res.status(400).json({ success: false, message: 'title is required.' });
 
-  const serial = nextSerial();
-  const now    = new Date().toISOString();
+  const serial     = nextSerial();
+  const now        = new Date().toISOString();
+  const deptId     = target_dept_id || '';
+  const initStatus = target_dept_id ? 'assigned' : 'new';
 
   const info = db.prepare(`
     INSERT INTO tasks
       (serial, title, type, priority, status, source_entity, delivery_method,
        current_dept_id, expected_at, extra_data, created_by_id, created_by_name, updated_at)
-    VALUES (?,?,?,?,'new',?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     serial, title.trim(), type, priority,
+    initStatus,
     source_entity || '', delivery_method || '',
-    '',                   // starts unassigned (at CS)
+    deptId,
     expected_at || '', extra_data ? JSON.stringify(extra_data) : null,
     req.user.id || null, req.user.name || req.user.username,
     now,
   );
 
+  const taskId = info.lastInsertRowid;
+
   db.prepare(`
     INSERT INTO task_events (task_id, type, actor_id, actor_name, note)
     VALUES (?, 'created', ?, ?, ?)
-  `).run(info.lastInsertRowid, req.user.id || null, req.user.name || req.user.username, note || '');
+  `).run(taskId, req.user.id || null, req.user.name || req.user.username, note || '');
 
-  const task = withEvents(db.prepare('SELECT * FROM tasks WHERE id = ?').get(info.lastInsertRowid));
-  logAudit(req.user, 'TASK_CREATED', 'task', info.lastInsertRowid, { serial: task.serial }, req.ip);
+  if (target_dept_id) {
+    db.prepare(`
+      INSERT INTO task_events (task_id, type, from_dept, to_dept, actor_id, actor_name, note)
+      VALUES (?, 'forwarded', '', ?, ?, ?, ?)
+    `).run(taskId, target_dept_id, req.user.id || null, req.user.name || req.user.username, note || '');
+
+    const taskRow = db.prepare('SELECT serial, title FROM tasks WHERE id = ?').get(taskId);
+    db.prepare('INSERT INTO notifications (dept_id, task_id, task_serial, task_title, type) VALUES (?,?,?,?,?)')
+      .run(target_dept_id, taskId, taskRow.serial, taskRow.title, 'forwarded');
+  }
+
+  const task = withEvents(db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId));
+  logAudit(req.user, 'TASK_CREATED', 'task', taskId, { serial: task.serial }, req.ip);
   res.status(201).json({ success: true, task });
 });
 

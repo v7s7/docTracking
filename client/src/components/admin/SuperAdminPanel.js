@@ -10,7 +10,7 @@ import {
   AlertTriangle, CheckCircle, Building2, Key, HardDrive,
   ChevronDown, ChevronRight, Plus, Edit2, Trash2, Info,
   Users, Settings2, LayoutTemplate, Monitor, Activity,
-  LogOut, RefreshCw, ChevronLeft, Filter,
+  LogOut, RefreshCw, ChevronLeft, Filter, ClipboardList,
 } from 'lucide-react';
 
 const FIELD_TYPES  = ['text', 'number', 'textarea', 'select', 'date', 'email', 'checkbox'];
@@ -44,7 +44,7 @@ function Flash({ msg, type = 'error' }) {
   );
 }
 
-// ── Custom field editor row ──────────────────────────────────
+// ── Field form row (reused for service fields) ────────────────
 const blankField = { key: '', label: '', type: 'text', required: false, options: '', placeholder: '' };
 
 function FieldFormRow({ initial, onSave, onCancel, t }) {
@@ -87,17 +87,187 @@ function FieldFormRow({ initial, onSave, onCancel, t }) {
   );
 }
 
-// ── Department row ───────────────────────────────────────────
+// ── Service row (nested inside DeptRow) ───────────────────────
+function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
+  const [open,      setOpen]     = useState(false);
+  const [editing,   setEditing]  = useState(false);
+  const [label,     setLabel]    = useState(service.label);
+  const [desc,      setDesc]     = useState(service.description || '');
+  const [addingF,   setAddingF]  = useState(false);
+  const [editingF,  setEditingF] = useState(null);
+  const [err,       setErr]      = useState('');
+
+  async function saveLabel() {
+    try {
+      const { service: updated } = await api.updateService(deptId, service.id, { label, description: desc });
+      onUpdated(updated); setEditing(false); setErr('');
+    } catch (e) { setErr(e.message); }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(t.confirmDel)) return;
+    try { await api.deleteService(deptId, service.id); onDeleted(service.id); }
+    catch (e) { setErr(e.message); }
+  }
+
+  function buildFieldBody(f) {
+    return {
+      key: f.key.trim(), label: f.label.trim(), type: f.type, required: f.required,
+      ...(f.type === 'select' ? { options: f.options.split(',').map(x => x.trim()).filter(Boolean) } : {}),
+      ...(f.placeholder ? { placeholder: f.placeholder } : {}),
+    };
+  }
+
+  async function handleAddField(f) {
+    try {
+      const { field } = await api.addField(deptId, service.id, buildFieldBody(f));
+      onUpdated({ ...service, fields: [...(service.fields || []), field] }); setAddingF(false);
+    } catch (e) { setErr(e.message); }
+  }
+
+  async function handleSaveField(f) {
+    try {
+      const body = { ...buildFieldBody(f), ...(f.type === 'select' ? { options: typeof f.options === 'string' ? f.options.split(',').map(x => x.trim()).filter(Boolean) : f.options } : {}) };
+      const { field } = await api.updateField(deptId, service.id, f.key, body);
+      onUpdated({ ...service, fields: (service.fields || []).map(fi => fi.key === field.key ? field : fi) });
+      setEditingF(null);
+    } catch (e) { setErr(e.message); }
+  }
+
+  async function handleDeleteField(key) {
+    if (!window.confirm(t.confirmDel)) return;
+    try {
+      await api.deleteField(deptId, service.id, key);
+      onUpdated({ ...service, fields: (service.fields || []).filter(fi => fi.key !== key) });
+    } catch (e) { setErr(e.message); }
+  }
+
+  return (
+    <div style={{
+      border: '1px solid var(--border)', borderRadius: 8, marginBottom: '0.4rem',
+      background: 'var(--surface)', overflow: 'hidden',
+    }}>
+      {/* Service header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.65rem 0.85rem', flexWrap: 'wrap' }}>
+        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 0, display: 'flex' }}
+          onClick={() => setOpen(p => !p)}>
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+        <ClipboardList size={14} strokeWidth={2} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+
+        {editing ? (
+          <div style={{ display: 'flex', gap: '0.5rem', flex: 1, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.6rem', marginBottom: '0.3rem' }}
+                value={label} onChange={e => setLabel(e.target.value)} placeholder="اسم الخدمة" />
+              <input className="form-control" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+                value={desc} onChange={e => setDesc(e.target.value)} placeholder="وصف مختصر (اختياري)" />
+            </div>
+            <div style={{ display: 'flex', gap: '0.35rem', alignSelf: 'flex-start', paddingTop: '0.1rem' }}>
+              <button className="btn btn-primary btn-sm" onClick={saveLabel}>{t.save}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(service.label); setDesc(service.description || ''); }}>{t.cancel}</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ flex: 1 }}>
+            <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{service.label}</span>
+            {service.description && (
+              <span style={{ marginInlineStart: '0.5rem', fontSize: '0.75rem', color: 'var(--text-3)' }}>{service.description}</span>
+            )}
+            <span style={{ marginInlineStart: '0.5rem', fontSize: '0.72rem', color: 'var(--text-3)' }}>
+              · {(service.fields || []).length} {t.fields || 'حقول'}
+            </span>
+          </div>
+        )}
+
+        {!editing && (
+          <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
+            <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
+              onClick={() => setEditing(true)}>
+              <Edit2 size={11} strokeWidth={2} />{t.edit}
+            </button>
+            <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
+              onClick={handleDelete}>
+              <Trash2 size={11} strokeWidth={2} />{t.del}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {err && <div style={{ padding: '0 0.85rem' }}><Flash msg={err} /></div>}
+
+      {/* Fields table */}
+      {open && (
+        <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)', padding: '0.65rem 0.85rem' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  {[t.fieldKey, t.fieldLabel, t.fieldType, t.fieldReq, t.optPH, t.actions].map(h => (
+                    <th key={h} style={{ fontSize: '0.76rem' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(service.fields || []).map(f =>
+                  editingF === f.key
+                    ? <FieldFormRow key={f.key} t={t} initial={{ ...f, options: Array.isArray(f.options) ? f.options.join(', ') : (f.options || '') }} onSave={handleSaveField} onCancel={() => setEditingF(null)} />
+                    : (
+                      <tr key={f.key}>
+                        <td><code className="tag">{f.key}</code></td>
+                        <td style={{ fontSize: '0.82rem' }}>{f.label}</td>
+                        <td>
+                          <span style={{ background: 'var(--accent-light)', color: 'var(--accent-hover)', padding: '1px 8px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 600 }}>
+                            {f.type}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          {f.required ? <CheckCircle size={12} strokeWidth={2.5} style={{ color: 'var(--success)' }} /> : '—'}
+                        </td>
+                        <td style={{ color: 'var(--text-2)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                          {Array.isArray(f.options) ? f.options.join(', ') : (f.placeholder || '—')}
+                        </td>
+                        <td>
+                          <button className="btn btn-sm btn-ghost" style={{ marginInlineEnd: '0.25rem', fontSize: '0.78rem' }} onClick={() => setEditingF(f.key)}>{t.edit}</button>
+                          <button className="btn btn-sm btn-danger" style={{ fontSize: '0.78rem' }} onClick={() => handleDeleteField(f.key)}>{t.del}</button>
+                        </td>
+                      </tr>
+                    )
+                )}
+                {addingF
+                  ? <FieldFormRow t={t} onSave={handleAddField} onCancel={() => setAddingF(false)} />
+                  : (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '0.4rem 0.5rem' }}>
+                        <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem' }}
+                          onClick={() => setAddingF(true)}>
+                          <Plus size={11} strokeWidth={2.5} />{t.addField}
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Department row ─────────────────────────────────────────────
 function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
   const [open,      setOpen]      = useState(false);
-  const [fieldsOpen,setFieldsOpen]= useState(false);
   const [editing,   setEditing]   = useState(false);
   const [showAdv,   setShowAdv]   = useState(false);
   const [label,     setLabel]     = useState(dept.label);
   const [group,     setGroup]     = useState(dept.ldapGroup || '');
-  const [addingF,   setAddingF]   = useState(false);
-  const [editingF,  setEditingF]  = useState(null);
+  const [addingSvc, setAddingSvc] = useState(false);
+  const [newSvcLabel, setNewSvcLabel] = useState('');
+  const [newSvcDesc,  setNewSvcDesc]  = useState('');
   const [err,       setErr]       = useState('');
+
+  const services = dept.services || [];
 
   async function saveLabel() {
     try {
@@ -112,39 +282,26 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
     catch (e) { setErr(e.message); }
   }
 
-  function buildFieldBody(f) {
-    return {
-      key: f.key.trim(), label: f.label.trim(), type: f.type, required: f.required,
-      ...(f.type === 'select' ? { options: f.options.split(',').map(x => x.trim()).filter(Boolean) } : {}),
-      ...(f.placeholder ? { placeholder: f.placeholder } : {}),
-    };
-  }
-
-  async function handleAddField(f) {
+  async function handleAddService() {
+    if (!newSvcLabel.trim()) return;
     try {
-      const { field } = await api.addField(dept.id, buildFieldBody(f));
-      onUpdated({ ...dept, fields: [...dept.fields, field] }); setAddingF(false);
+      const { service } = await api.createService(dept.id, { label: newSvcLabel.trim(), description: newSvcDesc.trim() });
+      onUpdated({ ...dept, services: [...services, service] });
+      setNewSvcLabel(''); setNewSvcDesc(''); setAddingSvc(false); setErr('');
     } catch (e) { setErr(e.message); }
   }
 
-  async function handleSaveField(f) {
-    try {
-      const body = { ...buildFieldBody(f), ...(f.type === 'select' ? { options: typeof f.options === 'string' ? f.options.split(',').map(x => x.trim()).filter(Boolean) : f.options } : {}) };
-      const { field } = await api.updateField(dept.id, f.key, body);
-      onUpdated({ ...dept, fields: dept.fields.map(fi => fi.key === field.key ? field : fi) }); setEditingF(null);
-    } catch (e) { setErr(e.message); }
+  function handleSvcUpdated(updated) {
+    onUpdated({ ...dept, services: services.map(s => s.id === updated.id ? updated : s) });
   }
 
-  async function handleDeleteField(key) {
-    if (!window.confirm(t.confirmDel)) return;
-    try {
-      await api.deleteField(dept.id, key);
-      onUpdated({ ...dept, fields: dept.fields.filter(fi => fi.key !== key) });
-    } catch (e) { setErr(e.message); }
+  function handleSvcDeleted(svcId) {
+    onUpdated({ ...dept, services: services.filter(s => s.id !== svcId) });
   }
 
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 10, marginBottom: '0.6rem', background: 'var(--surface)', overflow: 'hidden' }}>
+      {/* Dept header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem', flexWrap: 'wrap' }}>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 0, display: 'flex' }}
           onClick={() => setOpen(p => !p)}>
@@ -185,11 +342,9 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
                 <Users size={11} strokeWidth={2} />{userCount} {t.usersInDept}
               </span>
             )}
-            {dept.fields.length > 0 && (
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
-                {dept.fields.length} {t.fields}
-              </span>
-            )}
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+              {services.length} خدمة
+            </span>
           </div>
         )}
 
@@ -209,69 +364,59 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
 
       <Flash msg={err} />
 
+      {/* Services list */}
       {open && (
-        <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-          <button
-            style={{ width: '100%', textAlign: 'start', padding: '0.6rem 1rem', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-2)' }}
-            onClick={() => setFieldsOpen(p => !p)}>
-            {fieldsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-            {t.customFields}
-            <span style={{ fontWeight: 400, color: 'var(--text-3)', marginInlineStart: '0.25rem' }}>— {t.customFieldsNote}</span>
-          </button>
+        <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)', padding: '0.75rem 1rem 0.85rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-2)' }}>
+              الخدمات / أنواع المعاملات
+            </span>
+            {!addingSvc && (
+              <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}
+                onClick={() => setAddingSvc(true)}>
+                <Plus size={12} strokeWidth={2.5} /> إضافة خدمة
+              </button>
+            )}
+          </div>
 
-          {fieldsOpen && (
-            <div style={{ padding: '0 1rem 1rem' }}>
-              <div style={{ overflowX: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr>
-                      {[t.fieldKey, t.fieldLabel, t.fieldType, t.fieldReq, t.optPH, t.actions].map(h => (
-                        <th key={h} style={{ fontSize: '0.78rem' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dept.fields.map(f =>
-                      editingF === f.key
-                        ? <FieldFormRow key={f.key} t={t} initial={{ ...f, options: Array.isArray(f.options) ? f.options.join(', ') : (f.options || '') }} onSave={handleSaveField} onCancel={() => setEditingF(null)} />
-                        : (
-                          <tr key={f.key}>
-                            <td><code className="tag">{f.key}</code></td>
-                            <td style={{ fontSize: '0.85rem' }}>{f.label}</td>
-                            <td>
-                              <span style={{ background: 'var(--accent-light)', color: 'var(--accent-hover)', padding: '1px 8px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 600 }}>
-                                {f.type}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              {f.required ? <CheckCircle size={13} strokeWidth={2.5} style={{ color: 'var(--success)' }} /> : '—'}
-                            </td>
-                            <td style={{ color: 'var(--text-2)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.82rem' }}>
-                              {Array.isArray(f.options) ? f.options.join(', ') : (f.placeholder || '—')}
-                            </td>
-                            <td>
-                              <button className="btn btn-sm btn-ghost" style={{ marginInlineEnd: '0.3rem' }} onClick={() => setEditingF(f.key)}>{t.edit}</button>
-                              <button className="btn btn-sm btn-danger" onClick={() => handleDeleteField(f.key)}>{t.del}</button>
-                            </td>
-                          </tr>
-                        )
-                    )}
-                    {addingF
-                      ? <FieldFormRow t={t} onSave={handleAddField} onCancel={() => setAddingF(false)} />
-                      : (
-                        <tr>
-                          <td colSpan={6} style={{ padding: '0.5rem 0.6rem' }}>
-                            <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                              onClick={() => setAddingF(true)}>
-                              <Plus size={12} strokeWidth={2.5} />{t.addField}
-                            </button>
-                          </td>
-                        </tr>
-                      )}
-                  </tbody>
-                </table>
+          {/* Add service form */}
+          {addingSvc && (
+            <div style={{ border: '1px solid var(--primary)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.65rem', background: 'var(--primary-light)' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>اسم الخدمة *</label>
+                  <input className="form-control" value={newSvcLabel} onChange={e => setNewSvcLabel(e.target.value)}
+                    placeholder="مثال: إعانة زواج" autoFocus
+                    onKeyDown={e => e.key === 'Enter' && handleAddService()} />
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>الوصف (اختياري)</label>
+                  <input className="form-control" value={newSvcDesc} onChange={e => setNewSvcDesc(e.target.value)}
+                    placeholder="وصف مختصر للخدمة" />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.65rem' }}>
+                <button className="btn btn-primary btn-sm" onClick={handleAddService} disabled={!newSvcLabel.trim()}>إضافة</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setAddingSvc(false); setNewSvcLabel(''); setNewSvcDesc(''); }}>إلغاء</button>
               </div>
             </div>
+          )}
+
+          {services.length === 0 && !addingSvc ? (
+            <div style={{ textAlign: 'center', padding: '1.25rem', color: 'var(--text-3)', fontSize: '0.82rem', border: '1px dashed var(--border)', borderRadius: 8 }}>
+              لا توجد خدمات — أضف خدمة لتفعيل هذه الإدارة في واجهة خدمة العملاء
+            </div>
+          ) : (
+            services.map(svc => (
+              <ServiceRow
+                key={svc.id}
+                deptId={dept.id}
+                service={svc}
+                t={t}
+                onUpdated={handleSvcUpdated}
+                onDeleted={handleSvcDeleted}
+              />
+            ))
           )}
         </div>
       )}
@@ -279,7 +424,7 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
   );
 }
 
-// ── Departments tab ──────────────────────────────────────────
+// ── Departments tab ────────────────────────────────────────────
 function DepartmentsTab({ t }) {
   const [depts,    setDepts]    = useState([]);
   const [userMap,  setUserMap]  = useState({});
@@ -320,7 +465,9 @@ function DepartmentsTab({ t }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.6rem' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.deptFields}</h3>
-          <p className="text-sm text-muted" style={{ margin: '0.15rem 0 0' }}>{t.deptNote}</p>
+          <p className="text-sm text-muted" style={{ margin: '0.15rem 0 0' }}>
+            كل إدارة تحتوي على خدمات، وكل خدمة تحتوي على حقول خاصة بها
+          </p>
         </div>
         <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
           onClick={() => setAdding(p => !p)}>
@@ -336,7 +483,7 @@ function DepartmentsTab({ t }) {
             <div style={{ flex: 1, minWidth: 200 }}>
               <label className="form-label" style={{ fontSize: '0.82rem' }}>{t.deptLabel} *</label>
               <input className="form-control" value={newLabel} onChange={e => setNewLabel(e.target.value)}
-                placeholder="e.g. Accounts Department" autoFocus
+                placeholder="مثال: قسم الشؤون القانونية" autoFocus
                 onKeyDown={e => e.key === 'Enter' && handleAdd()} />
             </div>
             <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', marginBottom: '0.1rem' }}
@@ -378,7 +525,7 @@ function DepartmentsTab({ t }) {
   );
 }
 
-// ── AD Auto-Roles tab ────────────────────────────────────────
+// ── AD Auto-Roles tab ──────────────────────────────────────────
 function AutoRolesTab({ t }) {
   const [map,      setMap]   = useState({});
   const [newGroup, setNG]    = useState('');
@@ -466,7 +613,6 @@ function AutoRolesTab({ t }) {
                 </td>
               </tr>
             ))}
-
             <tr style={{ background: 'var(--surface-2)' }}>
               <td style={{ padding: '0.5rem 0.75rem' }}>
                 <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
@@ -494,7 +640,7 @@ function AutoRolesTab({ t }) {
   );
 }
 
-// ── Backup tab ───────────────────────────────────────────────
+// ── Backup tab ─────────────────────────────────────────────────
 function BackupTab({ t }) {
   const [raw, setRaw] = useState('');
   const [msg, setMsg] = useState({ text: '', type: 'error' });
@@ -536,7 +682,6 @@ function BackupTab({ t }) {
         </button>
         <button className="btn btn-ghost btn-sm" onClick={handlePreview}>{t.previewCfg}</button>
       </div>
-
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
         <label className="form-label" style={{ display: 'block', marginBottom: '0.4rem' }}>{t.importNote}</label>
         <textarea
@@ -556,7 +701,7 @@ function BackupTab({ t }) {
   );
 }
 
-// ── Templates tab ────────────────────────────────────────────
+// ── Templates tab ──────────────────────────────────────────────
 const blankTpl = { name: '', type: 'incoming', priority: 'normal', source_entity: '', delivery_method: '', expected_days: '', note: '' };
 
 function TemplatesTab({ t }) {
@@ -633,7 +778,6 @@ function TemplatesTab({ t }) {
 
       <Flash msg={msg.text} type={msg.type} />
 
-      {/* Add / Edit form */}
       {adding && (
         <div style={{ border: '1px solid var(--primary)', borderRadius: 10, padding: '1.1rem', marginBottom: '1rem', background: 'var(--primary-light)' }}>
           <h4 style={{ margin: '0 0 0.85rem', fontSize: '0.9rem', fontWeight: 700 }}>
@@ -689,7 +833,6 @@ function TemplatesTab({ t }) {
         </div>
       )}
 
-      {/* Templates list */}
       {loading ? (
         <div className="page-loading" style={{ height: 120 }}><span className="spinner" /></div>
       ) : templates.length === 0 ? (
@@ -702,12 +845,8 @@ function TemplatesTab({ t }) {
           <table>
             <thead>
               <tr>
-                <th>{t.templateName}</th>
-                <th>{t.taskType}</th>
-                <th>{t.taskPriority}</th>
-                <th>{t.expectedDays}</th>
-                <th>{t.taskNote}</th>
-                <th>{t.actions}</th>
+                <th>{t.templateName}</th><th>{t.taskType}</th><th>{t.taskPriority}</th>
+                <th>{t.expectedDays}</th><th>{t.taskNote}</th><th>{t.actions}</th>
               </tr>
             </thead>
             <tbody>
@@ -746,7 +885,7 @@ function TemplatesTab({ t }) {
   );
 }
 
-// ── Sessions tab ─────────────────────────────────────────────
+// ── Sessions tab ───────────────────────────────────────────────
 function SessionsTab({ t }) {
   const { user }    = useAuth();
   const [sessions,  setSessions]  = useState([]);
@@ -776,10 +915,7 @@ function SessionsTab({ t }) {
     } catch (e) { showFlash(e.message, 'error'); }
   }
 
-  function fmt(dt) {
-    if (!dt) return '—';
-    return new Date(dt).toLocaleString();
-  }
+  function fmt(dt) { return dt ? new Date(dt).toLocaleString() : '—'; }
 
   return (
     <div>
@@ -788,14 +924,11 @@ function SessionsTab({ t }) {
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.activeSessions}</h3>
           <p className="text-sm text-muted" style={{ margin: '0.15rem 0 0' }}>{t.sessionsNote}</p>
         </div>
-        <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-          onClick={load}>
+        <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }} onClick={load}>
           <RefreshCw size={13} strokeWidth={2} />{t.refresh}
         </button>
       </div>
-
       <Flash msg={flash.text} type={flash.type} />
-
       {loading ? (
         <div className="page-loading" style={{ height: 120 }}><span className="spinner" /></div>
       ) : sessions.length === 0 ? (
@@ -808,13 +941,8 @@ function SessionsTab({ t }) {
           <table>
             <thead>
               <tr>
-                <th>{t.fullName || 'Name'}</th>
-                <th>{t.username}</th>
-                <th>{t.role}</th>
-                <th>IP</th>
-                <th>{t.loggedInAt}</th>
-                <th>{t.expiresAt}</th>
-                <th>{t.actions}</th>
+                <th>{t.fullName || 'Name'}</th><th>{t.username}</th><th>{t.role}</th>
+                <th>IP</th><th>{t.loggedInAt}</th><th>{t.expiresAt}</th><th>{t.actions}</th>
               </tr>
             </thead>
             <tbody>
@@ -854,7 +982,7 @@ function SessionsTab({ t }) {
   );
 }
 
-// ── Audit Log tab ────────────────────────────────────────────
+// ── Audit Log tab ──────────────────────────────────────────────
 const AUDIT_ACTIONS = [
   'USER_LOGIN','USER_LOGOUT','TASK_CREATED','TASK_FORWARDED','TASK_CLOSED',
   'USER_CREATED','USER_UPDATED','USER_DELETED','LDAP_ROLE_ASSIGNED','SESSION_TERMINATED',
@@ -876,8 +1004,7 @@ function AuditLogTab({ t }) {
     if (action)        params.action = action;
     try {
       const { logs: rows, total: tot } = await getAuditLog(params);
-      setLogs(rows || []);
-      setTotal(tot || 0);
+      setLogs(rows || []); setTotal(tot || 0);
     } catch (_) {}
     finally { setLoading(false); }
   }, [actor, action, page]);
@@ -887,60 +1014,30 @@ function AuditLogTab({ t }) {
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  function actionLabel(a) {
-    return t.auditActions?.[a] || a;
-  }
-
-  function fmt(dt) {
-    if (!dt) return '—';
-    return new Date(dt).toLocaleString();
-  }
-
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.6rem' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.auditLog}</h3>
-          <p className="text-sm text-muted" style={{ margin: '0.15rem 0 0' }}>
-            {total} {t.auditLog?.toLowerCase()}
-          </p>
+          <p className="text-sm text-muted" style={{ margin: '0.15rem 0 0' }}>{total} {t.auditLog?.toLowerCase()}</p>
         </div>
-        <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-          onClick={load}>
+        <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }} onClick={load}>
           <RefreshCw size={13} strokeWidth={2} />{t.refresh}
         </button>
       </div>
-
-      {/* Filters */}
       <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <Filter size={14} strokeWidth={1.8} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
-        <div style={{ position: 'relative' }}>
-          <input
-            className="form-control"
-            style={{ minWidth: 180, padding: '0.38rem 0.7rem', fontSize: '0.85rem' }}
-            placeholder={t.auditFilter}
-            value={actor}
-            onChange={e => setActor(e.target.value)}
-          />
-        </div>
-        <select
-          className="form-control"
-          style={{ width: 'auto', padding: '0.38rem 0.7rem', fontSize: '0.85rem' }}
-          value={action}
-          onChange={e => setAction(e.target.value)}
-        >
+        <input className="form-control" style={{ minWidth: 180, padding: '0.38rem 0.7rem', fontSize: '0.85rem' }}
+          placeholder={t.auditFilter} value={actor} onChange={e => setActor(e.target.value)} />
+        <select className="form-control" style={{ width: 'auto', padding: '0.38rem 0.7rem', fontSize: '0.85rem' }}
+          value={action} onChange={e => setAction(e.target.value)}>
           <option value="">— {t.auditAction} —</option>
-          {AUDIT_ACTIONS.map(a => (
-            <option key={a} value={a}>{actionLabel(a)}</option>
-          ))}
+          {AUDIT_ACTIONS.map(a => <option key={a} value={a}>{t.auditActions?.[a] || a}</option>)}
         </select>
         {(actor || action) && (
-          <button className="btn btn-ghost btn-sm" onClick={() => { setActor(''); setAction(''); }}>
-            ✕ {t.clearSelection || 'Clear'}
-          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setActor(''); setAction(''); }}>✕ {t.clearSelection || 'Clear'}</button>
         )}
       </div>
-
       {loading ? (
         <div className="page-loading" style={{ height: 120 }}><span className="spinner" /></div>
       ) : logs.length === 0 ? (
@@ -954,49 +1051,38 @@ function AuditLogTab({ t }) {
             <table>
               <thead>
                 <tr>
-                  <th>{t.auditActor}</th>
-                  <th>{t.role}</th>
-                  <th>{t.auditAction}</th>
-                  <th>{t.auditTarget}</th>
-                  <th>{t.auditTime}</th>
+                  <th>{t.auditActor}</th><th>{t.role}</th><th>{t.auditAction}</th>
+                  <th>{t.auditTarget}</th><th>{t.auditTime}</th>
                 </tr>
               </thead>
               <tbody>
                 {logs.map(row => (
                   <tr key={row.id}>
-                    <td>
-                      <span style={{ fontWeight: 600 }}>{row.actor_username}</span>
-                    </td>
-                    <td>
-                      {row.actor_role ? <RoleBadge role={row.actor_role} t={t} /> : <span className="text-muted">—</span>}
-                    </td>
+                    <td><span style={{ fontWeight: 600 }}>{row.actor_username}</span></td>
+                    <td>{row.actor_role ? <RoleBadge role={row.actor_role} t={t} /> : <span className="text-muted">—</span>}</td>
                     <td>
                       <span style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '1px 8px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {actionLabel(row.action)}
+                        {t.auditActions?.[row.action] || row.action}
                       </span>
                     </td>
                     <td style={{ fontSize: '0.82rem', color: 'var(--text-2)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {row.target_id || '—'}
                     </td>
                     <td style={{ fontSize: '0.82rem', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                      {fmt(row.created_at)}
+                      {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
-          {/* Pagination */}
           {totalPages > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '1rem' }}>
               <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
                 onClick={() => setPage(p => p - 1)} disabled={page === 0}>
                 <ChevronLeft size={14} strokeWidth={2} />
               </button>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>
-                {page + 1} / {totalPages}
-              </span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>{page + 1} / {totalPages}</span>
               <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
                 onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1}>
                 <ChevronRight size={14} strokeWidth={2} />
@@ -1009,7 +1095,7 @@ function AuditLogTab({ t }) {
   );
 }
 
-// ── Main panel ───────────────────────────────────────────────
+// ── Main panel ─────────────────────────────────────────────────
 export default function SuperAdminPanel() {
   const { t } = useLang();
   const [tab, setTab] = useState('departments');
