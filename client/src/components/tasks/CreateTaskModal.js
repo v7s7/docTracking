@@ -838,9 +838,11 @@ function GenericForm({ onClose, onCreated }) {
             <label className="form-label">{t.taskDelivery}</label>
             <select className="form-control" value={form.delivery_method} onChange={e => set('delivery_method', e.target.value)}>
               <option value="">—</option>
-              <option value="email">Email</option>
-              <option value="manual">Manual</option>
-              <option value="mail">Mail</option>
+              <option value="يدوي">يدوي</option>
+              <option value="بريد">بريد</option>
+              <option value="إيميل">إيميل</option>
+              <option value="فاكس">فاكس</option>
+              <option value="أخرى">أخرى</option>
             </select>
           </div>
           <div className="form-group">
