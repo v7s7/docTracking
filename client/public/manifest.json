@@ -1,0 +1,16 @@
+{
+  "short_name": "docTracking",
+  "name": "نظام تتبع الوثائق - docTracking",
+  "icons": [
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "192x192", "purpose": "any" },
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "512x512", "purpose": "any" },
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "theme_color": "#C41E1E",
+  "background_color": "#FFFFFF",
+  "lang": "ar",
+  "dir": "rtl"
+}

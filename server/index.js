@@ -1,6 +1,7 @@
 const express    = require('express');
 const cors       = require('cors');
 const bodyParser = require('body-parser');
+const path       = require('path');
 require('dotenv').config();
 
 // Initialise DB before routes so the schema is ready
@@ -16,6 +17,7 @@ const notificationsRoutes = require('./routes/notifications');
 const sessionsRoutes  = require('./routes/sessions');
 const templatesRoutes = require('./routes/templates');
 const auditRoutes     = require('./routes/audit');
+const messagesRoutes  = require('./routes/messages');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -27,6 +29,7 @@ if (!process.env.JWT_SECRET) {
 
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000', credentials: true }));
 app.use(bodyParser.json());
+app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
 
 app.use('/auth',        authRoutes);
 app.use('/admin',       adminRoutes);      // SUPER_ADMIN only
@@ -35,6 +38,7 @@ app.use('/users',       usersRoutes);      // SUPER_ADMIN only
 app.use('/tasks',       tasksRoutes);      // role-filtered inside
 app.use('/dashboard',      dashboardRoutes);     // role-filtered inside
 app.use('/notifications',  notificationsRoutes); // per-dept unread count
+app.use('/messages',   messagesRoutes);    // chat: DMs + department conversations
 app.use('/sessions',  sessionsRoutes);
 app.use('/templates', templatesRoutes);
 app.use('/audit',     auditRoutes);

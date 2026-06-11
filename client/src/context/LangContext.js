@@ -241,6 +241,26 @@ const T = {
       banks_dept:             'Banks & Social',
       asset_development_dept: 'Asset Development',
     },
+
+    // Messages / Chat
+    messages:          'Messages',
+    newChat:           'New Conversation',
+    searchPeople:      'Search people…',
+    noConversations:   'No conversations yet. Start one!',
+    noMessagesYet:     'No messages yet. Say hello!',
+    typeMessage:       'Type a message…',
+    send:              'Send',
+    attachFile:        'Attach a file',
+    fileTooLarge:      'File is too large (max 15MB).',
+    selectConversation:'Select a conversation to start messaging.',
+    departmentGroup:   'Department group',
+    online:            'Online',
+    lastSeen:          'Last seen {time}',
+    lastSeenNever:     'Offline',
+    justNow:           'Just now',
+    minAgo:            '{n}m ago',
+    hourAgo:           '{n}h ago',
+    dayAgo:            '{n}d ago',
   },
 
   ar: {
@@ -481,6 +501,26 @@ const T = {
       banks_dept:             'قسم المصارف',
       asset_development_dept: 'تنمية الأصول الوقفية',
     },
+
+    // Messages / Chat
+    messages:          'المراسلات',
+    newChat:           'محادثة جديدة',
+    searchPeople:      'ابحث عن موظف…',
+    noConversations:   'لا توجد محادثات بعد. ابدأ واحدة!',
+    noMessagesYet:     'لا توجد رسائل بعد. ابدأ المحادثة!',
+    typeMessage:       'اكتب رسالة…',
+    send:              'إرسال',
+    attachFile:        'إرفاق ملف',
+    fileTooLarge:      'حجم الملف كبير جداً (الحد الأقصى 15 ميجابايت).',
+    selectConversation:'اختر محادثة لبدء المراسلة.',
+    departmentGroup:   'مجموعة القسم',
+    online:            'متصل الآن',
+    lastSeen:          'آخر ظهور {time}',
+    lastSeenNever:     'غير متصل',
+    justNow:           'الآن',
+    minAgo:            'منذ {n} د',
+    hourAgo:           'منذ {n} س',
+    dayAgo:            'منذ {n} يوم',
   },
 };
 

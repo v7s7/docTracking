@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LangProvider, useLang } from './context/LangContext';
 import {
-  LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, Building2,
+  LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, Building2, MessageCircle,
 } from 'lucide-react';
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
@@ -12,18 +12,24 @@ import TaskDetail from './components/tasks/TaskDetail';
 import CreateTaskModal from './components/tasks/CreateTaskModal';
 import UserManagement from './components/users/UserManagement';
 import NotificationBell from './components/notifications/NotificationBell';
+import Messages from './components/messages/Messages';
 import { getDepartments } from './services/deptService';
+import { getUnreadCount, getConversations, sendPresence } from './services/messageService';
+
+const PRESENCE_MS = 60_000;
+const MSG_POLL_MS = 20_000;
 
 // ── Role helpers ─────────────────────────────────────────────
 function isCS(role)      { return ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(role); }
 function isSuperAdmin(r) { return r === 'SUPER_ADMIN'; }
 
 // ── Nav items per role ───────────────────────────────────────
-function navItems(role, t) {
+function navItems(role, t, hasMessages) {
   const items = [
     { id: 'dashboard', icon: <LayoutDashboard size={17} strokeWidth={1.8} />, label: t.dashboard },
     { id: 'tasks',     icon: <ClipboardList   size={17} strokeWidth={1.8} />, label: t.tasks },
   ];
+  if (hasMessages) items.push({ id: 'messages', icon: <MessageCircle size={17} strokeWidth={1.8} />, label: t.messages });
   if (isSuperAdmin(role)) items.push({ id: 'users',    icon: <Users    size={17} strokeWidth={1.8} />, label: t.users });
   if (isSuperAdmin(role)) items.push({ id: 'settings', icon: <Settings size={17} strokeWidth={1.8} />, label: t.settings });
   return items;
@@ -72,9 +78,9 @@ function Header({ user, onTaskClick }) {
 }
 
 // ── Sidebar ──────────────────────────────────────────────────
-function Sidebar({ activeView, onNav, user }) {
+function Sidebar({ activeView, onNav, user, unreadMsgs }) {
   const { t } = useLang();
-  const items = navItems(user?.role, t);
+  const items = navItems(user?.role, t, !!user?.id);
 
   return (
     <aside className="app-sidebar">
@@ -89,7 +95,16 @@ function Sidebar({ activeView, onNav, user }) {
           onKeyDown={e => e.key === 'Enter' && onNav(item.id)}
         >
           <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{item.icon}</span>
-          <span>{item.label}</span>
+          <span style={{ flex: 1 }}>{item.label}</span>
+          {item.id === 'messages' && unreadMsgs > 0 && (
+            <span style={{
+              background: 'var(--primary)', color: '#fff', borderRadius: 99,
+              fontSize: '0.68rem', fontWeight: 700, minWidth: 18, height: 18,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
+            }}>
+              {unreadMsgs > 99 ? '99+' : unreadMsgs}
+            </span>
+          )}
         </div>
       ))}
     </aside>
@@ -104,6 +119,10 @@ function AppShell() {
   const [taskId, setTaskId] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [refresh, setRefresh]       = useState(0);
+  const [unreadMsgs, setUnreadMsgs] = useState(0);
+  const lastSeenMsgRef = useRef({});
+  const viewRef = useRef(view);
+  viewRef.current = view;
 
   useEffect(() => { if (user) getDepartments().catch(() => {}); }, [user]);
 
@@ -111,6 +130,54 @@ function AppShell() {
     setView(v);
     setTaskId(null);
   }, []);
+
+  // Presence heartbeat — keeps "last seen" fresh while the app is open
+  useEffect(() => {
+    if (!user?.id) return;
+    const ping = () => sendPresence().catch(() => {});
+    ping();
+    const id = setInterval(ping, PRESENCE_MS);
+    window.addEventListener('focus', ping);
+    return () => { clearInterval(id); window.removeEventListener('focus', ping); };
+  }, [user?.id]);
+
+  // Unread message badge + desktop notifications for new messages
+  useEffect(() => {
+    if (!user?.id) return;
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    let cancelled = false;
+    async function poll() {
+      try {
+        const { unread } = await getUnreadCount();
+        if (!cancelled) setUnreadMsgs(unread);
+      } catch (_) {}
+
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+      try {
+        const { conversations } = await getConversations();
+        for (const conv of conversations) {
+          const last = conv.last_message;
+          if (!last) continue;
+          const prevSeen = lastSeenMsgRef.current[conv.id];
+          const isNew = prevSeen !== undefined && prevSeen !== last.created_at && last.sender_id !== user.id;
+          lastSeenMsgRef.current[conv.id] = last.created_at;
+          if (isNew && (document.hidden || viewRef.current !== 'messages')) {
+            const title = conv.type === 'department' ? (t.groupLabels?.[conv.dept_id] || conv.name) : (last.sender_name || conv.name);
+            const notif = new Notification(title, { body: last.content || last.file_name || '', icon: '/favicon.ico' });
+            notif.onclick = () => { window.focus(); setView('messages'); setTaskId(null); };
+          }
+        }
+      } catch (_) {}
+    }
+
+    poll();
+    const id = setInterval(poll, MSG_POLL_MS);
+    window.addEventListener('focus', poll);
+    return () => { cancelled = true; clearInterval(id); window.removeEventListener('focus', poll); };
+  }, [user?.id, t]);
 
   if (loading) return <div className="page-loading"><span className="spinner" /><span>{t.loading}</span></div>;
   if (!user)   return <LoginPage />;
@@ -128,7 +195,7 @@ function AppShell() {
       <Header user={user} onTaskClick={id => { setView('tasks'); setTaskId(id); }} />
 
       <div style={{ display: 'flex', flex: 1, marginTop: 'var(--header-h)' }}>
-        <Sidebar activeView={taskId ? 'tasks' : view} onNav={handleNavAndClearTask} user={user} />
+        <Sidebar activeView={taskId ? 'tasks' : view} onNav={handleNavAndClearTask} user={user} unreadMsgs={unreadMsgs} />
 
         <main className="app-main">
           {taskId ? (
@@ -145,6 +212,8 @@ function AppShell() {
               onSelect={id => setTaskId(id)}
               createButton={createBtn}
             />
+          ) : view === 'messages' && user.id ? (
+            <Messages />
           ) : view === 'users' && isSuperAdmin(user.role) ? (
             <UserManagement />
           ) : view === 'settings' && isSuperAdmin(user.role) ? (

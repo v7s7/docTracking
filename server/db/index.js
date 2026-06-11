@@ -99,6 +99,39 @@ db.exec(`
     created_at     TEXT NOT NULL DEFAULT (datetime('now','localtime'))
   );
 
+  CREATE TABLE IF NOT EXISTS conversations (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    type        TEXT NOT NULL CHECK(type IN ('dm','department')),
+    dept_id     TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS conversation_members (
+    conversation_id INTEGER NOT NULL,
+    user_id          INTEGER NOT NULL,
+    last_read_at     TEXT,
+    PRIMARY KEY (conversation_id, user_id),
+    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    sender_id       INTEGER NOT NULL,
+    sender_name     TEXT NOT NULL,
+    content         TEXT,
+    file_url        TEXT,
+    file_name       TEXT,
+    file_type       TEXT,
+    file_size       INTEGER,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_conv_members_user ON conversation_members(user_id);
+  CREATE INDEX IF NOT EXISTS idx_messages_conv     ON messages(conversation_id);
+  CREATE INDEX IF NOT EXISTS idx_conv_dept         ON conversations(dept_id);
+
   CREATE TABLE IF NOT EXISTS task_templates (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT NOT NULL,
@@ -117,6 +150,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_created    ON audit_log(created_at);
   CREATE INDEX IF NOT EXISTS idx_audit_action     ON audit_log(action);
 `);
+
+// ── Migrations for columns added after initial release ────────
+const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+if (!userCols.includes('last_seen_at')) {
+  db.exec("ALTER TABLE users ADD COLUMN last_seen_at TEXT");
+}
 
 // ── Serial number helper ─────────────────────────────────────
 // Format: PREFIX-YYYY-NNNN  (e.g. CS-2026-0001)
