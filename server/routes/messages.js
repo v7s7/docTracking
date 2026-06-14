@@ -100,7 +100,7 @@ function getAccessibleConversation(conversationId, user) {
 // GET /messages/directory — colleagues available to start a DM with
 router.get('/directory', (req, res) => {
   const users = db.prepare(
-    "SELECT id, full_name, role, dept_id, last_seen_at FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
+    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
   ).all(req.user.id);
   res.json({ success: true, users });
 });
@@ -136,7 +136,7 @@ router.get('/conversations', (req, res) => {
       display = { name: deptLabel(conv.dept_id), dept_id: conv.dept_id };
     } else {
       const other = db.prepare(`
-        SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at
+        SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status
         FROM conversation_members cm JOIN users u ON u.id = cm.user_id
         WHERE cm.conversation_id = ? AND cm.user_id != ?
       `).get(conv.id, req.user.id);
@@ -167,7 +167,7 @@ router.post('/dm/:userId', (req, res) => {
   if (otherId === req.user.id) {
     return res.status(400).json({ success: false, message: 'Cannot message yourself.' });
   }
-  const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at FROM users WHERE id=? AND is_active=1").get(otherId);
+  const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE id=? AND is_active=1").get(otherId);
   if (!other) return res.status(404).json({ success: false, message: 'User not found.' });
 
   let conv = db.prepare(`
@@ -255,8 +255,12 @@ router.get('/unread-count', (req, res) => {
 });
 
 // POST /messages/presence — heartbeat marking the user "active now"
+// Optional body: { status: 'active' | 'away' } — reported by clients that can
+// detect idle time (e.g. the desktop app via OS idle time).
 router.post('/presence', (req, res) => {
-  db.prepare("UPDATE users SET last_seen_at = datetime('now','localtime') WHERE id=?").run(req.user.id);
+  const status = req.body?.status === 'away' ? 'away' : 'active';
+  db.prepare("UPDATE users SET last_seen_at = datetime('now','localtime'), presence_status = ? WHERE id=?")
+    .run(status, req.user.id);
   res.json({ success: true });
 });
 

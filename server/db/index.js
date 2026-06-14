@@ -156,6 +156,9 @@ const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
 if (!userCols.includes('last_seen_at')) {
   db.exec("ALTER TABLE users ADD COLUMN last_seen_at TEXT");
 }
+if (!userCols.includes('presence_status')) {
+  db.exec("ALTER TABLE users ADD COLUMN presence_status TEXT");
+}
 
 // ── Serial number helper ─────────────────────────────────────
 // Format: PREFIX-YYYY-NNNN  (e.g. CS-2026-0001)

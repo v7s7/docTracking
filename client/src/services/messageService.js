@@ -17,7 +17,11 @@ export const getConversations = ()        => req('/messages/conversations');
 export const openDM           = (userId)  => req(`/messages/dm/${userId}`, { method: 'POST' });
 export const markRead         = (convId)  => req(`/messages/conversations/${convId}/read`, { method: 'POST' });
 export const getUnreadCount   = ()        => req('/messages/unread-count');
-export const sendPresence     = ()        => req('/messages/presence', { method: 'POST' });
+export const sendPresence     = (status = 'active') => req('/messages/presence', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ status }),
+});
 
 export const getMessages = (convId, after) =>
   req(`/messages/conversations/${convId}/messages${after ? `?after=${after}` : ''}`);

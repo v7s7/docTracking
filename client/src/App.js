@@ -16,15 +16,25 @@ import Messages from './components/messages/Messages';
 import { getDepartments } from './services/deptService';
 import { getUnreadCount, getConversations, sendPresence } from './services/messageService';
 
-const PRESENCE_MS = 60_000;
-const MSG_POLL_MS = 20_000;
+const PRESENCE_MS      = 60_000;
+const MSG_POLL_MS      = 20_000;
+const AWAY_IDLE_SECONDS = 5 * 60;
+
+// True when running inside the docTracking desktop app (see /desktop).
+const isElectron = typeof window !== 'undefined' && !!window.electron?.isElectron;
 
 // ── Role helpers ─────────────────────────────────────────────
 function isCS(role)      { return ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(role); }
 function isSuperAdmin(r) { return r === 'SUPER_ADMIN'; }
 
 // ── Nav items per role ───────────────────────────────────────
-function navItems(role, t, hasMessages) {
+function navItems(role, t, hasMessages, chatOnly) {
+  // The desktop app is chat-focused for now: show only Messages.
+  // (Easy to revert — just stop passing chatOnly.)
+  if (chatOnly && hasMessages) {
+    return [{ id: 'messages', icon: <MessageCircle size={17} strokeWidth={1.8} />, label: t.messages }];
+  }
+
   const items = [
     { id: 'dashboard', icon: <LayoutDashboard size={17} strokeWidth={1.8} />, label: t.dashboard },
     { id: 'tasks',     icon: <ClipboardList   size={17} strokeWidth={1.8} />, label: t.tasks },
@@ -80,7 +90,7 @@ function Header({ user, onTaskClick }) {
 // ── Sidebar ──────────────────────────────────────────────────
 function Sidebar({ activeView, onNav, user, unreadMsgs }) {
   const { t } = useLang();
-  const items = navItems(user?.role, t, !!user?.id);
+  const items = navItems(user?.role, t, !!user?.id, isElectron);
 
   return (
     <aside className="app-sidebar">
@@ -115,7 +125,7 @@ function Sidebar({ activeView, onNav, user, unreadMsgs }) {
 function AppShell() {
   const { user, loading } = useAuth();
   const { t }             = useLang();
-  const [view, setView]   = useState('dashboard');
+  const [view, setView]   = useState(() => (isElectron && user?.id) ? 'messages' : 'dashboard');
   const [taskId, setTaskId] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [refresh, setRefresh]       = useState(0);
@@ -131,10 +141,21 @@ function AppShell() {
     setTaskId(null);
   }, []);
 
-  // Presence heartbeat — keeps "last seen" fresh while the app is open
+  // Presence heartbeat — keeps "last seen" fresh while the app is open.
+  // In the desktop app, also reports 'away' when the OS reports the user
+  // has been idle (no mouse/keyboard input) for AWAY_IDLE_SECONDS.
   useEffect(() => {
     if (!user?.id) return;
-    const ping = () => sendPresence().catch(() => {});
+    const ping = async () => {
+      let status = 'active';
+      if (isElectron && window.electron?.getIdleTime) {
+        try {
+          const idle = await window.electron.getIdleTime();
+          if (idle >= AWAY_IDLE_SECONDS) status = 'away';
+        } catch (_) {}
+      }
+      sendPresence(status).catch(() => {});
+    };
     ping();
     const id = setInterval(ping, PRESENCE_MS);
     window.addEventListener('focus', ping);

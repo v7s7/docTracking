@@ -25,6 +25,10 @@ function isOnline(lastSeenAt) {
   return !!d && (Date.now() - d.getTime()) < ONLINE_MS;
 }
 
+function isAway(user) {
+  return isOnline(user?.last_seen_at) && user?.presence_status === 'away';
+}
+
 function relativeTime(dateStr, t) {
   const d = toDate(dateStr);
   if (!d) return '';
@@ -55,11 +59,11 @@ function deptDisplayName(conv, t) {
   return t.groupLabels?.[conv.dept_id] || conv.name || conv.dept_id;
 }
 
-function Avatar({ name, isGroup, online }) {
+function Avatar({ name, isGroup, online, away }) {
   return (
     <div className={`msg-avatar${isGroup ? ' dept' : ''}`}>
       {isGroup ? <Building2 size={18} strokeWidth={1.8} /> : initials(name)}
-      {online && <span className="msg-online-dot" />}
+      {online && <span className={`msg-online-dot${away ? ' away' : ''}`} />}
     </div>
   );
 }
@@ -68,6 +72,7 @@ function ConversationItem({ conv, active, onClick, t }) {
   const isGroup = conv.type === 'department';
   const name = isGroup ? deptDisplayName(conv, t) : (conv.name || '—');
   const online = !isGroup && isOnline(conv.other_user?.last_seen_at);
+  const away   = !isGroup && isAway(conv.other_user);
 
   const last = conv.last_message;
   let snippet = '';
@@ -78,7 +83,7 @@ function ConversationItem({ conv, active, onClick, t }) {
 
   return (
     <div className={`msg-list-item${active ? ' active' : ''}`} onClick={onClick}>
-      <Avatar name={name} isGroup={isGroup} online={online} />
+      <Avatar name={name} isGroup={isGroup} online={online} away={away} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-top">
           <span className="msg-list-item-name">{name}</span>
@@ -132,7 +137,7 @@ function DirectoryPanel({ onPick, onClose, t }) {
             </div>
           ) : filtered.map(u => (
             <div key={u.id} className="msg-list-item" onClick={() => onPick(u)}>
-              <Avatar name={u.full_name} online={isOnline(u.last_seen_at)} />
+              <Avatar name={u.full_name} online={isOnline(u.last_seen_at)} away={isAway(u)} />
               <div className="msg-list-item-body">
                 <div className="msg-list-item-name">{u.full_name}</div>
                 <div className="msg-list-item-snippet">{t.roles?.[u.role] || u.role}</div>
@@ -250,10 +255,15 @@ function ChatThread({ conv, user, t, onBack }) {
     }
   }
 
+  const online = !isGroup && isOnline(conv.other_user?.last_seen_at);
+  const away   = !isGroup && isAway(conv.other_user);
+
   let status = '';
   if (isGroup) {
     status = t.departmentGroup;
-  } else if (isOnline(conv.other_user?.last_seen_at)) {
+  } else if (away) {
+    status = t.away;
+  } else if (online) {
     status = t.online;
   } else if (conv.other_user?.last_seen_at) {
     status = (t.lastSeen || '').replace('{time}', relativeTime(conv.other_user.last_seen_at, t));
@@ -267,7 +277,7 @@ function ChatThread({ conv, user, t, onBack }) {
         <button className="msg-back-btn btn-ghost btn-sm" onClick={onBack} aria-label="back">
           <ArrowLeft size={16} strokeWidth={2} />
         </button>
-        <Avatar name={name} isGroup={isGroup} online={!isGroup && isOnline(conv.other_user?.last_seen_at)} />
+        <Avatar name={name} isGroup={isGroup} online={online} away={away} />
         <div>
           <div className="msg-thread-title">{name}</div>
           <div className="msg-thread-status">{status}</div>

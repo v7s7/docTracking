@@ -1032,6 +1032,10 @@ code.tag {
   border: 2px solid var(--surface);
 }
 
+.msg-online-dot.away {
+  background: #f59e0b;
+}
+
 .msg-list-item-body { flex: 1; min-width: 0; }
 
 .msg-list-item-top {
