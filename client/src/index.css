@@ -1120,6 +1120,35 @@ code.tag {
 
 .msg-back-btn { display: none; }
 
+.msg-members-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+}
+
+.msg-members-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  inset-inline-end: 0;
+  z-index: 10;
+  width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.msg-members-panel-title {
+  padding: 0.7rem 1.1rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
 .msg-body {
   flex: 1;
   overflow-y: auto;

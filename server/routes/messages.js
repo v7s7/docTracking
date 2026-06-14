@@ -83,6 +83,21 @@ function touchRead(conversationId, userId) {
     .run(conversationId, userId);
 }
 
+// Live updates (SSE) — userId -> Set of open response streams
+const sseClients = new Map();
+
+function sseSend(res, event, data) {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+function broadcastToUsers(userIds, event, data) {
+  for (const userId of userIds) {
+    const clients = sseClients.get(userId);
+    if (!clients) continue;
+    for (const res of clients) sseSend(res, event, data);
+  }
+}
+
 // Returns the conversation row if the user may access it, else null
 function getAccessibleConversation(conversationId, user) {
   const conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(conversationId);
@@ -99,6 +114,26 @@ router.get('/directory', (req, res) => {
     "SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
   ).all(req.user.id);
   res.json({ success: true, users });
+});
+
+// GET /messages/stream — live updates (SSE): pushes new messages as they arrive
+router.get('/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+  });
+  res.write('\n');
+
+  const userId = req.user.id;
+  if (!sseClients.has(userId)) sseClients.set(userId, new Set());
+  sseClients.get(userId).add(res);
+
+  const heartbeat = setInterval(() => res.write(':\n\n'), 25000);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients.get(userId)?.delete(res);
+  });
 });
 
 // GET /messages/conversations — list my conversations (all department groups + my DMs)
@@ -227,6 +262,24 @@ router.post('/conversations/:id/messages', uploadSingle, (req, res) => {
 
   const message = db.prepare("SELECT * FROM messages WHERE id=?").get(info.lastInsertRowid);
   res.status(201).json({ success: true, message });
+
+  const recipientIds = conv.type === 'department'
+    ? db.prepare("SELECT id FROM users WHERE is_active=1").all().map(r => r.id)
+    : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(conv.id).map(r => r.user_id);
+  broadcastToUsers(recipientIds, 'message', { conversation_id: conv.id, message });
+});
+
+// GET /messages/conversations/:id/members — department roster with live presence
+router.get('/conversations/:id/members', (req, res) => {
+  const conv = getAccessibleConversation(Number(req.params.id), req.user);
+  if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+  if (conv.type !== 'department') return res.json({ success: true, members: [] });
+
+  const members = db.prepare(
+    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
+  ).all(conv.dept_id);
+
+  res.json({ success: true, members });
 });
 
 // POST /messages/conversations/:id/read — mark conversation as read

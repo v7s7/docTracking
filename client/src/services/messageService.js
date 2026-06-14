@@ -26,6 +26,12 @@ export const sendPresence     = (status = 'active') => req('/messages/presence',
 export const getMessages = (convId, after) =>
   req(`/messages/conversations/${convId}/messages${after ? `?after=${after}` : ''}`);
 
+export const getConversationMembers = (convId) => req(`/messages/conversations/${convId}/members`);
+
+export function streamUrl() {
+  return `${BASE}/messages/stream?token=${encodeURIComponent(getToken())}`;
+}
+
 export function sendMessage(convId, { content, file }) {
   const form = new FormData();
   if (content) form.append('content', content);

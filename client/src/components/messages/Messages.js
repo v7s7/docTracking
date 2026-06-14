@@ -3,9 +3,10 @@ import { useLang } from '../../context/LangContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   getDirectory, getConversations, openDM, getMessages, sendMessage, markRead, fileUrl,
+  getConversationMembers, streamUrl,
 } from '../../services/messageService';
 import {
-  Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus,
+  Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
 } from 'lucide-react';
 
 const THREAD_POLL_MS = 4000;
@@ -110,6 +111,47 @@ function PersonItem({ person, onClick, t }) {
   );
 }
 
+function MemberItem({ member, t }) {
+  const online = isOnline(member.last_seen_at);
+  const away   = isAway(member);
+
+  let status;
+  if (away)               status = t.away;
+  else if (online)        status = t.online;
+  else if (member.last_seen_at) status = (t.lastSeen || '').replace('{time}', relativeTime(member.last_seen_at, t));
+  else                    status = t.lastSeenNever;
+
+  return (
+    <div className="msg-list-item">
+      <Avatar name={member.full_name} online={online} away={away} />
+      <div className="msg-list-item-body">
+        <div className="msg-list-item-name">{member.full_name}</div>
+        <div className="msg-list-item-snippet">{status}</div>
+      </div>
+    </div>
+  );
+}
+
+function MembersPanel({ members, t }) {
+  const onlineCount = members.filter(m => isOnline(m.last_seen_at)).length;
+
+  const sorted = [...members].sort((a, b) => {
+    const rank = m => isAway(m) ? 1 : isOnline(m.last_seen_at) ? 0 : 2;
+    const ra = rank(a), rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    return a.full_name.localeCompare(b.full_name);
+  });
+
+  return (
+    <div className="msg-members-panel">
+      <div className="msg-members-panel-title">
+        {t.members} · {(t.onlineNow || '{n}').replace('{n}', onlineCount)}
+      </div>
+      {sorted.map(m => <MemberItem key={m.id} member={m} t={t} />)}
+    </div>
+  );
+}
+
 function DirectoryPanel({ onPick, onClose, t }) {
   const [users, setUsers]   = useState([]);
   const [search, setSearch] = useState('');
@@ -182,12 +224,14 @@ function MessageBubble({ msg, mine, showSender, t }) {
   );
 }
 
-function ChatThread({ conv, user, t, onBack }) {
-  const [messages, setMessages] = useState([]);
-  const [text, setText]         = useState('');
-  const [file, setFile]         = useState(null);
-  const [sending, setSending]   = useState(false);
-  const [error, setError]       = useState('');
+function ChatThread({ conv, user, t, onBack, liveMessage }) {
+  const [messages, setMessages]     = useState([]);
+  const [text, setText]             = useState('');
+  const [file, setFile]             = useState(null);
+  const [sending, setSending]       = useState(false);
+  const [error, setError]           = useState('');
+  const [members, setMembers]       = useState([]);
+  const [showMembers, setShowMembers] = useState(false);
   const bodyRef    = useRef(null);
   const fileInput  = useRef(null);
   const lastIdRef  = useRef(0);
@@ -220,10 +264,32 @@ function ChatThread({ conv, user, t, onBack }) {
     return () => clearInterval(id);
   }, [conv.id, load, scrollToBottom]);
 
+  // Append messages pushed live over SSE for this conversation
+  useEffect(() => {
+    if (!liveMessage || liveMessage.conversation_id !== conv.id) return;
+    const msg = liveMessage.message;
+    if (msg.id <= lastIdRef.current) return;
+    setMessages(prev => [...prev, msg]);
+    lastIdRef.current = msg.id;
+    scrollToBottom();
+  }, [liveMessage, conv.id, scrollToBottom]);
+
   // Mark read whenever new messages arrive while the thread is open
   useEffect(() => {
     if (messages.length) markRead(conv.id).catch(() => {});
   }, [messages.length, conv.id]);
+
+  // Department roster with live presence
+  useEffect(() => {
+    if (!isGroup) return;
+    let cancelled = false;
+    const loadMembers = () => getConversationMembers(conv.id).then(d => {
+      if (!cancelled) setMembers(d.members || []);
+    }).catch(() => {});
+    loadMembers();
+    const id = setInterval(loadMembers, LIST_POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [conv.id, isGroup]);
 
   function handleFileChange(e) {
     const f = e.target.files?.[0];
@@ -284,10 +350,24 @@ function ChatThread({ conv, user, t, onBack }) {
           <ArrowLeft size={16} strokeWidth={2} />
         </button>
         <Avatar name={name} isGroup={isGroup} online={online} away={away} />
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div className="msg-thread-title">{name}</div>
           <div className="msg-thread-status">{status}</div>
         </div>
+        {isGroup && (
+          <div style={{ position: 'relative' }}>
+            <button className="btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }} onClick={() => setShowMembers(s => !s)} title={t.members}>
+              <Users size={16} strokeWidth={1.8} />
+              <span style={{ fontSize: '0.8rem' }}>{members.length}</span>
+            </button>
+            {showMembers && (
+              <>
+                <div className="msg-members-backdrop" onClick={() => setShowMembers(false)} />
+                <MembersPanel members={members} t={t} />
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="msg-body" ref={bodyRef}>
@@ -347,6 +427,9 @@ export default function Messages() {
   const [showDirectory, setShowDirectory]  = useState(false);
   const [search, setSearch]                = useState('');
   const [loading, setLoading]              = useState(true);
+  const [liveMessage, setLiveMessage]      = useState(null);
+  const activeIdRef = useRef(null);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -374,6 +457,39 @@ export default function Messages() {
     window.addEventListener('focus', loadConversations);
     return () => window.removeEventListener('focus', loadConversations);
   }, [loadConversations]);
+
+  // Live updates over SSE — new messages appear instantly without polling
+  useEffect(() => {
+    const es = new EventSource(streamUrl());
+    es.addEventListener('message', e => {
+      let data;
+      try { data = JSON.parse(e.data); } catch { return; }
+      const { conversation_id, message } = data;
+
+      setConversations(prev => {
+        const idx = prev.findIndex(c => c.id === conversation_id);
+        if (idx === -1) {
+          loadConversations();
+          return prev;
+        }
+        const next = [...prev];
+        const conv = { ...next[idx], last_message: message };
+        if (conversation_id !== activeIdRef.current && message.sender_id !== user.id) {
+          conv.unread = (conv.unread || 0) + 1;
+        }
+        next[idx] = conv;
+        next.sort((a, b) => {
+          const at = a.last_message?.created_at || '';
+          const bt = b.last_message?.created_at || '';
+          return bt.localeCompare(at);
+        });
+        return next;
+      });
+
+      setLiveMessage({ conversation_id, message });
+    });
+    return () => es.close();
+  }, [loadConversations, user.id]);
 
   async function handlePickUser(otherUser) {
     try {
@@ -459,7 +575,7 @@ export default function Messages() {
         </div>
 
         {active ? (
-          <ChatThread key={active.id} conv={active} user={user} t={t} onBack={() => setActiveId(null)} />
+          <ChatThread key={active.id} conv={active} user={user} t={t} onBack={() => setActiveId(null)} liveMessage={liveMessage} />
         ) : (
           <div className="msg-thread" style={{ alignItems: 'center', justifyContent: 'center' }}>
             <div className="empty-state">
