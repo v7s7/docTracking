@@ -98,6 +98,18 @@ function ConversationItem({ conv, active, onClick, t }) {
   );
 }
 
+function PersonItem({ person, onClick, t }) {
+  return (
+    <div className="msg-list-item" onClick={onClick}>
+      <Avatar name={person.full_name} online={isOnline(person.last_seen_at)} away={isAway(person)} />
+      <div className="msg-list-item-body">
+        <div className="msg-list-item-name">{person.full_name}</div>
+        <div className="msg-list-item-snippet">{t.roles?.[person.role] || person.role}</div>
+      </div>
+    </div>
+  );
+}
+
 function DirectoryPanel({ onPick, onClose, t }) {
   const [users, setUsers]   = useState([]);
   const [search, setSearch] = useState('');
@@ -136,13 +148,7 @@ function DirectoryPanel({ onPick, onClose, t }) {
               <div className="empty-sub">{t.noResults}</div>
             </div>
           ) : filtered.map(u => (
-            <div key={u.id} className="msg-list-item" onClick={() => onPick(u)}>
-              <Avatar name={u.full_name} online={isOnline(u.last_seen_at)} away={isAway(u)} />
-              <div className="msg-list-item-body">
-                <div className="msg-list-item-name">{u.full_name}</div>
-                <div className="msg-list-item-snippet">{t.roles?.[u.role] || u.role}</div>
-              </div>
-            </div>
+            <PersonItem key={u.id} person={u} onClick={() => onPick(u)} t={t} />
           ))}
         </div>
       </div>
@@ -336,8 +342,10 @@ export default function Messages() {
   const { t }    = useLang();
   const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
+  const [directory, setDirectory]          = useState([]);
   const [activeId, setActiveId]            = useState(null);
   const [showDirectory, setShowDirectory]  = useState(false);
+  const [search, setSearch]                = useState('');
   const [loading, setLoading]              = useState(true);
 
   const loadConversations = useCallback(async () => {
@@ -348,11 +356,19 @@ export default function Messages() {
     finally { setLoading(false); }
   }, []);
 
+  const loadDirectory = useCallback(async () => {
+    try {
+      const data = await getDirectory();
+      setDirectory(data.users || []);
+    } catch (_) {}
+  }, []);
+
   useEffect(() => {
     loadConversations();
+    loadDirectory();
     const id = setInterval(loadConversations, LIST_POLL_MS);
     return () => clearInterval(id);
-  }, [loadConversations]);
+  }, [loadConversations, loadDirectory]);
 
   useEffect(() => {
     window.addEventListener('focus', loadConversations);
@@ -369,6 +385,7 @@ export default function Messages() {
       setActiveId(conversation.id);
     } catch (_) {}
     setShowDirectory(false);
+    setSearch('');
   }
 
   function handleSelect(convId) {
@@ -377,6 +394,19 @@ export default function Messages() {
   }
 
   const active = conversations.find(c => c.id === activeId);
+
+  const query = search.trim().toLowerCase();
+  const filteredConversations = !query ? conversations : conversations.filter(conv => {
+    const name = conv.type === 'department' ? deptDisplayName(conv, t) : (conv.name || '');
+    return name.toLowerCase().includes(query);
+  });
+
+  const dmUserIds = new Set(
+    conversations.filter(c => c.type === 'dm' && c.other_user).map(c => c.other_user.id)
+  );
+  const filteredPeople = !query ? [] : directory.filter(u =>
+    !dmUserIds.has(u.id) && u.full_name.toLowerCase().includes(query)
+  );
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -388,19 +418,43 @@ export default function Messages() {
               <Plus size={16} strokeWidth={2} />
             </button>
           </div>
+          <div className="msg-search">
+            <div style={{ position: 'relative' }}>
+              <Search size={14} strokeWidth={2} style={{ position: 'absolute', top: '50%', insetInlineStart: '0.6rem', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }} />
+              <input
+                className="form-control"
+                style={{ padding: '0.45rem 0.7rem', paddingInlineStart: '2rem', fontSize: '0.85rem' }}
+                placeholder={t.searchChats}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
           <div className="msg-list">
             {loading ? (
               <div className="page-loading" style={{ height: 160 }}>
                 <span className="spinner" /><span>{t.loading}</span>
               </div>
-            ) : !conversations.length ? (
+            ) : !filteredConversations.length && !filteredPeople.length ? (
               <div className="empty-state" style={{ padding: '2rem 1rem' }}>
                 <div className="empty-icon"><MessageCircle size={28} strokeWidth={1.4} /></div>
-                <div className="empty-sub">{t.noConversations}</div>
+                <div className="empty-sub">{query ? t.noResults : t.noConversations}</div>
               </div>
-            ) : conversations.map(conv => (
-              <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} t={t} />
-            ))}
+            ) : (
+              <>
+                {filteredConversations.map(conv => (
+                  <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} t={t} />
+                ))}
+                {filteredPeople.length > 0 && (
+                  <>
+                    <div className="msg-list-section-label">{t.people}</div>
+                    {filteredPeople.map(person => (
+                      <PersonItem key={person.id} person={person} onClick={() => handlePickUser(person)} t={t} />
+                    ))}
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
 

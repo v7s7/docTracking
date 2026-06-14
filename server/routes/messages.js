@@ -51,14 +51,6 @@ router.use((req, res, next) => {
   next();
 });
 
-// CS-tier roles share the "reception_dept" department conversation.
-function effectiveDeptId(user) {
-  if (['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(user.role)) {
-    return user.dept_id || 'reception_dept';
-  }
-  return user.dept_id || null;
-}
-
 function deptLabel(deptId) {
   const dept = readConfig().departments.find(d => d.id === deptId);
   return dept ? dept.label : deptId;
@@ -71,6 +63,11 @@ function ensureDeptConversation(deptId) {
     conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(info.lastInsertRowid);
   }
   return conv;
+}
+
+// Every department has a group conversation, visible to all staff (Teams-style channels).
+function ensureAllDeptConversations() {
+  readConfig().departments.forEach(d => ensureDeptConversation(d.id));
 }
 
 function ensureMembership(conversationId, userId) {
@@ -90,9 +87,8 @@ function touchRead(conversationId, userId) {
 function getAccessibleConversation(conversationId, user) {
   const conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(conversationId);
   if (!conv) return null;
-  if (conv.type === 'department') {
-    return conv.dept_id === effectiveDeptId(user) ? conv : null;
-  }
+  // Department groups are open channels — every user can view and post.
+  if (conv.type === 'department') return conv;
   const member = db.prepare("SELECT 1 FROM conversation_members WHERE conversation_id=? AND user_id=?").get(conversationId, user.id);
   return member ? conv : null;
 }
@@ -105,20 +101,25 @@ router.get('/directory', (req, res) => {
   res.json({ success: true, users });
 });
 
-// GET /messages/conversations — list my conversations (DMs + my department)
+// GET /messages/conversations — list my conversations (all department groups + my DMs)
 router.get('/conversations', (req, res) => {
-  const myDept = effectiveDeptId(req.user);
-  if (myDept) {
-    const deptConv = ensureDeptConversation(myDept);
-    ensureMembership(deptConv.id, req.user.id);
-  }
+  ensureAllDeptConversations();
 
-  const rows = db.prepare(`
+  const deptRows = db.prepare(`
+    SELECT c.*, cm.last_read_at
+    FROM conversations c
+    LEFT JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
+    WHERE c.type = 'department'
+  `).all(req.user.id);
+
+  const dmRows = db.prepare(`
     SELECT c.*, cm.last_read_at
     FROM conversation_members cm
     JOIN conversations c ON c.id = cm.conversation_id
-    WHERE cm.user_id = ?
+    WHERE cm.user_id = ? AND c.type = 'dm'
   `).all(req.user.id);
+
+  const rows = [...deptRows, ...dmRows];
 
   const result = rows.map(conv => {
     const unread = db.prepare(`
@@ -239,16 +240,15 @@ router.post('/conversations/:id/read', (req, res) => {
 
 // GET /messages/unread-count — total across all conversations (nav badge)
 router.get('/unread-count', (req, res) => {
-  const myDept = effectiveDeptId(req.user);
-  if (myDept) {
-    const deptConv = ensureDeptConversation(myDept);
-    ensureMembership(deptConv.id, req.user.id);
-  }
+  ensureAllDeptConversations();
 
   const total = db.prepare(`
     SELECT COUNT(*) as n FROM messages msg
-    JOIN conversation_members cm ON cm.conversation_id = msg.conversation_id AND cm.user_id = ?
-    WHERE msg.sender_id != ? AND (cm.last_read_at IS NULL OR msg.created_at > cm.last_read_at)
+    JOIN conversations c ON c.id = msg.conversation_id
+    LEFT JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
+    WHERE msg.sender_id != ?
+      AND (cm.user_id IS NOT NULL OR c.type = 'department')
+      AND (cm.last_read_at IS NULL OR msg.created_at > cm.last_read_at)
   `).get(req.user.id, req.user.id).n;
 
   res.json({ success: true, unread: total });

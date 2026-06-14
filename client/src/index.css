@@ -1075,6 +1075,15 @@ code.tag {
   white-space: nowrap;
 }
 
+.msg-list-section-label {
+  padding: 0.5rem 1.1rem 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
 .msg-unread-badge {
   background: var(--primary);
   color: #fff;
