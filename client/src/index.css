@@ -1099,6 +1099,42 @@ code.tag {
   flex-shrink: 0;
 }
 
+.msg-hide-btn {
+  flex-shrink: 0;
+  padding: 0.35rem;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.msg-list-item:hover .msg-hide-btn,
+.msg-list-item.active .msg-hide-btn {
+  opacity: 1;
+}
+
+.msg-hide-btn.always { opacity: 1; }
+
+.msg-hidden-section {
+  border-top: 1px solid var(--border);
+}
+
+.msg-hidden-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.6rem 1.1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.msg-hidden-toggle:hover { color: var(--text-2); }
+
 /* Thread */
 .msg-thread {
   flex: 1;

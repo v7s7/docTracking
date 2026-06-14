@@ -157,14 +157,14 @@ router.get('/conversations', (req, res) => {
   ensureAllDeptConversations();
 
   const deptRows = db.prepare(`
-    SELECT c.*, cm.last_read_at
+    SELECT c.*, cm.last_read_at, cm.hidden_at
     FROM conversations c
     LEFT JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
     WHERE c.type = 'department'
   `).all(req.user.id);
 
   const dmRows = db.prepare(`
-    SELECT c.*, cm.last_read_at
+    SELECT c.*, cm.last_read_at, cm.hidden_at
     FROM conversation_members cm
     JOIN conversations c ON c.id = cm.conversation_id
     WHERE cm.user_id = ? AND c.type IN ('dm','group')
@@ -205,6 +205,7 @@ router.get('/conversations', (req, res) => {
       ...display,
       unread,
       last_message: last || null,
+      hidden: !!conv.hidden_at,
     };
   });
 
@@ -383,6 +384,28 @@ router.post('/conversations/:id/read', (req, res) => {
   if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
 
   touchRead(conv.id, req.user.id);
+  res.json({ success: true });
+});
+
+// POST /messages/conversations/:id/hide — tuck a chat away in the "hidden" section.
+// Purely a per-user display preference: notifications/unread counts are unaffected.
+router.post('/conversations/:id/hide', (req, res) => {
+  const conv = getAccessibleConversation(Number(req.params.id), req.user);
+  if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+
+  ensureMembership(conv.id, req.user.id);
+  db.prepare("UPDATE conversation_members SET hidden_at = datetime('now','localtime') WHERE conversation_id=? AND user_id=?")
+    .run(conv.id, req.user.id);
+  res.json({ success: true });
+});
+
+// POST /messages/conversations/:id/unhide — move a chat back to the main list
+router.post('/conversations/:id/unhide', (req, res) => {
+  const conv = getAccessibleConversation(Number(req.params.id), req.user);
+  if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+
+  db.prepare("UPDATE conversation_members SET hidden_at = NULL WHERE conversation_id=? AND user_id=?")
+    .run(conv.id, req.user.id);
   res.json({ success: true });
 });
 

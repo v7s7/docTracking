@@ -185,6 +185,11 @@ if (convTableSql && !convTableSql.includes("'group'")) {
   `);
 }
 
+const convMemberCols = db.prepare("PRAGMA table_info(conversation_members)").all().map(c => c.name);
+if (!convMemberCols.includes('hidden_at')) {
+  db.exec("ALTER TABLE conversation_members ADD COLUMN hidden_at TEXT");
+}
+
 // ── Serial number helper ─────────────────────────────────────
 // Format: PREFIX-YYYY-NNNN  (e.g. CS-2026-0001)
 // Prefix is read from TASK_SERIAL_PREFIX env var, defaults to "CS"

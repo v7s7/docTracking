@@ -3,10 +3,11 @@ import { useLang } from '../../context/LangContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   getDirectory, getConversations, openDM, getMessages, sendMessage, markRead, fileUrl,
-  getConversationMembers, streamUrl, startGroupChat,
+  getConversationMembers, streamUrl, startGroupChat, hideConversation, unhideConversation,
 } from '../../services/messageService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
+  Eye, EyeOff, ChevronDown, ChevronRight,
 } from 'lucide-react';
 
 const THREAD_POLL_MS = 4000;
@@ -73,7 +74,7 @@ function Avatar({ name, isGroup, isDept, online, away }) {
   );
 }
 
-function ConversationItem({ conv, active, onClick, t }) {
+function ConversationItem({ conv, active, onClick, onToggleHide, t }) {
   const isDept  = conv.type === 'department';
   const isGroup = isDept || conv.type === 'group';
   const name = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
@@ -100,6 +101,14 @@ function ConversationItem({ conv, active, onClick, t }) {
           {conv.unread > 0 && <span className="msg-unread-badge">{conv.unread > 99 ? '99+' : conv.unread}</span>}
         </div>
       </div>
+      <button
+        className={`msg-hide-btn btn-ghost btn-sm${conv.hidden ? ' always' : ''}`}
+        onClick={e => { e.stopPropagation(); onToggleHide?.(conv); }}
+        title={conv.hidden ? t.unhideChat : t.hideChat}
+        aria-label={conv.hidden ? t.unhideChat : t.hideChat}
+      >
+        {conv.hidden ? <Eye size={14} strokeWidth={2} /> : <EyeOff size={14} strokeWidth={2} />}
+      </button>
     </div>
   );
 }
@@ -499,6 +508,7 @@ export default function Messages() {
   const [search, setSearch]                = useState('');
   const [loading, setLoading]              = useState(true);
   const [liveMessage, setLiveMessage]      = useState(null);
+  const [showHidden, setShowHidden]        = useState(false);
   const activeIdRef = useRef(null);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
@@ -584,6 +594,14 @@ export default function Messages() {
     setActiveId(conversation.id);
   }
 
+  async function handleToggleHide(conv) {
+    try {
+      if (conv.hidden) await unhideConversation(conv.id);
+      else await hideConversation(conv.id);
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, hidden: !conv.hidden } : c));
+    } catch (_) {}
+  }
+
   function handleSelect(convId) {
     setActiveId(convId);
     setConversations(prev => prev.map(c => c.id === convId ? { ...c, unread: 0 } : c));
@@ -603,6 +621,9 @@ export default function Messages() {
   const filteredPeople = !query ? [] : directory.filter(u =>
     !dmUserIds.has(u.id) && u.full_name.toLowerCase().includes(query)
   );
+
+  const visibleConversations = filteredConversations.filter(c => !c.hidden);
+  const hiddenConversations  = filteredConversations.filter(c => c.hidden);
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -638,8 +659,8 @@ export default function Messages() {
               </div>
             ) : (
               <>
-                {filteredConversations.map(conv => (
-                  <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} t={t} />
+                {visibleConversations.map(conv => (
+                  <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} />
                 ))}
                 {filteredPeople.length > 0 && (
                   <>
@@ -648,6 +669,17 @@ export default function Messages() {
                       <PersonItem key={person.id} person={person} onClick={() => handlePickUser(person)} t={t} />
                     ))}
                   </>
+                )}
+                {hiddenConversations.length > 0 && (
+                  <div className="msg-hidden-section">
+                    <button className="msg-hidden-toggle" onClick={() => setShowHidden(s => !s)}>
+                      {showHidden ? <ChevronDown size={14} strokeWidth={2} /> : <ChevronRight size={14} strokeWidth={2} />}
+                      <span>{t.hiddenChats} ({hiddenConversations.length})</span>
+                    </button>
+                    {showHidden && hiddenConversations.map(conv => (
+                      <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} />
+                    ))}
+                  </div>
                 )}
               </>
             )}
