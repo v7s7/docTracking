@@ -149,6 +149,8 @@ function MemberItem({ member, t, isSelf, selected, onToggleSelect, onOpenChat })
 
 function MembersPanel({ members, t, currentUserId, onOpenChat, onStartGroup }) {
   const [selected, setSelected] = useState(new Set());
+  const [busy, setBusy]         = useState(false);
+  const [error, setError]       = useState('');
 
   const onlineCount = members.filter(m => isOnline(m)).length;
 
@@ -160,11 +162,24 @@ function MembersPanel({ members, t, currentUserId, onOpenChat, onStartGroup }) {
   });
 
   function toggle(id) {
+    setError('');
     setSelected(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  }
+
+  async function handleStart() {
+    setBusy(true);
+    setError('');
+    try {
+      await onStartGroup?.([...selected]);
+    } catch (e) {
+      setError(e.message || 'Failed to start chat.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -185,8 +200,9 @@ function MembersPanel({ members, t, currentUserId, onOpenChat, onStartGroup }) {
           />
         ))}
       </div>
+      {error && <div className="alert alert-error msg-members-panel-alert">{error}</div>}
       {selected.size > 0 && (
-        <button className="btn btn-primary btn-sm msg-members-panel-action" onClick={() => onStartGroup?.([...selected])}>
+        <button className="btn btn-primary btn-sm msg-members-panel-action" onClick={handleStart} disabled={busy}>
           <MessageCircle size={14} strokeWidth={2} />
           {t.startChat} ({selected.size})
         </button>
@@ -414,7 +430,10 @@ function ChatThread({ conv, user, t, onBack, liveMessage, onOpenDM, onStartGroup
                   t={t}
                   currentUserId={user.id}
                   onOpenChat={member => { setShowMembers(false); onOpenDM?.(member); }}
-                  onStartGroup={memberIds => { setShowMembers(false); onStartGroup?.(memberIds); }}
+                  onStartGroup={async memberIds => {
+                    await onStartGroup?.(memberIds);
+                    setShowMembers(false);
+                  }}
                 />
               </>
             )}
@@ -557,14 +576,12 @@ export default function Messages() {
   }
 
   async function handleStartGroup(memberIds) {
-    try {
-      const { conversation } = await startGroupChat(memberIds);
-      setConversations(prev => {
-        if (prev.some(c => c.id === conversation.id)) return prev;
-        return [conversation, ...prev];
-      });
-      setActiveId(conversation.id);
-    } catch (_) {}
+    const { conversation } = await startGroupChat(memberIds);
+    setConversations(prev => {
+      if (prev.some(c => c.id === conversation.id)) return prev;
+      return [conversation, ...prev];
+    });
+    setActiveId(conversation.id);
   }
 
   function handleSelect(convId) {

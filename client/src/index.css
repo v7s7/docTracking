@@ -1168,6 +1168,13 @@ code.tag {
   flex-shrink: 0;
 }
 
+.msg-members-panel-alert {
+  margin: 0.4rem 0.6rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
 .msg-member-checkbox {
   flex-shrink: 0;
   width: 16px;
