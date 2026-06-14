@@ -98,6 +98,13 @@ function broadcastToUsers(userIds, event, data) {
   }
 }
 
+// A user with an open SSE stream has the app open right now — the most
+// reliable "online" signal, independent of the presence heartbeat.
+function isUserOnline(userId) {
+  const clients = sseClients.get(userId);
+  return !!clients && clients.size > 0;
+}
+
 // Returns the conversation row if the user may access it, else null
 function getAccessibleConversation(conversationId, user) {
   const conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(conversationId);
@@ -112,7 +119,7 @@ function getAccessibleConversation(conversationId, user) {
 router.get('/directory', (req, res) => {
   const users = db.prepare(
     "SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
-  ).all(req.user.id);
+  ).all(req.user.id).map(u => ({ ...u, online: isUserOnline(u.id) }));
   res.json({ success: true, users });
 });
 
@@ -176,6 +183,7 @@ router.get('/conversations', (req, res) => {
         FROM conversation_members cm JOIN users u ON u.id = cm.user_id
         WHERE cm.conversation_id = ? AND cm.user_id != ?
       `).get(conv.id, req.user.id);
+      if (other) other.online = isUserOnline(other.id);
       display = { name: other?.full_name || '—', other_user: other };
     }
 
@@ -205,6 +213,7 @@ router.post('/dm/:userId', (req, res) => {
   }
   const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE id=? AND is_active=1").get(otherId);
   if (!other) return res.status(404).json({ success: false, message: 'User not found.' });
+  other.online = isUserOnline(other.id);
 
   let conv = db.prepare(`
     SELECT c.* FROM conversations c
@@ -277,7 +286,7 @@ router.get('/conversations/:id/members', (req, res) => {
 
   const members = db.prepare(
     "SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
-  ).all(conv.dept_id);
+  ).all(conv.dept_id).map(m => ({ ...m, online: isUserOnline(m.id) }));
 
   res.json({ success: true, members });
 });

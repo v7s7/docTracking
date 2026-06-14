@@ -21,13 +21,17 @@ function toDate(dateStr) {
   return dateStr ? new Date(dateStr.replace(' ', 'T')) : null;
 }
 
-function isOnline(lastSeenAt) {
-  const d = toDate(lastSeenAt);
+// "online" is true if the user has an open real-time connection right now
+// (most reliable), or failing that, sent a presence heartbeat recently.
+function isOnline(user) {
+  if (!user) return false;
+  if (user.online) return true;
+  const d = toDate(user.last_seen_at);
   return !!d && (Date.now() - d.getTime()) < ONLINE_MS;
 }
 
 function isAway(user) {
-  return isOnline(user?.last_seen_at) && user?.presence_status === 'away';
+  return isOnline(user) && user?.presence_status === 'away';
 }
 
 function relativeTime(dateStr, t) {
@@ -72,7 +76,7 @@ function Avatar({ name, isGroup, online, away }) {
 function ConversationItem({ conv, active, onClick, t }) {
   const isGroup = conv.type === 'department';
   const name = isGroup ? deptDisplayName(conv, t) : (conv.name || '—');
-  const online = !isGroup && isOnline(conv.other_user?.last_seen_at);
+  const online = !isGroup && isOnline(conv.other_user);
   const away   = !isGroup && isAway(conv.other_user);
 
   const last = conv.last_message;
@@ -102,7 +106,7 @@ function ConversationItem({ conv, active, onClick, t }) {
 function PersonItem({ person, onClick, t }) {
   return (
     <div className="msg-list-item" onClick={onClick}>
-      <Avatar name={person.full_name} online={isOnline(person.last_seen_at)} away={isAway(person)} />
+      <Avatar name={person.full_name} online={isOnline(person)} away={isAway(person)} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-name">{person.full_name}</div>
         <div className="msg-list-item-snippet">{t.roles?.[person.role] || person.role}</div>
@@ -112,7 +116,7 @@ function PersonItem({ person, onClick, t }) {
 }
 
 function MemberItem({ member, t }) {
-  const online = isOnline(member.last_seen_at);
+  const online = isOnline(member);
   const away   = isAway(member);
 
   let status;
@@ -133,10 +137,10 @@ function MemberItem({ member, t }) {
 }
 
 function MembersPanel({ members, t }) {
-  const onlineCount = members.filter(m => isOnline(m.last_seen_at)).length;
+  const onlineCount = members.filter(m => isOnline(m)).length;
 
   const sorted = [...members].sort((a, b) => {
-    const rank = m => isAway(m) ? 1 : isOnline(m.last_seen_at) ? 0 : 2;
+    const rank = m => isAway(m) ? 1 : isOnline(m) ? 0 : 2;
     const ra = rank(a), rb = rank(b);
     if (ra !== rb) return ra - rb;
     return a.full_name.localeCompare(b.full_name);
@@ -327,7 +331,7 @@ function ChatThread({ conv, user, t, onBack, liveMessage }) {
     }
   }
 
-  const online = !isGroup && isOnline(conv.other_user?.last_seen_at);
+  const online = !isGroup && isOnline(conv.other_user);
   const away   = !isGroup && isAway(conv.other_user);
 
   let status = '';
