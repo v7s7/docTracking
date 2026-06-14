@@ -105,6 +105,15 @@ function isUserOnline(userId) {
   return !!clients && clients.size > 0;
 }
 
+// All members of a conversation (used for ad-hoc group chats), with live presence
+function groupMembers(convId) {
+  return db.prepare(`
+    SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status
+    FROM conversation_members cm JOIN users u ON u.id = cm.user_id
+    WHERE cm.conversation_id = ? ORDER BY u.full_name COLLATE NOCASE
+  `).all(convId).map(u => ({ ...u, online: isUserOnline(u.id) }));
+}
+
 // Returns the conversation row if the user may access it, else null
 function getAccessibleConversation(conversationId, user) {
   const conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(conversationId);
@@ -158,7 +167,7 @@ router.get('/conversations', (req, res) => {
     SELECT c.*, cm.last_read_at
     FROM conversation_members cm
     JOIN conversations c ON c.id = cm.conversation_id
-    WHERE cm.user_id = ? AND c.type = 'dm'
+    WHERE cm.user_id = ? AND c.type IN ('dm','group')
   `).all(req.user.id);
 
   const rows = [...deptRows, ...dmRows];
@@ -177,6 +186,9 @@ router.get('/conversations', (req, res) => {
     let display;
     if (conv.type === 'department') {
       display = { name: deptLabel(conv.dept_id), dept_id: conv.dept_id };
+    } else if (conv.type === 'group') {
+      const others = groupMembers(conv.id).filter(m => m.id !== req.user.id);
+      display = { name: others.map(o => o.full_name).join(', ') };
     } else {
       const other = db.prepare(`
         SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status
@@ -232,6 +244,74 @@ router.post('/dm/:userId', (req, res) => {
   res.json({ success: true, conversation: { id: conv.id, type: 'dm', name: other.full_name, other_user: other, unread: 0, last_message: null } });
 });
 
+// POST /messages/group — get or create a chat with the given members (DM if just one, group otherwise)
+router.post('/group', (req, res) => {
+  const ids = Array.isArray(req.body?.memberIds) ? req.body.memberIds.map(Number) : [];
+  const otherIds = [...new Set(ids.filter(id => Number.isInteger(id) && id !== req.user.id))];
+
+  if (!otherIds.length) {
+    return res.status(400).json({ success: false, message: 'Select at least one person.' });
+  }
+
+  const placeholders = otherIds.map(() => '?').join(',');
+  const users = db.prepare(
+    `SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND id IN (${placeholders})`
+  ).all(...otherIds);
+  if (users.length !== otherIds.length) {
+    return res.status(404).json({ success: false, message: 'One or more users not found.' });
+  }
+
+  // Exactly one other person — reuse/create the 1:1 DM conversation.
+  if (otherIds.length === 1) {
+    const otherId = otherIds[0];
+    let conv = db.prepare(`
+      SELECT c.* FROM conversations c
+      JOIN conversation_members m1 ON m1.conversation_id = c.id AND m1.user_id = ?
+      JOIN conversation_members m2 ON m2.conversation_id = c.id AND m2.user_id = ?
+      WHERE c.type = 'dm'
+    `).get(req.user.id, otherId);
+
+    if (!conv) {
+      const info = db.prepare("INSERT INTO conversations (type) VALUES ('dm')").run();
+      conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(info.lastInsertRowid);
+      ensureMembership(conv.id, req.user.id);
+      ensureMembership(conv.id, otherId);
+    }
+
+    const other = users[0];
+    other.online = isUserOnline(other.id);
+    return res.json({ success: true, conversation: { id: conv.id, type: 'dm', name: other.full_name, other_user: other, unread: 0, last_message: null } });
+  }
+
+  // Multiple people — find an existing group with exactly this member set, or create one.
+  const allIds = [req.user.id, ...otherIds];
+  const candidates = db.prepare(`
+    SELECT c.id FROM conversations c
+    JOIN conversation_members cm ON cm.conversation_id = c.id
+    WHERE c.type = 'group'
+    GROUP BY c.id
+    HAVING COUNT(*) = ?
+  `).all(allIds.length);
+
+  let conv = null;
+  for (const c of candidates) {
+    const members = db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(c.id).map(r => r.user_id);
+    if (allIds.every(id => members.includes(id))) {
+      conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(c.id);
+      break;
+    }
+  }
+
+  if (!conv) {
+    const info = db.prepare("INSERT INTO conversations (type) VALUES ('group')").run();
+    conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(info.lastInsertRowid);
+    allIds.forEach(id => ensureMembership(conv.id, id));
+  }
+
+  const others = groupMembers(conv.id).filter(m => m.id !== req.user.id);
+  res.json({ success: true, conversation: { id: conv.id, type: 'group', name: others.map(o => o.full_name).join(', '), unread: 0, last_message: null } });
+});
+
 // GET /messages/conversations/:id/messages — fetch (optionally only messages after a given id, for polling)
 router.get('/conversations/:id/messages', (req, res) => {
   const conv = getAccessibleConversation(Number(req.params.id), req.user);
@@ -278,15 +358,21 @@ router.post('/conversations/:id/messages', uploadSingle, (req, res) => {
   broadcastToUsers(recipientIds, 'message', { conversation_id: conv.id, message });
 });
 
-// GET /messages/conversations/:id/members — department roster with live presence
+// GET /messages/conversations/:id/members — roster with live presence (department staff or group members)
 router.get('/conversations/:id/members', (req, res) => {
   const conv = getAccessibleConversation(Number(req.params.id), req.user);
   if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
-  if (conv.type !== 'department') return res.json({ success: true, members: [] });
 
-  const members = db.prepare(
-    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
-  ).all(conv.dept_id).map(m => ({ ...m, online: isUserOnline(m.id) }));
+  let members;
+  if (conv.type === 'department') {
+    members = db.prepare(
+      "SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
+    ).all(conv.dept_id).map(m => ({ ...m, online: isUserOnline(m.id) }));
+  } else if (conv.type === 'group') {
+    members = groupMembers(conv.id);
+  } else {
+    members = [];
+  }
 
   res.json({ success: true, members });
 });

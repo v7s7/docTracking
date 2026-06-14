@@ -101,7 +101,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS conversations (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    type        TEXT NOT NULL CHECK(type IN ('dm','department')),
+    type        TEXT NOT NULL CHECK(type IN ('dm','department','group')),
     dept_id     TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
   );
@@ -158,6 +158,31 @@ if (!userCols.includes('last_seen_at')) {
 }
 if (!userCols.includes('presence_status')) {
   db.exec("ALTER TABLE users ADD COLUMN presence_status TEXT");
+}
+
+// SQLite can't ALTER a CHECK constraint — recreate the table if an older
+// version doesn't yet allow the 'group' conversation type.
+const convTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='conversations'").get()?.sql || '';
+if (convTableSql && !convTableSql.includes("'group'")) {
+  // Build the replacement table under a fresh name and rename it into place
+  // afterwards. Renaming the OLD table instead would make SQLite rewrite the
+  // conversation_members/messages FK clauses to point at the old table's new
+  // name, leaving them dangling (and cascade-deleting their rows) once it's
+  // dropped.
+  db.exec(`
+    PRAGMA foreign_keys = OFF;
+    CREATE TABLE conversations_new (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      type        TEXT NOT NULL CHECK(type IN ('dm','department','group')),
+      dept_id     TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    );
+    INSERT INTO conversations_new (id, type, dept_id, created_at) SELECT id, type, dept_id, created_at FROM conversations;
+    DROP TABLE conversations;
+    ALTER TABLE conversations_new RENAME TO conversations;
+    CREATE INDEX IF NOT EXISTS idx_conv_dept ON conversations(dept_id);
+    PRAGMA foreign_keys = ON;
+  `);
 }
 
 // ── Serial number helper ─────────────────────────────────────

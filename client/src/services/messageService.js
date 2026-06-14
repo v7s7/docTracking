@@ -15,6 +15,11 @@ async function req(path, opts = {}) {
 export const getDirectory     = ()        => req('/messages/directory');
 export const getConversations = ()        => req('/messages/conversations');
 export const openDM           = (userId)  => req(`/messages/dm/${userId}`, { method: 'POST' });
+export const startGroupChat   = (memberIds) => req('/messages/group', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ memberIds }),
+});
 export const markRead         = (convId)  => req(`/messages/conversations/${convId}/read`, { method: 'POST' });
 export const getUnreadCount   = ()        => req('/messages/unread-count');
 export const sendPresence     = (status = 'active') => req('/messages/presence', {

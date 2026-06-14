@@ -3,7 +3,7 @@ import { useLang } from '../../context/LangContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   getDirectory, getConversations, openDM, getMessages, sendMessage, markRead, fileUrl,
-  getConversationMembers, streamUrl,
+  getConversationMembers, streamUrl, startGroupChat,
 } from '../../services/messageService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
@@ -64,18 +64,19 @@ function deptDisplayName(conv, t) {
   return t.groupLabels?.[conv.dept_id] || conv.name || conv.dept_id;
 }
 
-function Avatar({ name, isGroup, online, away }) {
+function Avatar({ name, isGroup, isDept, online, away }) {
   return (
     <div className={`msg-avatar${isGroup ? ' dept' : ''}`}>
-      {isGroup ? <Building2 size={18} strokeWidth={1.8} /> : initials(name)}
+      {isDept ? <Building2 size={18} strokeWidth={1.8} /> : isGroup ? <Users size={18} strokeWidth={1.8} /> : initials(name)}
       {online && <span className={`msg-online-dot${away ? ' away' : ''}`} />}
     </div>
   );
 }
 
 function ConversationItem({ conv, active, onClick, t }) {
-  const isGroup = conv.type === 'department';
-  const name = isGroup ? deptDisplayName(conv, t) : (conv.name || '—');
+  const isDept  = conv.type === 'department';
+  const isGroup = isDept || conv.type === 'group';
+  const name = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
   const online = !isGroup && isOnline(conv.other_user);
   const away   = !isGroup && isAway(conv.other_user);
 
@@ -88,7 +89,7 @@ function ConversationItem({ conv, active, onClick, t }) {
 
   return (
     <div className={`msg-list-item${active ? ' active' : ''}`} onClick={onClick}>
-      <Avatar name={name} isGroup={isGroup} online={online} away={away} />
+      <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-top">
           <span className="msg-list-item-name">{name}</span>
@@ -115,7 +116,7 @@ function PersonItem({ person, onClick, t }) {
   );
 }
 
-function MemberItem({ member, t }) {
+function MemberItem({ member, t, isSelf, selected, onToggleSelect, onOpenChat }) {
   const online = isOnline(member);
   const away   = isAway(member);
 
@@ -126,17 +127,29 @@ function MemberItem({ member, t }) {
   else                    status = t.lastSeenNever;
 
   return (
-    <div className="msg-list-item">
+    <div className="msg-list-item" onClick={() => !isSelf && onOpenChat?.(member)}>
+      {!isSelf && (
+        <input
+          type="checkbox"
+          className="msg-member-checkbox"
+          checked={!!selected}
+          onChange={() => onToggleSelect?.(member.id)}
+          onClick={e => e.stopPropagation()}
+          aria-label={member.full_name}
+        />
+      )}
       <Avatar name={member.full_name} online={online} away={away} />
       <div className="msg-list-item-body">
-        <div className="msg-list-item-name">{member.full_name}</div>
+        <div className="msg-list-item-name">{member.full_name}{isSelf ? ` (${t.you})` : ''}</div>
         <div className="msg-list-item-snippet">{status}</div>
       </div>
     </div>
   );
 }
 
-function MembersPanel({ members, t }) {
+function MembersPanel({ members, t, currentUserId, onOpenChat, onStartGroup }) {
+  const [selected, setSelected] = useState(new Set());
+
   const onlineCount = members.filter(m => isOnline(m)).length;
 
   const sorted = [...members].sort((a, b) => {
@@ -146,12 +159,38 @@ function MembersPanel({ members, t }) {
     return a.full_name.localeCompare(b.full_name);
   });
 
+  function toggle(id) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div className="msg-members-panel">
       <div className="msg-members-panel-title">
         {t.members} · {(t.onlineNow || '{n}').replace('{n}', onlineCount)}
       </div>
-      {sorted.map(m => <MemberItem key={m.id} member={m} t={t} />)}
+      <div className="msg-members-panel-list">
+        {sorted.map(m => (
+          <MemberItem
+            key={m.id}
+            member={m}
+            t={t}
+            isSelf={m.id === currentUserId}
+            selected={selected.has(m.id)}
+            onToggleSelect={toggle}
+            onOpenChat={onOpenChat}
+          />
+        ))}
+      </div>
+      {selected.size > 0 && (
+        <button className="btn btn-primary btn-sm msg-members-panel-action" onClick={() => onStartGroup?.([...selected])}>
+          <MessageCircle size={14} strokeWidth={2} />
+          {t.startChat} ({selected.size})
+        </button>
+      )}
     </div>
   );
 }
@@ -228,7 +267,7 @@ function MessageBubble({ msg, mine, showSender, t }) {
   );
 }
 
-function ChatThread({ conv, user, t, onBack, liveMessage }) {
+function ChatThread({ conv, user, t, onBack, liveMessage, onOpenDM, onStartGroup }) {
   const [messages, setMessages]     = useState([]);
   const [text, setText]             = useState('');
   const [file, setFile]             = useState(null);
@@ -240,8 +279,9 @@ function ChatThread({ conv, user, t, onBack, liveMessage }) {
   const fileInput  = useRef(null);
   const lastIdRef  = useRef(0);
 
-  const isGroup = conv.type === 'department';
-  const name    = isGroup ? deptDisplayName(conv, t) : (conv.name || '—');
+  const isDept  = conv.type === 'department';
+  const isGroup = isDept || conv.type === 'group';
+  const name    = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -335,8 +375,10 @@ function ChatThread({ conv, user, t, onBack, liveMessage }) {
   const away   = !isGroup && isAway(conv.other_user);
 
   let status = '';
-  if (isGroup) {
+  if (isDept) {
     status = t.departmentGroup;
+  } else if (isGroup) {
+    status = t.groupChat;
   } else if (away) {
     status = t.away;
   } else if (online) {
@@ -353,7 +395,7 @@ function ChatThread({ conv, user, t, onBack, liveMessage }) {
         <button className="msg-back-btn btn-ghost btn-sm" onClick={onBack} aria-label="back">
           <ArrowLeft size={16} strokeWidth={2} />
         </button>
-        <Avatar name={name} isGroup={isGroup} online={online} away={away} />
+        <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="msg-thread-title">{name}</div>
           <div className="msg-thread-status">{status}</div>
@@ -367,7 +409,13 @@ function ChatThread({ conv, user, t, onBack, liveMessage }) {
             {showMembers && (
               <>
                 <div className="msg-members-backdrop" onClick={() => setShowMembers(false)} />
-                <MembersPanel members={members} t={t} />
+                <MembersPanel
+                  members={members}
+                  t={t}
+                  currentUserId={user.id}
+                  onOpenChat={member => { setShowMembers(false); onOpenDM?.(member); }}
+                  onStartGroup={memberIds => { setShowMembers(false); onStartGroup?.(memberIds); }}
+                />
               </>
             )}
           </div>
@@ -508,6 +556,17 @@ export default function Messages() {
     setSearch('');
   }
 
+  async function handleStartGroup(memberIds) {
+    try {
+      const { conversation } = await startGroupChat(memberIds);
+      setConversations(prev => {
+        if (prev.some(c => c.id === conversation.id)) return prev;
+        return [conversation, ...prev];
+      });
+      setActiveId(conversation.id);
+    } catch (_) {}
+  }
+
   function handleSelect(convId) {
     setActiveId(convId);
     setConversations(prev => prev.map(c => c.id === convId ? { ...c, unread: 0 } : c));
@@ -579,7 +638,7 @@ export default function Messages() {
         </div>
 
         {active ? (
-          <ChatThread key={active.id} conv={active} user={user} t={t} onBack={() => setActiveId(null)} liveMessage={liveMessage} />
+          <ChatThread key={active.id} conv={active} user={user} t={t} onBack={() => setActiveId(null)} liveMessage={liveMessage} onOpenDM={handlePickUser} onStartGroup={handleStartGroup} />
         ) : (
           <div className="msg-thread" style={{ alignItems: 'center', justifyContent: 'center' }}>
             <div className="empty-state">
