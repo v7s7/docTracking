@@ -4,8 +4,8 @@ export const BASE = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
 async function req(path, opts = {}) {
   const res  = await fetch(`${BASE}${path}`, {
-    headers: { Authorization: `Bearer ${getToken()}`, ...opts.headers },
     ...opts,
+    headers: { Authorization: `Bearer ${getToken()}`, ...opts.headers },
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || 'Request failed');
@@ -34,6 +34,22 @@ export const getMessages = (convId, after) =>
   req(`/messages/conversations/${convId}/messages${after ? `?after=${after}` : ''}`);
 
 export const getConversationMembers = (convId) => req(`/messages/conversations/${convId}/members`);
+
+export const getReadStatus = (convId) => req(`/messages/conversations/${convId}/read-status`);
+
+export const sendTyping = (convId) => req(`/messages/conversations/${convId}/typing`, { method: 'POST' });
+
+export const toggleReaction = (convId, msgId, emoji) => req(`/messages/conversations/${convId}/messages/${msgId}/react`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ emoji }),
+});
+
+export const searchMessages = (q, conversationId) => {
+  const params = new URLSearchParams({ q });
+  if (conversationId) params.set('conversationId', conversationId);
+  return req(`/messages/search?${params.toString()}`);
+};
 
 export function streamUrl() {
   return `${BASE}/messages/stream?token=${encodeURIComponent(getToken())}`;

@@ -79,8 +79,68 @@ function ensureMembership(conversationId, userId) {
 
 function touchRead(conversationId, userId) {
   ensureMembership(conversationId, userId);
-  db.prepare("UPDATE conversation_members SET last_read_at = datetime('now','localtime') WHERE conversation_id=? AND user_id=?")
+  const now = db.prepare("SELECT datetime('now','localtime') as now").get().now;
+  db.prepare("UPDATE conversation_members SET last_read_at = ? WHERE conversation_id=? AND user_id=?")
+    .run(now, conversationId, userId);
+  db.prepare("UPDATE message_mentions SET is_read=1 WHERE conversation_id=? AND user_id=?")
     .run(conversationId, userId);
+  return now;
+}
+
+// Notify other members that this user has read up to `lastReadAt` (DM/group only —
+// department channels can have too many members for per-message read receipts to be useful).
+function broadcastReadReceipt(conv, userId, lastReadAt) {
+  if (conv.type === 'department') return;
+  const memberIds = db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=? AND user_id != ?")
+    .all(conv.id, userId).map(r => r.user_id);
+  broadcastToUsers(memberIds, 'read', { conversation_id: conv.id, user_id: userId, last_read_at: lastReadAt });
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Scan message content for "@Full Name" occurrences matching real users who can
+// see this conversation, so we can highlight + notify them.
+function detectMentions(content, conv, senderId) {
+  if (!content) return [];
+
+  let candidates;
+  if (conv.type === 'department') {
+    candidates = db.prepare("SELECT id, full_name FROM users WHERE is_active=1").all();
+  } else if (conv.type === 'group') {
+    candidates = db.prepare(`
+      SELECT u.id, u.full_name FROM conversation_members cm JOIN users u ON u.id = cm.user_id
+      WHERE cm.conversation_id = ?
+    `).all(conv.id);
+  } else {
+    return [];
+  }
+
+  return candidates.filter(c => {
+    if (c.id === senderId) return false;
+    const re = new RegExp(`@${escapeRegExp(c.full_name)}(?![A-Za-z0-9])`, 'i');
+    return re.test(content);
+  });
+}
+
+// Aggregate emoji reactions for a message: [{ emoji, count, userIds }]
+function getReactions(messageId) {
+  const rows = db.prepare("SELECT emoji, user_id FROM message_reactions WHERE message_id=?").all(messageId);
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.emoji)) map.set(r.emoji, []);
+    map.get(r.emoji).push(r.user_id);
+  }
+  return [...map.entries()].map(([emoji, userIds]) => ({ emoji, count: userIds.length, userIds }));
+}
+
+function attachExtras(message) {
+  return {
+    ...message,
+    mentions: message.mentions ? JSON.parse(message.mentions) : [],
+    reactions: getReactions(message.id),
+  };
 }
 
 // Live updates (SSE) — userId -> Set of open response streams
@@ -199,6 +259,10 @@ router.get('/conversations', (req, res) => {
       display = { name: other?.full_name || '—', other_user: other };
     }
 
+    const mentioned = !!db.prepare(
+      "SELECT 1 FROM message_mentions WHERE conversation_id=? AND user_id=? AND is_read=0 LIMIT 1"
+    ).get(conv.id, req.user.id);
+
     return {
       id: conv.id,
       type: conv.type,
@@ -206,6 +270,7 @@ router.get('/conversations', (req, res) => {
       unread,
       last_message: last || null,
       hidden: !!conv.hidden_at,
+      mentioned,
     };
   });
 
@@ -321,7 +386,7 @@ router.get('/conversations/:id/messages', (req, res) => {
   const after = req.query.after ? Number(req.query.after) : 0;
   const messages = db.prepare(
     "SELECT * FROM messages WHERE conversation_id=? AND id > ? ORDER BY id ASC"
-  ).all(conv.id, after);
+  ).all(conv.id, after).map(attachExtras);
 
   res.json({ success: true, messages });
 });
@@ -337,26 +402,38 @@ router.post('/conversations/:id/messages', uploadSingle, (req, res) => {
     return res.status(400).json({ success: false, message: 'Message cannot be empty.' });
   }
 
+  const mentions = detectMentions(content, conv, req.user.id);
+
   const info = db.prepare(`
-    INSERT INTO messages (conversation_id, sender_id, sender_name, content, file_url, file_name, file_type, file_size)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO messages (conversation_id, sender_id, sender_name, content, file_url, file_name, file_type, file_size, mentions)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     conv.id, req.user.id, req.user.name || req.user.username, content || null,
     file ? `/uploads/messages/${file.filename}` : null,
     file ? file.originalname : null,
     file ? file.mimetype : null,
     file ? file.size : null,
+    mentions.length ? JSON.stringify(mentions) : null,
   );
 
-  touchRead(conv.id, req.user.id);
+  const lastReadAt = touchRead(conv.id, req.user.id);
 
-  const message = db.prepare("SELECT * FROM messages WHERE id=?").get(info.lastInsertRowid);
+  const message = attachExtras(db.prepare("SELECT * FROM messages WHERE id=?").get(info.lastInsertRowid));
   res.status(201).json({ success: true, message });
 
   const recipientIds = conv.type === 'department'
     ? db.prepare("SELECT id FROM users WHERE is_active=1").all().map(r => r.id)
     : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(conv.id).map(r => r.user_id);
   broadcastToUsers(recipientIds, 'message', { conversation_id: conv.id, message });
+  broadcastReadReceipt(conv, req.user.id, lastReadAt);
+
+  if (mentions.length) {
+    for (const mu of mentions) {
+      db.prepare("INSERT INTO message_mentions (message_id, conversation_id, user_id) VALUES (?, ?, ?)")
+        .run(info.lastInsertRowid, conv.id, mu.id);
+    }
+    broadcastToUsers(mentions.map(m => m.id), 'mention', { conversation_id: conv.id, message });
+  }
 });
 
 // GET /messages/conversations/:id/members — roster with live presence (department staff or group members)
@@ -383,8 +460,122 @@ router.post('/conversations/:id/read', (req, res) => {
   const conv = getAccessibleConversation(Number(req.params.id), req.user);
   if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
 
-  touchRead(conv.id, req.user.id);
+  const lastReadAt = touchRead(conv.id, req.user.id);
   res.json({ success: true });
+  broadcastReadReceipt(conv, req.user.id, lastReadAt);
+});
+
+// GET /messages/conversations/:id/read-status — other members' last_read_at (DM/group only)
+router.get('/conversations/:id/read-status', (req, res) => {
+  const conv = getAccessibleConversation(Number(req.params.id), req.user);
+  if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+
+  if (conv.type === 'department') return res.json({ success: true, members: [] });
+
+  const members = db.prepare(`
+    SELECT cm.user_id as id, u.full_name, cm.last_read_at
+    FROM conversation_members cm JOIN users u ON u.id = cm.user_id
+    WHERE cm.conversation_id=? AND cm.user_id != ?
+  `).all(conv.id, req.user.id);
+
+  res.json({ success: true, members });
+});
+
+// POST /messages/conversations/:id/typing — notify other members that I'm typing
+router.post('/conversations/:id/typing', (req, res) => {
+  const conv = getAccessibleConversation(Number(req.params.id), req.user);
+  if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+
+  const memberIds = conv.type === 'department'
+    ? db.prepare("SELECT id FROM users WHERE is_active=1 AND id != ?").all(req.user.id).map(r => r.id)
+    : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=? AND user_id != ?").all(conv.id, req.user.id).map(r => r.user_id);
+
+  res.json({ success: true });
+  broadcastToUsers(memberIds, 'typing', { conversation_id: conv.id, user_id: req.user.id, full_name: req.user.name || req.user.username });
+});
+
+// POST /messages/conversations/:convId/messages/:msgId/react — toggle an emoji reaction
+router.post('/conversations/:convId/messages/:msgId/react', (req, res) => {
+  const conv = getAccessibleConversation(Number(req.params.convId), req.user);
+  if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+
+  const emoji = (req.body?.emoji || '').trim();
+  if (!emoji) return res.status(400).json({ success: false, message: 'Emoji required.' });
+
+  const msg = db.prepare("SELECT id FROM messages WHERE id=? AND conversation_id=?").get(Number(req.params.msgId), conv.id);
+  if (!msg) return res.status(404).json({ success: false, message: 'Message not found.' });
+
+  const existing = db.prepare("SELECT 1 FROM message_reactions WHERE message_id=? AND user_id=? AND emoji=?").get(msg.id, req.user.id, emoji);
+  if (existing) {
+    db.prepare("DELETE FROM message_reactions WHERE message_id=? AND user_id=? AND emoji=?").run(msg.id, req.user.id, emoji);
+  } else {
+    db.prepare("INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)").run(msg.id, req.user.id, emoji);
+  }
+
+  const reactions = getReactions(msg.id);
+  res.json({ success: true, reactions });
+
+  const recipientIds = conv.type === 'department'
+    ? db.prepare("SELECT id FROM users WHERE is_active=1").all().map(r => r.id)
+    : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(conv.id).map(r => r.user_id);
+  broadcastToUsers(recipientIds, 'reaction', { conversation_id: conv.id, message_id: msg.id, reactions });
+});
+
+// GET /messages/search?q=...&conversationId=optional — search message text
+router.get('/search', (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (q.length < 2) return res.json({ success: true, results: [] });
+
+  let conversationIds;
+  if (req.query.conversationId) {
+    const conv = getAccessibleConversation(Number(req.query.conversationId), req.user);
+    if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+    conversationIds = [conv.id];
+  } else {
+    ensureAllDeptConversations();
+    const deptIds = db.prepare("SELECT id FROM conversations WHERE type='department'").all().map(r => r.id);
+    const memberIds = db.prepare("SELECT conversation_id FROM conversation_members WHERE user_id=?").all(req.user.id).map(r => r.conversation_id);
+    conversationIds = [...new Set([...deptIds, ...memberIds])];
+  }
+
+  if (!conversationIds.length) return res.json({ success: true, results: [] });
+
+  const placeholders = conversationIds.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT m.id as message_id, m.conversation_id, m.content, m.sender_name, m.created_at,
+           c.type as conv_type, c.dept_id
+    FROM messages m JOIN conversations c ON c.id = m.conversation_id
+    WHERE m.conversation_id IN (${placeholders}) AND m.content LIKE ?
+    ORDER BY m.id DESC LIMIT 30
+  `).all(...conversationIds, `%${q}%`);
+
+  const results = rows.map(r => {
+    let conversation_name;
+    if (r.conv_type === 'department') {
+      conversation_name = deptLabel(r.dept_id);
+    } else if (r.conv_type === 'group') {
+      const others = groupMembers(r.conversation_id).filter(m => m.id !== req.user.id);
+      conversation_name = others.map(o => o.full_name).join(', ');
+    } else {
+      const other = db.prepare(`
+        SELECT u.full_name FROM conversation_members cm JOIN users u ON u.id = cm.user_id
+        WHERE cm.conversation_id=? AND cm.user_id != ?
+      `).get(r.conversation_id, req.user.id);
+      conversation_name = other?.full_name || '—';
+    }
+    return {
+      message_id: r.message_id,
+      conversation_id: r.conversation_id,
+      conversation_type: r.conv_type,
+      conversation_name,
+      dept_id: r.conv_type === 'department' ? r.dept_id : undefined,
+      content: r.content,
+      sender_name: r.sender_name,
+      created_at: r.created_at,
+    };
+  });
+
+  res.json({ success: true, results });
 });
 
 // POST /messages/conversations/:id/hide — tuck a chat away in the "hidden" section.

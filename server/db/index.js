@@ -190,6 +190,36 @@ if (!convMemberCols.includes('hidden_at')) {
   db.exec("ALTER TABLE conversation_members ADD COLUMN hidden_at TEXT");
 }
 
+const messageCols = db.prepare("PRAGMA table_info(messages)").all().map(c => c.name);
+if (!messageCols.includes('mentions')) {
+  db.exec("ALTER TABLE messages ADD COLUMN mentions TEXT");
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS message_mentions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id      INTEGER NOT NULL,
+    conversation_id INTEGER NOT NULL,
+    user_id         INTEGER NOT NULL,
+    is_read         INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_mentions_user ON message_mentions(user_id, is_read);
+  CREATE INDEX IF NOT EXISTS idx_mentions_conv ON message_mentions(conversation_id, user_id);
+
+  CREATE TABLE IF NOT EXISTS message_reactions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id  INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL,
+    emoji       TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE(message_id, user_id, emoji),
+    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_reactions_msg ON message_reactions(message_id);
+`);
+
 // ── Serial number helper ─────────────────────────────────────
 // Format: PREFIX-YYYY-NNNN  (e.g. CS-2026-0001)
 // Prefix is read from TASK_SERIAL_PREFIX env var, defaults to "CS"
