@@ -2,82 +2,39 @@
   "_note": "Edit via Super Admin panel or PUT /admin/config. Each department has 'services', each service has 'fields'.",
   "departments": [
     {
-      "id": "customer_service",
-      "label": "خدمة العملاء",
-      "ldapGroup": "customer_service",
-      "services": [
-        {
-          "id": "cs_correspondence",
-          "label": "المراسلات الرسمية",
-          "description": "تسجيل وتتبع المراسلات الرسمية الواردة والصادرة",
-          "fields": [
-            { "key": "serial_number", "label": "رقم التسلسل", "type": "number", "required": true, "placeholder": "أدخل رقم التسلسل" },
-            { "key": "transaction_type", "label": "نوع المعاملة", "type": "select", "required": true, "options": ["صادر", "وارد"] },
-            { "key": "doc_date", "label": "تاريخ الكتاب", "type": "date", "required": true },
-            { "key": "sender_recipient", "label": "الجهة المرسلة / المرسل إليها", "type": "text", "required": true, "placeholder": "اسم الجهة" },
-            { "key": "subject", "label": "موضوع الكتاب", "type": "textarea", "required": true, "placeholder": "موضوع المراسلة" },
-            { "key": "delivery_method", "label": "طريقة الاستلام / التسليم", "type": "select", "required": true, "options": ["يدوي", "بريد", "إيميل"] },
-            { "key": "receipt_date", "label": "تاريخ الاستلام / التسليم", "type": "date", "required": true },
-            { "key": "recipient_name", "label": "اسم المستلم", "type": "text", "required": true, "placeholder": "اسم المستلم" },
-            { "key": "recipient_signature", "label": "توقيع المستلم", "type": "checkbox", "required": false }
-          ]
-        },
-        {
-          "id": "cs_inquiries",
-          "label": "الاستفسارات العامة",
-          "description": "تسجيل الاستفسارات العامة الواردة من المراجعين",
-          "fields": [
-            { "key": "inquiry_date", "label": "تاريخ الاستفسار", "type": "date", "required": true },
-            { "key": "inquirer_name", "label": "اسم المستفسر", "type": "text", "required": true, "placeholder": "اسم المستفسر" },
-            { "key": "requested_dept", "label": "قسم المطلوب", "type": "text", "required": true, "placeholder": "القسم المعني بالاستفسار" },
-            { "key": "contact_number", "label": "رقم التواصل", "type": "text", "required": true, "placeholder": "رقم الهاتف" },
-            { "key": "inquiry_details", "label": "تفاصيل الاستفسار", "type": "textarea", "required": true, "placeholder": "اكتب تفاصيل الاستفسار" },
-            { "key": "dept_replied", "label": "هل تم الرد عليه من قبل القسم", "type": "select", "required": true, "options": ["لا", "نعم"] }
-          ]
-        }
-      ]
+      "id": "board_office",
+      "label": "مكتب رئيس المجلس",
+      "ldapGroup": "board_office",
+      "services": []
     },
     {
-      "id": "accounts_dept",
-      "label": "قسم الحسابات",
-      "ldapGroup": "accounts_dept",
-      "services": [
-        {
-          "id": "accounts_checks",
-          "label": "تسليم الشيكات",
-          "description": "تسليم الشيكات للمستحقين من الأفراد والشركات والجهات ذات العلاقة",
-          "fields": [
-            { "key": "serial_number", "label": "رقم التسلسل", "type": "number", "required": true, "placeholder": "رقم التسلسل" },
-            { "key": "check_number", "label": "رقم الشيك", "type": "text", "required": true, "placeholder": "رقم الشيك" },
-            { "key": "amount", "label": "المبلغ", "type": "number", "required": true, "placeholder": "0.000" },
-            { "key": "beneficiary_name", "label": "اسم المستفيد", "type": "text", "required": true, "placeholder": "اسم المستفيد" },
-            { "key": "beneficiary_type", "label": "نوع المستفيد", "type": "select", "required": true, "options": ["فرد", "شركة", "جهة"] },
-            { "key": "delivery_method", "label": "طريقة التسليم", "type": "select", "required": true, "options": ["يدوي", "مندوب"] },
-            { "key": "delivery_date", "label": "تاريخ التسليم", "type": "date", "required": true },
-            { "key": "recipient_name", "label": "اسم المستلم", "type": "text", "required": true, "placeholder": "اسم المستلم" },
-            { "key": "recipient_contact", "label": "رقم تواصل المستلم", "type": "text", "required": true, "placeholder": "رقم الهاتف" },
-            { "key": "recipient_signature", "label": "توقيع المستلم", "type": "checkbox", "required": true },
-            { "key": "notes", "label": "ملاحظات", "type": "textarea", "required": false, "placeholder": "أي ملاحظات إضافية" }
-          ]
-        },
-        {
-          "id": "accounts_payment_orders",
-          "label": "أذون الصرف",
-          "description": "معالجة وإصدار أذون الصرف للمستحقين",
-          "fields": [
-            { "key": "order_number", "label": "رقم إذن الصرف", "type": "text", "required": true, "placeholder": "رقم الإذن" },
-            { "key": "amount", "label": "المبلغ", "type": "number", "required": true, "placeholder": "0.000" },
-            { "key": "beneficiary_name", "label": "اسم المستفيد", "type": "text", "required": true, "placeholder": "اسم المستفيد" },
-            { "key": "purpose", "label": "الغرض من الصرف", "type": "textarea", "required": true, "placeholder": "وصف الغرض" },
-            { "key": "notes", "label": "ملاحظات", "type": "textarea", "required": false, "placeholder": "أي ملاحظات إضافية" }
-          ]
-        }
-      ]
+      "id": "director_general_office",
+      "label": "مكتب المدير العام",
+      "ldapGroup": "director_general_office",
+      "services": []
     },
     {
-      "id": "banks_dept",
-      "label": "قسم المصارف",
-      "ldapGroup": "banks_dept",
+      "id": "strategic_planning_dept",
+      "label": "التخطيط الاستراتيجي ومتابعة المشاريع الوقفية",
+      "ldapGroup": "strategic_planning_dept",
+      "services": []
+    },
+    {
+      "id": "investments_dept",
+      "label": "الاستثمارات الوقفية",
+      "ldapGroup": "investments_dept",
+      "services": []
+    },
+    {
+      "id": "revenue_collection_dept",
+      "label": "تحصيل الإيرادات",
+      "ldapGroup": "revenue_collection_dept",
+      "services": []
+    },
+    {
+      "id": "endowment_disbursement_dept",
+      "label": "المصارف الوقفية وتنمية الوقف",
+      "ldapGroup": "endowment_disbursement_dept",
       "services": [
         {
           "id": "banks_marriage_grant",
@@ -122,9 +79,21 @@
       ]
     },
     {
-      "id": "asset_development_dept",
-      "label": "قسم تنمية الأصول الوقفية",
-      "ldapGroup": "asset_development_dept",
+      "id": "sharia_studies_dept",
+      "label": "الوقف الشرعي والدراسات",
+      "ldapGroup": "sharia_studies_dept",
+      "services": []
+    },
+    {
+      "id": "legal_affairs_dept",
+      "label": "الشؤون القانونية والأملاك الوقفية",
+      "ldapGroup": "legal_affairs_dept",
+      "services": []
+    },
+    {
+      "id": "engineering_services_dept",
+      "label": "المشاريع والخدمات الهندسية",
+      "ldapGroup": "engineering_services_dept",
       "services": [
         {
           "id": "asset_development_leases",
@@ -156,8 +125,45 @@
       ]
     },
     {
+      "id": "accounts_dept",
+      "label": "الحسابات",
+      "ldapGroup": "accounts_dept",
+      "services": [
+        {
+          "id": "accounts_checks",
+          "label": "تسليم الشيكات",
+          "description": "تسليم الشيكات للمستحقين من الأفراد والشركات والجهات ذات العلاقة",
+          "fields": [
+            { "key": "serial_number", "label": "رقم التسلسل", "type": "number", "required": true, "placeholder": "رقم التسلسل" },
+            { "key": "check_number", "label": "رقم الشيك", "type": "text", "required": true, "placeholder": "رقم الشيك" },
+            { "key": "amount", "label": "المبلغ", "type": "number", "required": true, "placeholder": "0.000" },
+            { "key": "beneficiary_name", "label": "اسم المستفيد", "type": "text", "required": true, "placeholder": "اسم المستفيد" },
+            { "key": "beneficiary_type", "label": "نوع المستفيد", "type": "select", "required": true, "options": ["فرد", "شركة", "جهة"] },
+            { "key": "delivery_method", "label": "طريقة التسليم", "type": "select", "required": true, "options": ["يدوي", "مندوب"] },
+            { "key": "delivery_date", "label": "تاريخ التسليم", "type": "date", "required": true },
+            { "key": "recipient_name", "label": "اسم المستلم", "type": "text", "required": true, "placeholder": "اسم المستلم" },
+            { "key": "recipient_contact", "label": "رقم تواصل المستلم", "type": "text", "required": true, "placeholder": "رقم الهاتف" },
+            { "key": "recipient_signature", "label": "توقيع المستلم", "type": "checkbox", "required": true },
+            { "key": "notes", "label": "ملاحظات", "type": "textarea", "required": false, "placeholder": "أي ملاحظات إضافية" }
+          ]
+        },
+        {
+          "id": "accounts_payment_orders",
+          "label": "أذون الصرف",
+          "description": "معالجة وإصدار أذون الصرف للمستحقين",
+          "fields": [
+            { "key": "order_number", "label": "رقم إذن الصرف", "type": "text", "required": true, "placeholder": "رقم الإذن" },
+            { "key": "amount", "label": "المبلغ", "type": "number", "required": true, "placeholder": "0.000" },
+            { "key": "beneficiary_name", "label": "اسم المستفيد", "type": "text", "required": true, "placeholder": "اسم المستفيد" },
+            { "key": "purpose", "label": "الغرض من الصرف", "type": "textarea", "required": true, "placeholder": "وصف الغرض" },
+            { "key": "notes", "label": "ملاحظات", "type": "textarea", "required": false, "placeholder": "أي ملاحظات إضافية" }
+          ]
+        }
+      ]
+    },
+    {
       "id": "hr_dept",
-      "label": "قسم الموارد البشرية",
+      "label": "الموارد البشرية",
       "ldapGroup": "hr_dept",
       "services": [
         {
@@ -184,6 +190,84 @@
           ]
         }
       ]
+    },
+    {
+      "id": "procurement_dept",
+      "label": "المشتريات",
+      "ldapGroup": "procurement_dept",
+      "services": []
+    },
+    {
+      "id": "it_dept",
+      "label": "تقنية المعلومات",
+      "ldapGroup": "it_dept",
+      "services": []
+    },
+    {
+      "id": "admin_affairs_dept",
+      "label": "الشؤون الإدارية",
+      "ldapGroup": "admin_affairs_dept",
+      "services": []
+    },
+    {
+      "id": "mosques_guidance_dept",
+      "label": "المساجد والإرشاد الديني",
+      "ldapGroup": "mosques_guidance_dept",
+      "services": []
+    },
+    {
+      "id": "community_relations_dept",
+      "label": "الإتصال وخدمة المجتمع",
+      "ldapGroup": "community_relations_dept",
+      "services": []
+    },
+    {
+      "id": "maintenance_dept",
+      "label": "الصيانة",
+      "ldapGroup": "maintenance_dept",
+      "services": []
+    },
+    {
+      "id": "reception_dept",
+      "label": "الإستقبال",
+      "ldapGroup": "reception_dept",
+      "services": [
+        {
+          "id": "cs_correspondence",
+          "label": "المراسلات الرسمية",
+          "description": "تسجيل وتتبع المراسلات الرسمية الواردة والصادرة",
+          "fields": [
+            { "key": "serial_number", "label": "رقم التسلسل", "type": "number", "required": true, "placeholder": "أدخل رقم التسلسل" },
+            { "key": "transaction_type", "label": "نوع المعاملة", "type": "select", "required": true, "options": ["صادر", "وارد"] },
+            { "key": "doc_date", "label": "تاريخ الكتاب", "type": "date", "required": true },
+            { "key": "sender_recipient", "label": "الجهة المرسلة / المرسل إليها", "type": "text", "required": true, "placeholder": "اسم الجهة" },
+            { "key": "subject", "label": "موضوع الكتاب", "type": "textarea", "required": true, "placeholder": "موضوع المراسلة" },
+            { "key": "delivery_method", "label": "طريقة الاستلام / التسليم", "type": "select", "required": true, "options": ["يدوي", "بريد", "إيميل"] },
+            { "key": "receipt_date", "label": "تاريخ الاستلام / التسليم", "type": "date", "required": true },
+            { "key": "recipient_name", "label": "اسم المستلم", "type": "text", "required": true, "placeholder": "اسم المستلم" },
+            { "key": "recipient_signature", "label": "توقيع المستلم", "type": "checkbox", "required": false }
+          ]
+        },
+        {
+          "id": "cs_inquiries",
+          "label": "الاستفسارات العامة",
+          "description": "تسجيل الاستفسارات العامة الواردة من المراجعين",
+          "fields": [
+            { "key": "inquiry_date", "label": "تاريخ الاستفسار", "type": "date", "required": true },
+            { "key": "inquirer_name", "label": "اسم المستفسر", "type": "text", "required": true, "placeholder": "اسم المستفسر" },
+            { "key": "requested_dept", "label": "قسم المطلوب", "type": "text", "required": true, "placeholder": "القسم المعني بالاستفسار" },
+            { "key": "contact_number", "label": "رقم التواصل", "type": "text", "required": true, "placeholder": "رقم الهاتف" },
+            { "key": "inquiry_details", "label": "تفاصيل الاستفسار", "type": "textarea", "required": true, "placeholder": "اكتب تفاصيل الاستفسار" },
+            { "key": "dept_replied", "label": "هل تم الرد عليه من قبل القسم", "type": "select", "required": true, "options": ["لا", "نعم"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "other_dept",
+      "label": "أخرى",
+      "ldapGroup": "other_dept",
+      "services": []
     }
   ],
   "roleGroupMap": {
@@ -196,11 +280,24 @@
     "dept_managers": "MANAGER",
     "supervisors": "MANAGER",
     "senior_staff": "MANAGER",
-    "customer_service": "STAFF",
+    "board_office": "STAFF",
+    "director_general_office": "STAFF",
+    "strategic_planning_dept": "STAFF",
+    "investments_dept": "STAFF",
+    "revenue_collection_dept": "STAFF",
+    "endowment_disbursement_dept": "STAFF",
+    "sharia_studies_dept": "STAFF",
+    "legal_affairs_dept": "STAFF",
+    "engineering_services_dept": "STAFF",
     "accounts_dept": "STAFF",
-    "banks_dept": "STAFF",
-    "asset_development_dept": "STAFF",
     "hr_dept": "STAFF",
+    "procurement_dept": "STAFF",
+    "admin_affairs_dept": "STAFF",
+    "mosques_guidance_dept": "STAFF",
+    "community_relations_dept": "STAFF",
+    "maintenance_dept": "STAFF",
+    "reception_dept": "STAFF",
+    "other_dept": "STAFF",
     "it_support": "STAFF",
     "general_staff": "STAFF",
     "audit_team": "READONLY",

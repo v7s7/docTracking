@@ -5,9 +5,9 @@ const { verifyToken } = require('../middleware/authMiddleware');
 const router = express.Router();
 
 function userDeptId(user) {
-  // CS and above see CS notifications; dept staff see their dept
+  // CS and above see reception notifications; dept staff see their dept
   if (['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(user.role)) {
-    return user.dept_id || 'customer_service';
+    return user.dept_id || 'reception_dept';
   }
   return user.dept_id || '';
 }

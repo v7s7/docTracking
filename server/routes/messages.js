@@ -51,10 +51,10 @@ router.use((req, res, next) => {
   next();
 });
 
-// CS-tier roles share the "customer_service" department conversation.
+// CS-tier roles share the "reception_dept" department conversation.
 function effectiveDeptId(user) {
   if (['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(user.role)) {
-    return user.dept_id || 'customer_service';
+    return user.dept_id || 'reception_dept';
   }
   return user.dept_id || null;
 }
