@@ -370,7 +370,9 @@ function LdapUsersSection({ t, onAssigned }) {
                     <td style={{ fontWeight: 500 }}>{u.name || '—'}</td>
                     <td><code className="tag" style={{ fontSize: '0.78em' }}>{u.username}</code></td>
                     <td className="text-sm text-muted">{u.email || '—'}</td>
-                    <td className="text-sm text-muted">{u.department || '—'}</td>
+                    <td className="text-sm text-muted">
+                      {db?.dept_id ? (t.groupLabels?.[db.dept_id] || db.dept_id) : (u.department || '—')}
+                    </td>
                     <td className="text-sm text-muted">{u.title || '—'}</td>
                     <td>
                       {db
