@@ -1345,6 +1345,8 @@ code.tag {
 .msg-react-trigger {
   position: relative;
   flex-shrink: 0;
+  display: flex;
+  gap: 0.1rem;
   opacity: 0;
   transition: opacity 0.12s;
 }
@@ -1475,6 +1477,70 @@ code.tag {
   padding: 0.3rem 0.6rem;
   font-size: 0.78rem;
   margin-bottom: 0.4rem;
+}
+
+.msg-reply-quote {
+  border-inline-start: 3px solid var(--accent);
+  background: rgba(0,0,0,0.04);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  margin-bottom: 0.35rem;
+  cursor: pointer;
+}
+
+.msg-bubble-row.mine .msg-reply-quote {
+  border-inline-start-color: rgba(255,255,255,0.75);
+  background: rgba(255,255,255,0.14);
+}
+
+.msg-reply-quote-sender {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 0.1rem;
+}
+
+.msg-bubble-row.mine .msg-reply-quote-sender { color: rgba(255,255,255,0.9); }
+
+.msg-reply-quote-text {
+  font-size: 0.78rem;
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+.msg-reply-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.6rem;
+  font-size: 0.78rem;
+  margin-bottom: 0.4rem;
+}
+
+.msg-reply-banner-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-reply-banner-name {
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
+.msg-reply-banner-text {
+  font-size: 0.78rem;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .msg-mention-dropdown {

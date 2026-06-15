@@ -8,7 +8,7 @@ import {
 } from '../../services/messageService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
-  Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile,
+  Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply,
 } from 'lucide-react';
 
 const THREAD_POLL_MS = 4000;
@@ -313,7 +313,7 @@ function DirectoryPanel({ onPick, onClose, t }) {
   );
 }
 
-function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact }) {
+function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply }) {
   const isImage = msg.file_type?.startsWith('image/');
   const [showPicker, setShowPicker] = useState(false);
 
@@ -322,6 +322,12 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
       {showSender && !mine && <span className="msg-sender-name">{msg.sender_name}</span>}
       <div className="msg-bubble-wrap">
         <div className="msg-bubble">
+          {msg.reply_to && (
+            <div className="msg-reply-quote" onClick={() => onJumpToReply?.(msg.reply_to.id)}>
+              <div className="msg-reply-quote-sender">{msg.reply_to.sender_name}</div>
+              <div className="msg-reply-quote-text">{msg.reply_to.content || msg.reply_to.file_name || t.attachment}</div>
+            </div>
+          )}
           {msg.file_url && isImage && (
             <a href={fileUrl(msg.file_url)} target="_blank" rel="noopener noreferrer">
               <img src={fileUrl(msg.file_url)} alt={msg.file_name || ''} className="msg-image" />
@@ -342,6 +348,9 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
           )}
         </div>
         <div className="msg-react-trigger">
+          <button className="msg-react-btn btn-ghost btn-sm" onClick={() => onReply?.(msg)} title={t.reply} aria-label={t.reply}>
+            <Reply size={13} strokeWidth={2} />
+          </button>
           <button className="msg-react-btn btn-ghost btn-sm" onClick={() => setShowPicker(s => !s)} title={t.addReaction} aria-label={t.addReaction}>
             <Smile size={13} strokeWidth={2} />
           </button>
@@ -396,6 +405,7 @@ function ChatThread({
   const [jumpHighlightId, setJumpHighlightId] = useState(null);
   const [mentionQuery, setMentionQuery] = useState(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [replyTo, setReplyTo] = useState(null);
   const bodyRef       = useRef(null);
   const fileInput     = useRef(null);
   const textareaRef   = useRef(null);
@@ -431,10 +441,21 @@ function ChatThread({
   useEffect(() => {
     setMessages([]);
     lastIdRef.current = 0;
+    setReplyTo(null);
     load(true).then(scrollToBottom);
     const id = setInterval(() => load(false), THREAD_POLL_MS);
     return () => clearInterval(id);
   }, [conv.id, load, scrollToBottom]);
+
+  // Scroll to (and briefly highlight) a message already in the loaded thread —
+  // used when tapping the quote block on a reply.
+  const scrollToMsg = useCallback((id) => {
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setJumpHighlightId(id);
+    setTimeout(() => setJumpHighlightId(null), 2000);
+  }, []);
 
   // Append messages pushed live over SSE for this conversation
   useEffect(() => {
@@ -516,9 +537,10 @@ function ChatThread({
     setSending(true);
     setError('');
     try {
-      await sendMessage(conv.id, { content, file });
+      await sendMessage(conv.id, { content, file, replyToId: replyTo?.id });
       setText('');
       setFile(null);
+      setReplyTo(null);
       if (fileInput.current) fileInput.current.value = '';
       await load(false);
     } catch (e) {
@@ -745,12 +767,29 @@ function ChatThread({
             highlighted={msg.id === jumpHighlightId || msg.id === activeMatch?.id}
             seenLabel={msg.id === lastMine?.id ? seenLabel : null}
             onReact={handleReact}
+            onReply={setReplyTo}
+            onJumpToReply={scrollToMsg}
           />
         ))}
       </div>
 
       {error && (
         <div className="alert alert-error" style={{ margin: '0 1.1rem 0.5rem' }}>{error}</div>
+      )}
+
+      {replyTo && (
+        <div style={{ padding: '0 1.1rem' }}>
+          <div className="msg-reply-banner">
+            <Reply size={14} strokeWidth={2} style={{ flexShrink: 0 }} />
+            <div className="msg-reply-banner-body">
+              <div className="msg-reply-banner-name">{replyTo.sender_name}</div>
+              <div className="msg-reply-banner-text">{replyTo.content || replyTo.file_name || t.attachment}</div>
+            </div>
+            <button className="modal-close" style={{ width: 22, height: 22 }} onClick={() => setReplyTo(null)} title={t.cancelReply} aria-label={t.cancelReply}>
+              <X size={13} strokeWidth={2} />
+            </button>
+          </div>
+        </div>
       )}
 
       {file && (

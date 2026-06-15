@@ -135,11 +135,17 @@ function getReactions(messageId) {
   return [...map.entries()].map(([emoji, userIds]) => ({ emoji, count: userIds.length, userIds }));
 }
 
+// Small preview of the message being replied to, for rendering a quote block
+function getReplyPreview(messageId) {
+  return db.prepare("SELECT id, sender_name, content, file_name FROM messages WHERE id=?").get(messageId) || null;
+}
+
 function attachExtras(message) {
   return {
     ...message,
     mentions: message.mentions ? JSON.parse(message.mentions) : [],
     reactions: getReactions(message.id),
+    reply_to: message.reply_to_id ? getReplyPreview(message.reply_to_id) : null,
   };
 }
 
@@ -404,9 +410,16 @@ router.post('/conversations/:id/messages', uploadSingle, (req, res) => {
 
   const mentions = detectMentions(content, conv, req.user.id);
 
+  let replyToId = null;
+  if (req.body.replyToId) {
+    const replyTo = db.prepare("SELECT id FROM messages WHERE id=? AND conversation_id=?")
+      .get(Number(req.body.replyToId), conv.id);
+    if (replyTo) replyToId = replyTo.id;
+  }
+
   const info = db.prepare(`
-    INSERT INTO messages (conversation_id, sender_id, sender_name, content, file_url, file_name, file_type, file_size, mentions)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO messages (conversation_id, sender_id, sender_name, content, file_url, file_name, file_type, file_size, mentions, reply_to_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     conv.id, req.user.id, req.user.name || req.user.username, content || null,
     file ? `/uploads/messages/${file.filename}` : null,
@@ -414,6 +427,7 @@ router.post('/conversations/:id/messages', uploadSingle, (req, res) => {
     file ? file.mimetype : null,
     file ? file.size : null,
     mentions.length ? JSON.stringify(mentions) : null,
+    replyToId,
   );
 
   const lastReadAt = touchRead(conv.id, req.user.id);

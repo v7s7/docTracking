@@ -298,6 +298,9 @@ const T = {
     messagesResults:   'Messages',
     addReaction:       'Add reaction',
     mentionedYou:      'mentioned you',
+    reply:             'Reply',
+    cancelReply:       'Cancel reply',
+    attachment:        'Attachment',
   },
 
   ar: {
@@ -595,6 +598,9 @@ const T = {
     messagesResults:   'الرسائل',
     addReaction:       'إضافة تعبير',
     mentionedYou:      'أشار إليك',
+    reply:             'رد',
+    cancelReply:       'إلغاء الرد',
+    attachment:        'مرفق',
   },
 };
 

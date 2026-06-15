@@ -55,10 +55,11 @@ export function streamUrl() {
   return `${BASE}/messages/stream?token=${encodeURIComponent(getToken())}`;
 }
 
-export function sendMessage(convId, { content, file }) {
+export function sendMessage(convId, { content, file, replyToId }) {
   const form = new FormData();
   if (content) form.append('content', content);
   if (file)    form.append('file', file);
+  if (replyToId) form.append('replyToId', replyToId);
   return req(`/messages/conversations/${convId}/messages`, { method: 'POST', body: form });
 }
 

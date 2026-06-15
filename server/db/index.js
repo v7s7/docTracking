@@ -194,6 +194,9 @@ const messageCols = db.prepare("PRAGMA table_info(messages)").all().map(c => c.n
 if (!messageCols.includes('mentions')) {
   db.exec("ALTER TABLE messages ADD COLUMN mentions TEXT");
 }
+if (!messageCols.includes('reply_to_id')) {
+  db.exec("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER REFERENCES messages(id)");
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS message_mentions (
