@@ -617,10 +617,12 @@ router.get('/unread-count', (req, res) => {
 });
 
 // POST /messages/presence — heartbeat marking the user "active now"
-// Optional body: { status: 'active' | 'away' } — reported by clients that can
-// detect idle time (e.g. the desktop app via OS idle time).
+// Optional body: { status: 'active' | 'away' | 'offline' } — 'away' is reported by
+// clients that detect idle time (desktop OS idle, or browser mouse/keyboard idle);
+// 'offline' is sent once on sign-out so other users see it immediately.
 router.post('/presence', (req, res) => {
-  const status = req.body?.status === 'away' ? 'away' : 'active';
+  const reqStatus = req.body?.status;
+  const status = (reqStatus === 'away' || reqStatus === 'offline') ? reqStatus : 'active';
   db.prepare("UPDATE users SET last_seen_at = datetime('now','localtime'), presence_status = ? WHERE id=?")
     .run(status, req.user.id);
   res.json({ success: true });

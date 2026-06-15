@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { login as apiLogin, logout as apiLogout, fetchMe, getStoredUser } from '../services/authService';
+import { sendPresence } from '../services/messageService';
 
 const AuthContext = createContext(null);
 
@@ -22,6 +23,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Mark the user offline immediately so colleagues don't see a stale
+    // "Online" / "Last seen" for up to the usual presence window.
+    await sendPresence('offline').catch(() => {});
     await apiLogout();
     setUser(null);
   }, []);

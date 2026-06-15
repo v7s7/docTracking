@@ -133,6 +133,7 @@ function AppShell() {
   const lastSeenMsgRef = useRef({});
   const viewRef = useRef(view);
   viewRef.current = view;
+  const lastActivityRef = useRef(Date.now());
 
   useEffect(() => { if (user) getDepartments().catch(() => {}); }, [user]);
 
@@ -141,9 +142,20 @@ function AppShell() {
     setTaskId(null);
   }, []);
 
+  // Track real user activity (mouse/keyboard/touch/focus) so browser tabs can
+  // detect "away" the same way the desktop app does via OS idle time.
+  useEffect(() => {
+    if (!user?.id) return;
+    const markActive = () => { lastActivityRef.current = Date.now(); };
+    const events = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart', 'scroll', 'focus'];
+    events.forEach(ev => window.addEventListener(ev, markActive, { passive: true }));
+    return () => events.forEach(ev => window.removeEventListener(ev, markActive));
+  }, [user?.id]);
+
   // Presence heartbeat — keeps "last seen" fresh while the app is open.
-  // In the desktop app, also reports 'away' when the OS reports the user
-  // has been idle (no mouse/keyboard input) for AWAY_IDLE_SECONDS.
+  // Reports 'away' once the user has gone AWAY_IDLE_SECONDS without any
+  // mouse/keyboard input — via OS idle time in the desktop app, or via
+  // tracked DOM activity in a plain browser tab.
   useEffect(() => {
     if (!user?.id) return;
     const ping = async () => {
@@ -153,6 +165,8 @@ function AppShell() {
           const idle = await window.electron.getIdleTime();
           if (idle >= AWAY_IDLE_SECONDS) status = 'away';
         } catch (_) {}
+      } else if (Date.now() - lastActivityRef.current >= AWAY_IDLE_SECONDS * 1000) {
+        status = 'away';
       }
       sendPresence(status).catch(() => {});
     };

@@ -27,8 +27,11 @@ function toDate(dateStr) {
 
 // "online" is true if the user has an open real-time connection right now
 // (most reliable), or failing that, sent a presence heartbeat recently.
+// An explicit 'offline' (sent on sign-out) always wins, even if an old SSE
+// connection or last_seen_at timestamp would otherwise still look "online".
 function isOnline(user) {
   if (!user) return false;
+  if (user.presence_status === 'offline') return false;
   if (user.online) return true;
   const d = toDate(user.last_seen_at);
   return !!d && (Date.now() - d.getTime()) < ONLINE_MS;
