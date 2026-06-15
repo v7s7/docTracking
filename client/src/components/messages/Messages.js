@@ -416,8 +416,13 @@ function ChatThread({
     try {
       const data = await getMessages(conv.id, reset ? 0 : lastIdRef.current);
       if (data.messages?.length) {
-        setMessages(prev => reset ? data.messages : [...prev, ...data.messages]);
-        lastIdRef.current = data.messages[data.messages.length - 1].id;
+        setMessages(prev => {
+          if (reset) return data.messages;
+          const seen = new Set(prev.map(m => m.id));
+          const fresh = data.messages.filter(m => !seen.has(m.id));
+          return fresh.length ? [...prev, ...fresh] : prev;
+        });
+        lastIdRef.current = Math.max(lastIdRef.current, data.messages[data.messages.length - 1].id);
         scrollToBottom();
       }
     } catch (_) {}
@@ -436,8 +441,8 @@ function ChatThread({
     if (!liveMessage || liveMessage.conversation_id !== conv.id) return;
     const msg = liveMessage.message;
     if (msg.id <= lastIdRef.current) return;
-    setMessages(prev => [...prev, msg]);
-    lastIdRef.current = msg.id;
+    setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+    lastIdRef.current = Math.max(lastIdRef.current, msg.id);
     scrollToBottom();
   }, [liveMessage, conv.id, scrollToBottom]);
 
