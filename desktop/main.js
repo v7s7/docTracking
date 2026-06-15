@@ -1,11 +1,32 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, powerMonitor, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
-// Fixed server URL — point this at the deployed docTracking web app.
-// Override at install time via the DOCTRACKING_URL environment variable.
-const DOCTRACKING_URL = process.env.DOCTRACKING_URL || 'http://localhost:3000';
+// Default server URL — point this at the deployed docTracking web app.
+// Can be changed without rebuilding by editing config.json (see below),
+// or overridden via the DOCTRACKING_URL environment variable.
+const DEFAULT_URL = 'http://localhost:3030';
 
 const ICON_PATH = path.join(__dirname, 'build', 'icon.png');
+const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+
+// Reads the server URL from config.json (creating it with the default on
+// first run), so the target server can be changed by editing that file and
+// restarting the app — no rebuild needed.
+function loadServerUrl() {
+  if (process.env.DOCTRACKING_URL) return process.env.DOCTRACKING_URL;
+  try {
+    const { serverUrl } = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    if (serverUrl) return serverUrl;
+  } catch (_) {}
+  try {
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify({ serverUrl: DEFAULT_URL }, null, 2));
+  } catch (_) {}
+  return DEFAULT_URL;
+}
+
+const DOCTRACKING_URL = loadServerUrl();
 
 let mainWindow = null;
 let tray = null;

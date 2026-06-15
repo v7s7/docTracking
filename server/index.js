@@ -2,6 +2,7 @@ const express    = require('express');
 const cors       = require('cors');
 const bodyParser = require('body-parser');
 const path       = require('path');
+const fs         = require('fs');
 require('dotenv').config();
 
 // Initialise DB before routes so the schema is ready
@@ -44,6 +45,16 @@ app.use('/templates', templatesRoutes);
 app.use('/audit',     auditRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
+
+// Serve the production React build, if present, so the API and the web
+// app can run from a single process/port (npm run build in client/ first).
+const clientBuildPath = path.join(__dirname, '..', 'client', 'build');
+const clientIndexPath = path.join(clientBuildPath, 'index.html');
+if (fs.existsSync(clientIndexPath)) {
+  app.use(express.static(clientBuildPath));
+  app.get('*', (_req, res) => res.sendFile(clientIndexPath));
+  console.log('[Server] Serving client build from', clientBuildPath);
+}
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[Server] docTracking API running on http://0.0.0.0:${PORT}`);
