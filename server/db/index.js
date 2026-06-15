@@ -159,6 +159,9 @@ if (!userCols.includes('last_seen_at')) {
 if (!userCols.includes('presence_status')) {
   db.exec("ALTER TABLE users ADD COLUMN presence_status TEXT");
 }
+if (!userCols.includes('status_text')) {
+  db.exec("ALTER TABLE users ADD COLUMN status_text TEXT");
+}
 
 // SQLite can't ALTER a CHECK constraint — recreate the table if an older
 // version doesn't yet allow the 'group' conversation type.
@@ -196,6 +199,12 @@ if (!messageCols.includes('mentions')) {
 }
 if (!messageCols.includes('reply_to_id')) {
   db.exec("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER REFERENCES messages(id)");
+}
+if (!messageCols.includes('pinned_at')) {
+  db.exec("ALTER TABLE messages ADD COLUMN pinned_at TEXT");
+}
+if (!messageCols.includes('pinned_by')) {
+  db.exec("ALTER TABLE messages ADD COLUMN pinned_by TEXT");
 }
 
 db.exec(`

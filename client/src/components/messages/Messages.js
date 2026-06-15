@@ -5,10 +5,11 @@ import {
   getDirectory, getConversations, openDM, getMessages, sendMessage, markRead, fileUrl,
   getConversationMembers, streamUrl, startGroupChat, hideConversation, unhideConversation,
   getReadStatus, sendTyping, toggleReaction, searchMessages,
+  getPinnedMessage, pinMessage, unpinMessage,
 } from '../../services/messageService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
-  Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply,
+  Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff,
 } from 'lucide-react';
 
 const THREAD_POLL_MS = 4000;
@@ -39,6 +40,11 @@ function isOnline(user) {
 
 function isAway(user) {
   return isOnline(user) && user?.presence_status === 'away';
+}
+
+// Managers and above can pin/unpin announcements in a conversation.
+function isManager(role) {
+  return ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(role);
 }
 
 function relativeTime(dateStr, t) {
@@ -181,6 +187,7 @@ function MemberItem({ member, t, isSelf, selected, onToggleSelect, onOpenChat })
   else if (online)        status = t.online;
   else if (member.last_seen_at) status = (t.lastSeen || '').replace('{time}', relativeTime(member.last_seen_at, t));
   else                    status = t.lastSeenNever;
+  if (member.status_text) status = `${status} · ${member.status_text}`;
 
   return (
     <div className="msg-list-item" onClick={() => !isSelf && onOpenChat?.(member)}>
@@ -313,7 +320,7 @@ function DirectoryPanel({ onPick, onClose, t }) {
   );
 }
 
-function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply }) {
+function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply, canPin, isPinned, onTogglePin }) {
   const isImage = msg.file_type?.startsWith('image/');
   const [showPicker, setShowPicker] = useState(false);
 
@@ -348,6 +355,11 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
           )}
         </div>
         <div className="msg-react-trigger">
+          {canPin && (
+            <button className="msg-react-btn btn-ghost btn-sm" onClick={() => onTogglePin?.(msg)} title={isPinned ? t.unpin : t.pin} aria-label={isPinned ? t.unpin : t.pin}>
+              {isPinned ? <PinOff size={13} strokeWidth={2} /> : <Pin size={13} strokeWidth={2} />}
+            </button>
+          )}
           <button className="msg-react-btn btn-ghost btn-sm" onClick={() => onReply?.(msg)} title={t.reply} aria-label={t.reply}>
             <Reply size={13} strokeWidth={2} />
           </button>
@@ -388,7 +400,7 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
 }
 
 function ChatThread({
-  conv, user, t, onBack, liveMessage, liveRead, liveReaction, typingUsers,
+  conv, user, t, onBack, liveMessage, liveRead, liveReaction, livePin, typingUsers,
   onOpenDM, onStartGroup, scrollToMessageId, onClearScrollTarget,
 }) {
   const [messages, setMessages]     = useState([]);
@@ -406,6 +418,7 @@ function ChatThread({
   const [mentionQuery, setMentionQuery] = useState(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [replyTo, setReplyTo] = useState(null);
+  const [pinnedMessage, setPinnedMessage] = useState(null);
   const bodyRef       = useRef(null);
   const fileInput     = useRef(null);
   const textareaRef   = useRef(null);
@@ -507,6 +520,19 @@ function ChatThread({
       m.id === liveReaction.message_id ? { ...m, reactions: liveReaction.reactions } : m
     ));
   }, [liveReaction, conv.id]);
+
+  // Pinned announcement for this conversation, if any
+  useEffect(() => {
+    let cancelled = false;
+    getPinnedMessage(conv.id).then(d => { if (!cancelled) setPinnedMessage(d.pinned); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [conv.id]);
+
+  // Live pin/unpin updates pushed over SSE
+  useEffect(() => {
+    if (!livePin || livePin.conversation_id !== conv.id) return;
+    setPinnedMessage(livePin.pinned);
+  }, [livePin, conv.id]);
 
   // Jump to a message from a global search result, once it's loaded
   useEffect(() => {
@@ -616,6 +642,15 @@ function ChatThread({
     } catch (_) {}
   }
 
+  async function handleTogglePin(msg) {
+    try {
+      const { pinned } = msg.id === pinnedMessage?.id
+        ? await unpinMessage(conv.id, msg.id)
+        : await pinMessage(conv.id, msg.id);
+      setPinnedMessage(pinned);
+    } catch (_) {}
+  }
+
   // In-conversation search — the full history is already loaded client-side
   const query = searchQuery.trim().toLowerCase();
   const searchMatches = query ? messages.filter(m => m.content?.toLowerCase().includes(query)) : [];
@@ -680,6 +715,7 @@ function ChatThread({
   } else {
     status = t.lastSeenNever;
   }
+  if (!isGroup && conv.other_user?.status_text) status = `${status} · ${conv.other_user.status_text}`;
 
   return (
     <div className="msg-thread">
@@ -719,6 +755,21 @@ function ChatThread({
           </div>
         )}
       </div>
+
+      {pinnedMessage && (
+        <div className="msg-pinned-banner" onClick={() => scrollToMsg(pinnedMessage.id)}>
+          <Pin size={14} strokeWidth={2} style={{ flexShrink: 0 }} />
+          <div className="msg-pinned-banner-body">
+            <div className="msg-pinned-banner-label">{(t.pinnedBy || '').replace('{name}', pinnedMessage.pinned_by || '')}</div>
+            <div className="msg-pinned-banner-text">{pinnedMessage.content || pinnedMessage.file_name || t.attachment}</div>
+          </div>
+          {isManager(user.role) && (
+            <button className="modal-close" style={{ width: 22, height: 22, flexShrink: 0 }} onClick={e => { e.stopPropagation(); handleTogglePin(pinnedMessage); }} title={t.unpin} aria-label={t.unpin}>
+              <PinOff size={13} strokeWidth={2} />
+            </button>
+          )}
+        </div>
+      )}
 
       {showSearch && (
         <div className="msg-search-bar">
@@ -769,6 +820,9 @@ function ChatThread({
             onReact={handleReact}
             onReply={setReplyTo}
             onJumpToReply={scrollToMsg}
+            canPin={isManager(user.role)}
+            isPinned={msg.id === pinnedMessage?.id}
+            onTogglePin={handleTogglePin}
           />
         ))}
       </div>
@@ -853,6 +907,7 @@ export default function Messages() {
   const [liveMessage, setLiveMessage]      = useState(null);
   const [liveRead, setLiveRead]            = useState(null);
   const [liveReaction, setLiveReaction]    = useState(null);
+  const [livePin, setLivePin]              = useState(null);
   const [typingUsers, setTypingUsers]      = useState({});
   const [showHidden, setShowHidden]        = useState(false);
   const [messageResults, setMessageResults] = useState([]);
@@ -928,6 +983,12 @@ export default function Messages() {
       let data;
       try { data = JSON.parse(e.data); } catch { return; }
       setLiveReaction(data);
+    });
+
+    es.addEventListener('pin', e => {
+      let data;
+      try { data = JSON.parse(e.data); } catch { return; }
+      setLivePin(data);
     });
 
     es.addEventListener('mention', e => {
@@ -1133,6 +1194,7 @@ export default function Messages() {
             liveMessage={liveMessage}
             liveRead={liveRead}
             liveReaction={liveReaction}
+            livePin={livePin}
             typingUsers={typingUsers[active.id]}
             onOpenDM={handlePickUser}
             onStartGroup={handleStartGroup}

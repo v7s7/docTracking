@@ -197,6 +197,69 @@ a { color: inherit; text-decoration: none; }
   opacity: 0.85;
 }
 
+.user-status-text {
+  display: block;
+  font-size: 0.7rem;
+  opacity: 0.8;
+  margin-top: 0.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.status-popover {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  inset-inline-end: 0;
+  z-index: 10;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+}
+
+.status-popover-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
+.status-popover-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.status-popover-preset {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 99px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.74rem;
+  cursor: pointer;
+  color: var(--text-2);
+}
+
+.status-popover-preset:hover {
+  background: var(--surface-3, var(--surface-2));
+  border-color: var(--accent);
+}
+
+.status-popover-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .btn-header {
   padding: 0.35rem 0.85rem;
   border-radius: var(--radius-sm);
@@ -1538,6 +1601,36 @@ code.tag {
 .msg-reply-banner-text {
   font-size: 0.78rem;
   color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-pinned-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--warning-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.4rem 1.1rem;
+  font-size: 0.78rem;
+  color: var(--warning);
+  cursor: pointer;
+}
+
+.msg-pinned-banner-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-pinned-banner-label {
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+.msg-pinned-banner-text {
+  font-size: 0.78rem;
+  color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

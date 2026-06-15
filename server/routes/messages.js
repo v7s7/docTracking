@@ -3,8 +3,13 @@ const fs      = require('fs');
 const path    = require('path');
 const multer  = require('multer');
 const { db }  = require('../db');
-const { verifyToken } = require('../middleware/authMiddleware');
+const { verifyToken, ROLE_WEIGHT } = require('../middleware/authMiddleware');
 const { readConfig }  = require('../services/configService');
+
+// Managers and above can pin/unpin announcements in a conversation.
+function isManager(role) {
+  return (ROLE_WEIGHT[role] || 0) >= ROLE_WEIGHT.MANAGER;
+}
 
 const router = express.Router();
 
@@ -140,6 +145,15 @@ function getReplyPreview(messageId) {
   return db.prepare("SELECT id, sender_name, content, file_name FROM messages WHERE id=?").get(messageId) || null;
 }
 
+// The pinned announcement for a conversation (at most one at a time), if any
+function getPinnedMessage(conversationId) {
+  return db.prepare(`
+    SELECT id, sender_name, content, file_name, pinned_at, pinned_by
+    FROM messages WHERE conversation_id=? AND pinned_at IS NOT NULL
+    ORDER BY pinned_at DESC LIMIT 1
+  `).get(conversationId) || null;
+}
+
 function attachExtras(message) {
   return {
     ...message,
@@ -174,7 +188,7 @@ function isUserOnline(userId) {
 // All members of a conversation (used for ad-hoc group chats), with live presence
 function groupMembers(convId) {
   return db.prepare(`
-    SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status
+    SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text
     FROM conversation_members cm JOIN users u ON u.id = cm.user_id
     WHERE cm.conversation_id = ? ORDER BY u.full_name COLLATE NOCASE
   `).all(convId).map(u => ({ ...u, online: isUserOnline(u.id) }));
@@ -193,7 +207,7 @@ function getAccessibleConversation(conversationId, user) {
 // GET /messages/directory — colleagues available to start a DM with
 router.get('/directory', (req, res) => {
   const users = db.prepare(
-    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
+    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
   ).all(req.user.id).map(u => ({ ...u, online: isUserOnline(u.id) }));
   res.json({ success: true, users });
 });
@@ -257,7 +271,7 @@ router.get('/conversations', (req, res) => {
       display = { name: others.map(o => o.full_name).join(', ') };
     } else {
       const other = db.prepare(`
-        SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status
+        SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text
         FROM conversation_members cm JOIN users u ON u.id = cm.user_id
         WHERE cm.conversation_id = ? AND cm.user_id != ?
       `).get(conv.id, req.user.id);
@@ -295,7 +309,7 @@ router.post('/dm/:userId', (req, res) => {
   if (otherId === req.user.id) {
     return res.status(400).json({ success: false, message: 'Cannot message yourself.' });
   }
-  const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE id=? AND is_active=1").get(otherId);
+  const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE id=? AND is_active=1").get(otherId);
   if (!other) return res.status(404).json({ success: false, message: 'User not found.' });
   other.online = isUserOnline(other.id);
 
@@ -327,7 +341,7 @@ router.post('/group', (req, res) => {
 
   const placeholders = otherIds.map(() => '?').join(',');
   const users = db.prepare(
-    `SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND id IN (${placeholders})`
+    `SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE is_active=1 AND id IN (${placeholders})`
   ).all(...otherIds);
   if (users.length !== otherIds.length) {
     return res.status(404).json({ success: false, message: 'One or more users not found.' });
@@ -458,7 +472,7 @@ router.get('/conversations/:id/members', (req, res) => {
   let members;
   if (conv.type === 'department') {
     members = db.prepare(
-      "SELECT id, full_name, role, dept_id, last_seen_at, presence_status FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
+      "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
     ).all(conv.dept_id).map(m => ({ ...m, online: isUserOnline(m.id) }));
   } else if (conv.type === 'group') {
     members = groupMembers(conv.id);
@@ -533,6 +547,55 @@ router.post('/conversations/:convId/messages/:msgId/react', (req, res) => {
     ? db.prepare("SELECT id FROM users WHERE is_active=1").all().map(r => r.id)
     : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(conv.id).map(r => r.user_id);
   broadcastToUsers(recipientIds, 'reaction', { conversation_id: conv.id, message_id: msg.id, reactions });
+});
+
+// GET /messages/conversations/:id/pinned — the conversation's pinned announcement, if any
+router.get('/conversations/:id/pinned', (req, res) => {
+  const conv = getAccessibleConversation(Number(req.params.id), req.user);
+  if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+  res.json({ success: true, pinned: getPinnedMessage(conv.id) });
+});
+
+// POST /messages/conversations/:convId/messages/:msgId/pin — pin as the conversation's
+// announcement (managers and above only); replaces any previously pinned message.
+router.post('/conversations/:convId/messages/:msgId/pin', (req, res) => {
+  const conv = getAccessibleConversation(Number(req.params.convId), req.user);
+  if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+  if (!isManager(req.user.role)) return res.status(403).json({ success: false, message: 'Manager access required.' });
+
+  const msg = db.prepare("SELECT id FROM messages WHERE id=? AND conversation_id=?").get(Number(req.params.msgId), conv.id);
+  if (!msg) return res.status(404).json({ success: false, message: 'Message not found.' });
+
+  db.prepare("UPDATE messages SET pinned_at=NULL, pinned_by=NULL WHERE conversation_id=? AND pinned_at IS NOT NULL").run(conv.id);
+  db.prepare("UPDATE messages SET pinned_at=datetime('now','localtime'), pinned_by=? WHERE id=?")
+    .run(req.user.name || req.user.username, msg.id);
+
+  const pinned = getPinnedMessage(conv.id);
+  res.json({ success: true, pinned });
+
+  const recipientIds = conv.type === 'department'
+    ? db.prepare("SELECT id FROM users WHERE is_active=1").all().map(r => r.id)
+    : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(conv.id).map(r => r.user_id);
+  broadcastToUsers(recipientIds, 'pin', { conversation_id: conv.id, pinned });
+});
+
+// POST /messages/conversations/:convId/messages/:msgId/unpin
+router.post('/conversations/:convId/messages/:msgId/unpin', (req, res) => {
+  const conv = getAccessibleConversation(Number(req.params.convId), req.user);
+  if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+  if (!isManager(req.user.role)) return res.status(403).json({ success: false, message: 'Manager access required.' });
+
+  const msg = db.prepare("SELECT id FROM messages WHERE id=? AND conversation_id=?").get(Number(req.params.msgId), conv.id);
+  if (!msg) return res.status(404).json({ success: false, message: 'Message not found.' });
+
+  db.prepare("UPDATE messages SET pinned_at=NULL, pinned_by=NULL WHERE id=?").run(msg.id);
+
+  res.json({ success: true, pinned: null });
+
+  const recipientIds = conv.type === 'department'
+    ? db.prepare("SELECT id FROM users WHERE is_active=1").all().map(r => r.id)
+    : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(conv.id).map(r => r.user_id);
+  broadcastToUsers(recipientIds, 'pin', { conversation_id: conv.id, pinned: null });
 });
 
 // GET /messages/search?q=...&conversationId=optional — search message text
@@ -640,6 +703,19 @@ router.post('/presence', (req, res) => {
   db.prepare("UPDATE users SET last_seen_at = datetime('now','localtime'), presence_status = ? WHERE id=?")
     .run(status, req.user.id);
   res.json({ success: true });
+});
+
+// GET /messages/status-text — my current custom status text (e.g. "In a meeting")
+router.get('/status-text', (req, res) => {
+  const row = db.prepare("SELECT status_text FROM users WHERE id=?").get(req.user.id);
+  res.json({ success: true, statusText: row?.status_text || '' });
+});
+
+// POST /messages/status-text — set or clear my custom status text
+router.post('/status-text', (req, res) => {
+  const text = (req.body?.text || '').trim().slice(0, 80);
+  db.prepare("UPDATE users SET status_text = ? WHERE id=?").run(text || null, req.user.id);
+  res.json({ success: true, statusText: text });
 });
 
 module.exports = router;

@@ -14,7 +14,7 @@ import UserManagement from './components/users/UserManagement';
 import NotificationBell from './components/notifications/NotificationBell';
 import Messages from './components/messages/Messages';
 import { getDepartments } from './services/deptService';
-import { getUnreadCount, getConversations, sendPresence } from './services/messageService';
+import { getUnreadCount, getConversations, sendPresence, getStatusText, setStatusText } from './services/messageService';
 
 const PRESENCE_MS      = 60_000;
 const MSG_POLL_MS      = 20_000;
@@ -49,6 +49,26 @@ function navItems(role, t, hasMessages, chatOnly) {
 function Header({ user, onTaskClick }) {
   const { logout } = useAuth();
   const { t, lang, toggle } = useLang();
+  const [statusText, setStatusTextState] = useState('');
+  const [statusInput, setStatusInput] = useState('');
+  const [showStatusPopover, setShowStatusPopover] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    getStatusText().then(d => {
+      setStatusTextState(d.statusText || '');
+      setStatusInput(d.statusText || '');
+    }).catch(() => {});
+  }, [user?.id]);
+
+  async function saveStatus(text) {
+    try {
+      const { statusText: saved } = await setStatusText(text);
+      setStatusTextState(saved);
+      setStatusInput(saved);
+      setShowStatusPopover(false);
+    } catch (_) {}
+  }
 
   const initials = (user?.name || user?.username || '?')
     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
@@ -72,12 +92,44 @@ function Header({ user, onTaskClick }) {
             onClick={() => lang !== 'en' && toggle()}>EN</button>
         </div>
         <NotificationBell onTaskClick={onTaskClick} />
-        <div className="user-chip">
-          <div className="user-avatar">{initials}</div>
-          <div style={{ lineHeight: 1.3 }}>
-            <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{user?.name || user?.username}</div>
-            <span className="user-role-badge">{t.roles?.[user?.role] || user?.role}</span>
+        <div style={{ position: 'relative' }}>
+          <div className="user-chip" onClick={() => setShowStatusPopover(s => !s)} role="button" tabIndex={0} style={{ cursor: 'pointer' }}>
+            <div className="user-avatar">{initials}</div>
+            <div style={{ lineHeight: 1.3 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{user?.name || user?.username}</div>
+              <span className="user-role-badge">{t.roles?.[user?.role] || user?.role}</span>
+              {statusText && <span className="user-status-text">{statusText}</span>}
+            </div>
           </div>
+          {showStatusPopover && (
+            <>
+              <div className="msg-members-backdrop" onClick={() => setShowStatusPopover(false)} />
+              <div className="status-popover" onClick={e => e.stopPropagation()}>
+                <div className="status-popover-title">{t.setStatus}</div>
+                <input
+                  className="form-control"
+                  value={statusInput}
+                  onChange={e => setStatusInput(e.target.value)}
+                  placeholder={t.statusPlaceholder}
+                  maxLength={80}
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') saveStatus(statusInput.trim());
+                    if (e.key === 'Escape') setShowStatusPopover(false);
+                  }}
+                />
+                <div className="status-popover-presets">
+                  {(t.statusPresets || []).map(p => (
+                    <button key={p} className="status-popover-preset" onClick={() => saveStatus(p)}>{p}</button>
+                  ))}
+                </div>
+                <div className="status-popover-actions">
+                  <button className="btn-ghost btn-sm" onClick={() => saveStatus('')}>{t.clearStatus}</button>
+                  <button className="btn btn-primary btn-sm" onClick={() => saveStatus(statusInput.trim())}>{t.save}</button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
         <button className="btn-header" onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <LogOut size={14} strokeWidth={2} />{t.signOut}

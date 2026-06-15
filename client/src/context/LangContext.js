@@ -301,6 +301,13 @@ const T = {
     reply:             'Reply',
     cancelReply:       'Cancel reply',
     attachment:        'Attachment',
+    pin:               'Pin to top',
+    unpin:             'Unpin',
+    pinnedBy:          'Pinned by {name}',
+    setStatus:         'Set status',
+    statusPlaceholder: 'What are you up to?',
+    clearStatus:       'Clear status',
+    statusPresets: ['In a meeting', 'On leave', 'Out of office', 'Be right back'],
   },
 
   ar: {
@@ -601,6 +608,13 @@ const T = {
     reply:             'رد',
     cancelReply:       'إلغاء الرد',
     attachment:        'مرفق',
+    pin:               'تثبيت في الأعلى',
+    unpin:             'إلغاء التثبيت',
+    pinnedBy:          'مثبَّت من {name}',
+    setStatus:         'تعيين الحالة',
+    statusPlaceholder: 'ما الذي تفعله؟',
+    clearStatus:       'إزالة الحالة',
+    statusPresets: ['في اجتماع', 'في إجازة', 'خارج المكتب', 'سأعود حالاً'],
   },
 };
 

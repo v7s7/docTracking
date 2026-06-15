@@ -45,6 +45,17 @@ export const toggleReaction = (convId, msgId, emoji) => req(`/messages/conversat
   body: JSON.stringify({ emoji }),
 });
 
+export const getPinnedMessage = (convId) => req(`/messages/conversations/${convId}/pinned`);
+export const pinMessage   = (convId, msgId) => req(`/messages/conversations/${convId}/messages/${msgId}/pin`,   { method: 'POST' });
+export const unpinMessage = (convId, msgId) => req(`/messages/conversations/${convId}/messages/${msgId}/unpin`, { method: 'POST' });
+
+export const getStatusText = () => req('/messages/status-text');
+export const setStatusText = (text) => req('/messages/status-text', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ text }),
+});
+
 export const searchMessages = (q, conversationId) => {
   const params = new URLSearchParams({ q });
   if (conversationId) params.set('conversationId', conversationId);
