@@ -207,8 +207,8 @@ const T = {
       STAFF:            'Create tasks for Customer Service using their department\'s forms. View and act on tasks assigned to their department. Requires a department assignment.',
       READONLY:         'View tasks in their department only. No create or action permissions. Requires a department assignment.',
     },
-    deptHint:        'Determines which form the user sees when creating a task.',
-    deptNotRequired: 'Not required for this role — this role has access to all departments.',
+    deptHint:         'Determines which form the user sees when creating a task.',
+    deptOptionalHint: "Optional for this role — also adds the user to that department's chat and member list.",
 
     // Dashboard
     totalTasks:    'Total Tasks',
@@ -504,8 +504,8 @@ const T = {
       STAFF:            'ينشئ مهاماً لخدمة العملاء عبر نموذج قسمه. يعمل على المهام المُحالة لقسمه. يشترط تعيين القسم.',
       READONLY:         'عرض المهام في قسمه فقط. لا صلاحية للإنشاء أو اتخاذ أي إجراء. يشترط تعيين القسم.',
     },
-    deptHint:        'يحدد النموذج الذي يراه المستخدم عند إنشاء مهمة جديدة.',
-    deptNotRequired: 'لا يلزم لهذا الدور — يملك صلاحية الوصول لجميع الأقسام.',
+    deptHint:         'يحدد النموذج الذي يراه المستخدم عند إنشاء مهمة جديدة.',
+    deptOptionalHint: 'اختياري لهذا الدور — يضيف المستخدم أيضاً إلى محادثة هذا القسم وقائمة أعضائه.',
 
     // Dashboard
     totalTasks:    'إجمالي المهام',
