@@ -4,6 +4,7 @@ import { getDashboard } from '../../services/taskService';
 import { getDepartments } from '../../services/deptService';
 import { useAuth } from '../../context/AuthContext';
 import { isOverdue } from '../tasks/TaskList';
+import MyTasks from './MyTasks';
 import {
   FileText, Clock, RotateCcw, CheckCircle, AlertCircle, Users, Inbox, Building2,
 } from 'lucide-react';
@@ -119,6 +120,10 @@ export default function Dashboard({ onTaskClick }) {
         {stats?.totalUsers != null && (
           <StatCard icon={<Users size={22} strokeWidth={1.5} />} label={t.totalUsers} value={stats.totalUsers} color="var(--accent)" />
         )}
+      </div>
+
+      <div style={{ marginTop: '1.5rem' }}>
+        <MyTasks />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: stats?.byDept?.length ? '1fr 1fr' : '1fr', gap: '1.25rem', marginTop: '1.5rem' }}>

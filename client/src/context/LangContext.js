@@ -221,6 +221,14 @@ const T = {
     noTasks:       'No tasks yet.',
     noUsers:       'No users yet.',
 
+    // My Tasks — personal to-do list on the dashboard (myTasks key itself is under Navigation, above)
+    myTasksAddPH:       'Add a task for yourself…',
+    myTasksDueOptional: 'Due date (optional)',
+    myTasksEmpty:       'Nothing on your list. Add one above.',
+    myTasksShowDone:    'Show completed ({n})',
+    myTasksHideDone:    'Hide completed',
+    myTasksDue:         'Due',
+
     overdue:           'Overdue',
     overdueTasks:      'Overdue Tasks',
     dueSoon:           'Due soon',
@@ -535,6 +543,14 @@ const T = {
     recentTasks:   'أحدث المهام',
     noTasks:       'لا توجد مهام بعد.',
     noUsers:       'لا يوجد مستخدمون بعد.',
+
+    // مهامي — قائمة المهام الشخصية في لوحة التحكم (مفتاح myTasks موجود أعلاه ضمن Navigation)
+    myTasksAddPH:       'أضف مهمة خاصة بك…',
+    myTasksDueOptional: 'تاريخ الاستحقاق (اختياري)',
+    myTasksEmpty:       'لا توجد مهام في قائمتك. أضف مهمة أعلاه.',
+    myTasksShowDone:    'إظهار المكتملة ({n})',
+    myTasksHideDone:    'إخفاء المكتملة',
+    myTasksDue:         'الاستحقاق',
 
     overdue:           'متأخرة',
     overdueTasks:      'المهام المتأخرة',
