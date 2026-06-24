@@ -558,6 +558,16 @@ function ChatThread({
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
+  // Grow the compose box with its content (up to the CSS max-height, which then
+  // scrolls) so a big pasted block is visible/editable instead of hiding inside
+  // a single-line box.
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [text]);
+
   function handleFileChange(e) {
     const f = e.target.files?.[0];
     if (f && f.size > 15 * 1024 * 1024) {
@@ -567,6 +577,25 @@ function ChatThread({
     }
     setError('');
     setFile(f || null);
+  }
+
+  // Pasting an image (screenshot, copied from another app/page, etc.) attaches
+  // it just like picking it via the paperclip button. Plain text paste — including
+  // large blocks with emoji — is left alone and handled natively by the textarea.
+  function handlePaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
+      const f = item.getAsFile();
+      if (!f) continue;
+      e.preventDefault();
+      if (f.size > 15 * 1024 * 1024) { setError(t.fileTooLarge); return; }
+      setError('');
+      const ext = f.type.split('/')[1] || 'png';
+      setFile(new File([f], `pasted-image-${Date.now()}.${ext}`, { type: f.type }));
+      return;
+    }
   }
 
   async function handleSend() {
@@ -912,6 +941,7 @@ function ChatThread({
           value={text}
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
         />
         <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={sending || (!text.trim() && !file)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
           {sending ? (
