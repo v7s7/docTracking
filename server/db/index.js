@@ -162,6 +162,9 @@ if (!userCols.includes('presence_status')) {
 if (!userCols.includes('status_text')) {
   db.exec("ALTER TABLE users ADD COLUMN status_text TEXT");
 }
+if (!userCols.includes('last_chat_reminder_at')) {
+  db.exec("ALTER TABLE users ADD COLUMN last_chat_reminder_at TEXT");
+}
 
 // SQLite can't ALTER a CHECK constraint — recreate the table if an older
 // version doesn't yet allow the 'group' conversation type.

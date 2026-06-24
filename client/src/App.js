@@ -228,12 +228,13 @@ function AppShell() {
     return () => { clearInterval(id); window.removeEventListener('focus', ping); };
   }, [user?.id]);
 
-  // Unread message badge + desktop notifications for new messages
+  // Unread message badge + desktop notifications for new messages.
+  // Permission is requested from a real click (the bell-plus button in
+  // NotificationBell) — browsers silently ignore requestPermission() calls
+  // that aren't triggered by a user gesture, so asking here unconditionally
+  // on mount never actually prompted most users.
   useEffect(() => {
     if (!user?.id) return;
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
 
     let cancelled = false;
     async function poll() {
