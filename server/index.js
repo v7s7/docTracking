@@ -1,4 +1,5 @@
 const express    = require('express');
+const helmet     = require('helmet');
 const cors       = require('cors');
 const bodyParser = require('body-parser');
 const path       = require('path');
@@ -27,6 +28,29 @@ if (!process.env.JWT_SECRET) {
   console.error('[Server] FATAL: JWT_SECRET is not set. Refusing to start.');
   process.exit(1);
 }
+
+app.disable('x-powered-by');
+
+// Security headers (CSP, X-Frame-Options, X-Content-Type-Options, HSTS, etc.).
+// helmet merges these with its own defaults, so upgradeInsecureRequests must be
+// nulled out explicitly — otherwise browsers rewrite every asset request to
+// https:// and the app breaks outright until TLS is actually configured.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:    ["'self'"],
+      scriptSrc:     ["'self'"],
+      styleSrc:      ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc:       ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc:        ["'self'", 'data:'],
+      connectSrc:    ["'self'"],
+      objectSrc:     ["'none'"],
+      baseUri:       ["'self'"],
+      frameAncestors: ["'self'"],
+      upgradeInsecureRequests: null,
+    },
+  },
+}));
 
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000', credentials: true }));
 app.use(bodyParser.json());
