@@ -1,13 +1,16 @@
 // server/services/scheduler.js
 // Daily cron + a startup catch-up run for the overdue/due-soon task
-// reminder check, plus a more frequent check for chat messages sitting
-// unread too long. All are safe to run any number of times —
-// runReminderCheck dedupes per task per calendar day via
-// tasks.last_reminder_at, and runChatReminderCheck dedupes per user per
-// calendar day via users.last_chat_reminder_at.
+// reminder check and the personal-task reminder check, plus a more
+// frequent check for chat messages sitting unread too long. All are safe
+// to run any number of times — runReminderCheck dedupes per task per
+// calendar day via tasks.last_reminder_at, runPersonalTaskReminderCheck
+// the same way via personal_tasks.last_reminder_at, and
+// runChatReminderCheck dedupes per user per calendar day via
+// users.last_chat_reminder_at.
 const cron = require('node-cron');
 const { runReminderCheck } = require('./reminderService');
 const { runChatReminderCheck } = require('./chatReminderService');
+const { runPersonalTaskReminderCheck } = require('./personalTaskReminderService');
 
 function start() {
   // 07:00 every day, server local time.
@@ -15,6 +18,9 @@ function start() {
     runReminderCheck()
       .then(r => console.log('[Reminders] Daily run:', r))
       .catch(err => console.error('[Reminders] Daily run failed:', err.message));
+    runPersonalTaskReminderCheck()
+      .then(r => console.log('[Personal task reminders] Daily run:', r))
+      .catch(err => console.error('[Personal task reminders] Daily run failed:', err.message));
   });
 
   // Every 30 minutes — chat's staleness window (1 hour unread) is much
@@ -36,9 +42,12 @@ function start() {
     runChatReminderCheck()
       .then(r => console.log('[Chat reminders] Startup run:', r))
       .catch(err => console.error('[Chat reminders] Startup run failed:', err.message));
+    runPersonalTaskReminderCheck()
+      .then(r => console.log('[Personal task reminders] Startup run:', r))
+      .catch(err => console.error('[Personal task reminders] Startup run failed:', err.message));
   }, 15_000);
 
-  console.log('[Reminders] Scheduler started — task digest daily at 07:00, chat check every 30 min, plus startup catch-up.');
+  console.log('[Reminders] Scheduler started — task + personal-task digest daily at 07:00, chat check every 30 min, plus startup catch-up.');
 }
 
 module.exports = { start };
