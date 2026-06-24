@@ -47,6 +47,8 @@ app.use(helmet({
       objectSrc:     ["'none'"],
       baseUri:       ["'self'"],
       frameAncestors: ["'self'"],
+      formAction:    ["'self'"],
+      scriptSrcAttr: ["'none'"],
       upgradeInsecureRequests: null,
     },
   },
@@ -76,7 +78,13 @@ const clientBuildPath = path.join(__dirname, '..', 'client', 'build');
 const clientIndexPath = path.join(clientBuildPath, 'index.html');
 if (fs.existsSync(clientIndexPath)) {
   app.use(express.static(clientBuildPath));
-  app.get('*', (_req, res) => res.sendFile(clientIndexPath));
+  // Only fall back to the SPA shell for client-side routes (no file extension).
+  // Paths that look like static files (e.g. /sitemap.xml, /favicon.ico) but don't
+  // exist should 404 instead of silently returning the app shell.
+  app.get('*', (req, res, next) => {
+    if (path.extname(req.path)) return next();
+    res.sendFile(clientIndexPath);
+  });
   console.log('[Server] Serving client build from', clientBuildPath);
 }
 
