@@ -1,6 +1,6 @@
 import { getToken } from './authService';
 
-const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+const BASE_URL = process.env.REACT_APP_API_URL || '';
 
 function authHeaders() {
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` };
