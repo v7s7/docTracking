@@ -320,7 +320,7 @@ function DirectoryPanel({ onPick, onClose, t }) {
   );
 }
 
-function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply, canPin, isPinned, onTogglePin }) {
+function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply, canPin, isPinned, onTogglePin, onImageLoad }) {
   const isImage = msg.file_type?.startsWith('image/');
   const [showPicker, setShowPicker] = useState(false);
 
@@ -337,7 +337,7 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
           )}
           {msg.file_url && isImage && (
             <a href={fileUrl(msg.file_url)} target="_blank" rel="noopener noreferrer">
-              <img src={fileUrl(msg.file_url)} alt={msg.file_name || ''} className="msg-image" />
+              <img src={fileUrl(msg.file_url)} alt={msg.file_name || ''} className="msg-image" onLoad={onImageLoad} />
             </a>
           )}
           {msg.file_url && !isImage && (
@@ -835,6 +835,7 @@ function ChatThread({
             canPin={isManager(user.role)}
             isPinned={msg.id === pinnedMessage?.id}
             onTogglePin={handleTogglePin}
+            onImageLoad={scrollToBottom}
           />
         ))}
       </div>
