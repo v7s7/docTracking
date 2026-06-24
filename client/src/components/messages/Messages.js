@@ -9,7 +9,7 @@ import {
 } from '../../services/messageService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
-  Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff,
+  Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff, Loader2,
 } from 'lucide-react';
 
 const THREAD_POLL_MS = 4000;
@@ -406,6 +406,7 @@ function ChatThread({
   const [messages, setMessages]     = useState([]);
   const [text, setText]             = useState('');
   const [file, setFile]             = useState(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState(null);
   const [sending, setSending]       = useState(false);
   const [error, setError]           = useState('');
   const [members, setMembers]       = useState([]);
@@ -545,6 +546,17 @@ function ChatThread({
     const timer = setTimeout(() => setJumpHighlightId(null), 2000);
     return () => clearTimeout(timer);
   }, [scrollToMessageId, messages, onClearScrollTarget]);
+
+  // Local thumbnail for a staged image attachment, revoked whenever it's replaced/cleared
+  useEffect(() => {
+    if (!file || !file.type?.startsWith('image/')) {
+      setFilePreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setFilePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
 
   function handleFileChange(e) {
     const f = e.target.files?.[0];
@@ -849,9 +861,22 @@ function ChatThread({
       {file && (
         <div style={{ padding: '0 1.1rem' }}>
           <div className="msg-attach-preview">
-            <FileText size={14} strokeWidth={2} />
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
-            <button className="modal-close" style={{ width: 22, height: 22 }} onClick={() => { setFile(null); if (fileInput.current) fileInput.current.value = ''; }}>
+            {filePreviewUrl ? (
+              <img src={filePreviewUrl} alt="" className="msg-attach-preview-thumb" />
+            ) : (
+              <div className="msg-attach-preview-icon"><FileText size={16} strokeWidth={1.8} /></div>
+            )}
+            <div className="msg-attach-preview-info">
+              <span className="msg-attach-preview-name">{file.name}</span>
+              <span className="msg-attach-preview-status">{t.attachmentPending}</span>
+            </div>
+            <button
+              className="modal-close"
+              style={{ width: 22, height: 22, flexShrink: 0 }}
+              onClick={() => { setFile(null); if (fileInput.current) fileInput.current.value = ''; }}
+              aria-label={t.removeAttachment}
+              title={t.removeAttachment}
+            >
               <X size={13} strokeWidth={2} />
             </button>
           </div>
@@ -888,7 +913,11 @@ function ChatThread({
           onKeyDown={handleKeyDown}
         />
         <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={sending || (!text.trim() && !file)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-          <Send size={14} strokeWidth={2} />{t.send}
+          {sending ? (
+            <><Loader2 size={14} strokeWidth={2} className="spin" />{t.sending}</>
+          ) : (
+            <><Send size={14} strokeWidth={2} />{t.send}</>
+          )}
         </button>
       </div>
     </div>
