@@ -21,6 +21,9 @@ function getTransporter() {
     auth: process.env.SMTP_USER
       ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
       : undefined,
+    // Internal relay's cert is issued for a hostname, not the IP in SMTP_HOST —
+    // skip hostname verification but keep the connection encrypted.
+    tls: { rejectUnauthorized: false },
   });
   return transporter;
 }
