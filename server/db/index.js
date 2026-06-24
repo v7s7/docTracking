@@ -207,6 +207,11 @@ if (!messageCols.includes('pinned_by')) {
   db.exec("ALTER TABLE messages ADD COLUMN pinned_by TEXT");
 }
 
+const taskCols = db.prepare("PRAGMA table_info(tasks)").all().map(c => c.name);
+if (!taskCols.includes('last_reminder_at')) {
+  db.exec("ALTER TABLE tasks ADD COLUMN last_reminder_at TEXT");
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS message_mentions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,

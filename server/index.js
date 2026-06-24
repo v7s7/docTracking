@@ -20,6 +20,7 @@ const sessionsRoutes  = require('./routes/sessions');
 const templatesRoutes = require('./routes/templates');
 const auditRoutes     = require('./routes/audit');
 const messagesRoutes  = require('./routes/messages');
+const scheduler        = require('./services/scheduler');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -90,4 +91,5 @@ if (fs.existsSync(clientIndexPath)) {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[Server] docTracking API running on http://0.0.0.0:${PORT}`);
+  scheduler.start();
 });

@@ -17,7 +17,9 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
     "ldapjs": "^2.3.3",
-    "multer": "^2.0.0"
+    "multer": "^2.0.0",
+    "node-cron": "^4.5.0",
+    "nodemailer": "^9.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

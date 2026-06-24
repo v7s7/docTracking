@@ -223,9 +223,12 @@ const T = {
 
     overdue:           'Overdue',
     overdueTasks:      'Overdue Tasks',
+    dueSoon:           'Due soon',
     notifications:     'Notifications',
+    notifTitle:        'Doc Tracking',
     markAllRead:       'Mark all read',
     noNotifications:   'No notifications yet.',
+    enableDesktopAlerts: 'Enable desktop alerts',
     search:            'Search…',
     roles: {
       SUPER_ADMIN:      'Super Admin',
@@ -533,9 +536,12 @@ const T = {
 
     overdue:           'متأخرة',
     overdueTasks:      'المهام المتأخرة',
+    dueSoon:           'قريبة الاستحقاق',
     notifications:     'الإشعارات',
+    notifTitle:        'نظام تتبع الوثائق',
     markAllRead:       'تعليم الكل كمقروء',
     noNotifications:   'لا توجد إشعارات بعد.',
+    enableDesktopAlerts: 'تفعيل تنبيهات سطح المكتب',
     search:            'بحث…',
     roles: {
       SUPER_ADMIN:      'مدير النظام',
