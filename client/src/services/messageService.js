@@ -1,6 +1,6 @@
 import { getToken } from './authService';
 
-export const BASE = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+export const BASE = process.env.REACT_APP_API_URL || '';
 
 async function req(path, opts = {}) {
   const res  = await fetch(`${BASE}${path}`, {

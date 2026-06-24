@@ -3,6 +3,8 @@
 const express = require('express');
 const { verifyToken, requireRole } = require('../middleware/authMiddleware');
 const { readConfig, writeConfig }  = require('../services/configService');
+const { runReminderCheck }         = require('../services/reminderService');
+const { runChatReminderCheck }     = require('../services/chatReminderService');
 
 const router    = express.Router();
 const SUPER_ONLY = [verifyToken, requireRole('SUPER_ADMIN')];
@@ -244,6 +246,26 @@ router.delete('/role-map/:group', ...SUPER_ONLY, (req, res) => {
   delete cfg.roleGroupMap[decodeURIComponent(req.params.group).toLowerCase()];
   writeConfig(cfg);
   res.json({ success: true, roleGroupMap: cfg.roleGroupMap });
+});
+
+// ── Reminders (manual trigger) ────────────────────────────────────────────
+
+router.post('/reminders/run', ...SUPER_ONLY, async (req, res) => {
+  try {
+    const result = await runReminderCheck();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/chat-reminders/run', ...SUPER_ONLY, async (req, res) => {
+  try {
+    const result = await runChatReminderCheck();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 module.exports = router;

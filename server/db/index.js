@@ -162,6 +162,9 @@ if (!userCols.includes('presence_status')) {
 if (!userCols.includes('status_text')) {
   db.exec("ALTER TABLE users ADD COLUMN status_text TEXT");
 }
+if (!userCols.includes('last_chat_reminder_at')) {
+  db.exec("ALTER TABLE users ADD COLUMN last_chat_reminder_at TEXT");
+}
 
 // SQLite can't ALTER a CHECK constraint — recreate the table if an older
 // version doesn't yet allow the 'group' conversation type.
@@ -205,6 +208,11 @@ if (!messageCols.includes('pinned_at')) {
 }
 if (!messageCols.includes('pinned_by')) {
   db.exec("ALTER TABLE messages ADD COLUMN pinned_by TEXT");
+}
+
+const taskCols = db.prepare("PRAGMA table_info(tasks)").all().map(c => c.name);
+if (!taskCols.includes('last_reminder_at')) {
+  db.exec("ALTER TABLE tasks ADD COLUMN last_reminder_at TEXT");
 }
 
 db.exec(`
