@@ -12,10 +12,15 @@ const ROLE_WEIGHT = {
 
 function verifyToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  // EventSource (SSE) can't set custom headers, so it passes the token as a query param.
+  let token;
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7);
+  } else if (req.query.token) {
+    token = req.query.token;
+  } else {
     return res.status(401).json({ success: false, message: 'No token provided.' });
   }
-  const token = authHeader.slice(7);
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
     if (req.user.jti) {

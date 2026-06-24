@@ -99,6 +99,39 @@ db.exec(`
     created_at     TEXT NOT NULL DEFAULT (datetime('now','localtime'))
   );
 
+  CREATE TABLE IF NOT EXISTS conversations (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    type        TEXT NOT NULL CHECK(type IN ('dm','department','group')),
+    dept_id     TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS conversation_members (
+    conversation_id INTEGER NOT NULL,
+    user_id          INTEGER NOT NULL,
+    last_read_at     TEXT,
+    PRIMARY KEY (conversation_id, user_id),
+    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    sender_id       INTEGER NOT NULL,
+    sender_name     TEXT NOT NULL,
+    content         TEXT,
+    file_url        TEXT,
+    file_name       TEXT,
+    file_type       TEXT,
+    file_size       INTEGER,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_conv_members_user ON conversation_members(user_id);
+  CREATE INDEX IF NOT EXISTS idx_messages_conv     ON messages(conversation_id);
+  CREATE INDEX IF NOT EXISTS idx_conv_dept         ON conversations(dept_id);
+
   CREATE TABLE IF NOT EXISTS task_templates (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT NOT NULL,
@@ -116,6 +149,87 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_actor      ON audit_log(actor_username);
   CREATE INDEX IF NOT EXISTS idx_audit_created    ON audit_log(created_at);
   CREATE INDEX IF NOT EXISTS idx_audit_action     ON audit_log(action);
+`);
+
+// ── Migrations for columns added after initial release ────────
+const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+if (!userCols.includes('last_seen_at')) {
+  db.exec("ALTER TABLE users ADD COLUMN last_seen_at TEXT");
+}
+if (!userCols.includes('presence_status')) {
+  db.exec("ALTER TABLE users ADD COLUMN presence_status TEXT");
+}
+if (!userCols.includes('status_text')) {
+  db.exec("ALTER TABLE users ADD COLUMN status_text TEXT");
+}
+
+// SQLite can't ALTER a CHECK constraint — recreate the table if an older
+// version doesn't yet allow the 'group' conversation type.
+const convTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='conversations'").get()?.sql || '';
+if (convTableSql && !convTableSql.includes("'group'")) {
+  // Build the replacement table under a fresh name and rename it into place
+  // afterwards. Renaming the OLD table instead would make SQLite rewrite the
+  // conversation_members/messages FK clauses to point at the old table's new
+  // name, leaving them dangling (and cascade-deleting their rows) once it's
+  // dropped.
+  db.exec(`
+    PRAGMA foreign_keys = OFF;
+    CREATE TABLE conversations_new (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      type        TEXT NOT NULL CHECK(type IN ('dm','department','group')),
+      dept_id     TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    );
+    INSERT INTO conversations_new (id, type, dept_id, created_at) SELECT id, type, dept_id, created_at FROM conversations;
+    DROP TABLE conversations;
+    ALTER TABLE conversations_new RENAME TO conversations;
+    CREATE INDEX IF NOT EXISTS idx_conv_dept ON conversations(dept_id);
+    PRAGMA foreign_keys = ON;
+  `);
+}
+
+const convMemberCols = db.prepare("PRAGMA table_info(conversation_members)").all().map(c => c.name);
+if (!convMemberCols.includes('hidden_at')) {
+  db.exec("ALTER TABLE conversation_members ADD COLUMN hidden_at TEXT");
+}
+
+const messageCols = db.prepare("PRAGMA table_info(messages)").all().map(c => c.name);
+if (!messageCols.includes('mentions')) {
+  db.exec("ALTER TABLE messages ADD COLUMN mentions TEXT");
+}
+if (!messageCols.includes('reply_to_id')) {
+  db.exec("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER REFERENCES messages(id)");
+}
+if (!messageCols.includes('pinned_at')) {
+  db.exec("ALTER TABLE messages ADD COLUMN pinned_at TEXT");
+}
+if (!messageCols.includes('pinned_by')) {
+  db.exec("ALTER TABLE messages ADD COLUMN pinned_by TEXT");
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS message_mentions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id      INTEGER NOT NULL,
+    conversation_id INTEGER NOT NULL,
+    user_id         INTEGER NOT NULL,
+    is_read         INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_mentions_user ON message_mentions(user_id, is_read);
+  CREATE INDEX IF NOT EXISTS idx_mentions_conv ON message_mentions(conversation_id, user_id);
+
+  CREATE TABLE IF NOT EXISTS message_reactions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id  INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL,
+    emoji       TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE(message_id, user_id, emoji),
+    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_reactions_msg ON message_reactions(message_id);
 `);
 
 // ── Serial number helper ─────────────────────────────────────

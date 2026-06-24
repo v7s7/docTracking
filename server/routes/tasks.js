@@ -223,7 +223,7 @@ router.post('/:id/forward', AUTH, requireCS, (req, res) => {
   const { to_dept_id, note } = req.body || {};
   if (!to_dept_id) return res.status(400).json({ success: false, message: 'to_dept_id is required.' });
 
-  const fromDept = task.current_dept_id || 'customer_service';
+  const fromDept = task.current_dept_id || 'reception_dept';
 
   db.prepare(`
     UPDATE tasks SET current_dept_id = ?, status = 'assigned', updated_at = datetime('now','localtime')
@@ -301,13 +301,13 @@ router.post('/:id/return', AUTH, (req, res) => {
 
   db.prepare(`
     INSERT INTO task_events (task_id, type, from_dept, to_dept, actor_id, actor_name, note)
-    VALUES (?, 'returned', ?, 'customer_service', ?, ?, ?)
+    VALUES (?, 'returned', ?, 'reception_dept', ?, ?, ?)
   `).run(task.id, fromDept, user.id || null, user.name || user.username, note || '');
 
-  // Notify CS
+  // Notify reception
   db.prepare(`
     INSERT INTO notifications (dept_id, task_id, task_serial, task_title, type)
-    VALUES ('customer_service', ?, ?, ?, 'returned')
+    VALUES ('reception_dept', ?, ?, ?, 'returned')
   `).run(task.id, task.serial, task.title);
 
   res.json({ success: true, task: withEvents(db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id)) });
@@ -348,7 +348,7 @@ router.post('/:id/comment', AUTH, (req, res) => {
   if (!note?.trim()) return res.status(400).json({ success: false, message: 'note is required.' });
 
   const user     = req.user;
-  const fromDept = user.dept_id || 'customer_service';
+  const fromDept = user.dept_id || 'reception_dept';
   const isConsultation = !!tagged_dept_id;
 
   db.prepare(`
