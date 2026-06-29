@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLang } from '../../context/LangContext';
-import { Landmark, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 export default function LoginPage() {
   const { login }                   = useAuth();
@@ -33,7 +33,7 @@ export default function LoginPage() {
       {/* ── Brand panel ── */}
       <div className="login-brand">
         <div className="login-brand-inner">
-          <div className="login-logo-ring"><Landmark size={36} strokeWidth={1.4} /></div>
+          <div className="login-logo-ring"><img src="/logo.png" alt="" className="login-logo-img" /></div>
           <div className="login-org-name">{t.orgName}</div>
           <div className="login-org-sub" style={{ marginTop: '0.4rem' }}>{t.appName}</div>
           <div className="login-brand-features">

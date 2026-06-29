@@ -1,9 +1,9 @@
 /* ── CSS Variables ─────────────────────────────────────────── */
 :root {
-  --primary:        #2B5797;   /* Placeholder slate-blue — replace once logo colors are extracted */
-  --primary-hover:  #1F4275;
-  --primary-light:  #EAF1FA;
-  --accent:         #2D6E2D;   /* Forest green — logo palm tree */
+  --primary:        #1C7C1C;   /* Logo palm-tree green, darkened from #17B403 for AA contrast */
+  --primary-hover:  #145914;
+  --primary-light:  #EAF7EA;
+  --accent:         #2D6E2D;   /* Forest green — logo palm tree, secondary shade */
   --accent-hover:   #245724;
   --accent-light:   #EAF4EA;
   --bg:             #F5F5F5;
@@ -766,7 +766,7 @@ tr:hover td { background: var(--surface-2); }
 
 .login-brand {
   flex: 1;
-  background: linear-gradient(155deg, #2B5797 0%, #1F4275 60%, #163058 100%);
+  background: linear-gradient(155deg, #1C7C1C 0%, #145914 60%, #0E3D0E 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -789,16 +789,23 @@ tr:hover td { background: var(--surface-2); }
 .login-brand-inner { position: relative; z-index: 1; text-align: center; }
 
 .login-logo-ring {
-  width: 80px;
-  height: 80px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.1);
-  border: 2px solid rgba(255,255,255,0.2);
+  background: #FFFFFF;
+  border: 2px solid rgba(255,255,255,0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2.2rem;
   margin: 0 auto 1.5rem;
+  overflow: hidden;
+}
+
+.login-logo-img {
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
 }
 
 .login-org-name {
