@@ -5,7 +5,7 @@ const LANG_KEY = 'doctracking_lang';
 const T = {
   en: {
     appName:    'Document Tracking System',
-    orgName:    'General Administration of Sunni Endowments',
+    orgName:    'General Directorate of Sunni Affairs',
     loginSubtitle: 'Enter your corporate credentials',
     loginFeatures: [
       'Track official inbound & outbound correspondence',
