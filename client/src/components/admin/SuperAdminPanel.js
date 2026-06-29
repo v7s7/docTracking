@@ -169,9 +169,9 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
           <div style={{ display: 'flex', gap: '0.5rem', flex: 1, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <div style={{ flex: 1, minWidth: 160 }}>
               <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.6rem', marginBottom: '0.3rem' }}
-                value={label} onChange={e => setLabel(e.target.value)} placeholder="اسم الخدمة" />
+                value={label} onChange={e => setLabel(e.target.value)} placeholder={t.serviceNamePH} />
               <input className="form-control" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
-                value={desc} onChange={e => setDesc(e.target.value)} placeholder="وصف مختصر (اختياري)" />
+                value={desc} onChange={e => setDesc(e.target.value)} placeholder={t.serviceDescPH} />
             </div>
             <div style={{ display: 'flex', gap: '0.35rem', alignSelf: 'flex-start', paddingTop: '0.1rem' }}>
               <button className="btn btn-primary btn-sm" onClick={saveLabel} disabled={busy}>{busy ? '…' : t.save}</button>
@@ -185,7 +185,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
               <span style={{ marginInlineStart: '0.5rem', fontSize: '0.75rem', color: 'var(--text-3)' }}>{service.description}</span>
             )}
             <span style={{ marginInlineStart: '0.5rem', fontSize: '0.72rem', color: 'var(--text-3)' }}>
-              · {(service.fields || []).length} {t.fields || 'حقول'}
+              · {(service.fields || []).length} {t.fieldsSuffix}
             </span>
           </div>
         )}
@@ -361,7 +361,7 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
               </span>
             )}
             <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
-              {services.length} خدمة
+              {t.servicesCount.replace('{n}', services.length)}
             </span>
           </div>
         )}
@@ -387,12 +387,12 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
         <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)', padding: '0.75rem 1rem 0.85rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-2)' }}>
-              الخدمات / أنواع المعاملات
+              {t.servicesSectionTitle}
             </span>
             {!addingSvc && (
               <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}
                 onClick={() => setAddingSvc(true)}>
-                <Plus size={12} strokeWidth={2.5} /> إضافة خدمة
+                <Plus size={12} strokeWidth={2.5} /> {t.addService}
               </button>
             )}
           </div>
@@ -402,27 +402,27 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
             <div style={{ border: '1px solid var(--primary)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.65rem', background: 'var(--primary-light)' }}>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>اسم الخدمة *</label>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>{t.serviceNameLabel}</label>
                   <input className="form-control" value={newSvcLabel} onChange={e => setNewSvcLabel(e.target.value)}
-                    placeholder="مثال: إعانة زواج" autoFocus
+                    placeholder={t.serviceNameExample} autoFocus
                     onKeyDown={e => e.key === 'Enter' && handleAddService()} />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>الوصف (اختياري)</label>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>{t.serviceDescLabel}</label>
                   <input className="form-control" value={newSvcDesc} onChange={e => setNewSvcDesc(e.target.value)}
-                    placeholder="وصف مختصر للخدمة" />
+                    placeholder={t.serviceDescExample} />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.65rem' }}>
-                <button className="btn btn-primary btn-sm" onClick={handleAddService} disabled={!newSvcLabel.trim() || busy}>{busy ? '…' : 'إضافة'}</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setAddingSvc(false); setNewSvcLabel(''); setNewSvcDesc(''); }} disabled={busy}>إلغاء</button>
+                <button className="btn btn-primary btn-sm" onClick={handleAddService} disabled={!newSvcLabel.trim() || busy}>{busy ? '…' : t.add}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setAddingSvc(false); setNewSvcLabel(''); setNewSvcDesc(''); }} disabled={busy}>{t.cancel}</button>
               </div>
             </div>
           )}
 
           {services.length === 0 && !addingSvc ? (
             <div style={{ textAlign: 'center', padding: '1.25rem', color: 'var(--text-3)', fontSize: '0.82rem', border: '1px dashed var(--border)', borderRadius: 8 }}>
-              لا توجد خدمات — أضف خدمة لتفعيل هذه الإدارة في واجهة خدمة العملاء
+              {t.noServicesEmpty}
             </div>
           ) : (
             services.map(svc => (
@@ -484,7 +484,7 @@ function DepartmentsTab({ t }) {
         <div>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.deptFields}</h3>
           <p className="text-sm text-muted" style={{ margin: '0.15rem 0 0' }}>
-            كل إدارة تحتوي على خدمات، وكل خدمة تحتوي على حقول خاصة بها
+            {t.deptsSubtitle}
           </p>
         </div>
         <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
@@ -501,7 +501,7 @@ function DepartmentsTab({ t }) {
             <div style={{ flex: 1, minWidth: 200 }}>
               <label className="form-label" style={{ fontSize: '0.82rem' }}>{t.deptLabel} *</label>
               <input className="form-control" value={newLabel} onChange={e => setNewLabel(e.target.value)}
-                placeholder="مثال: قسم الشؤون القانونية" autoFocus
+                placeholder={t.deptNameExample} autoFocus
                 onKeyDown={e => e.key === 'Enter' && handleAdd()} />
             </div>
             <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', marginBottom: '0.1rem' }}
@@ -846,11 +846,11 @@ function TemplatesTab({ t }) {
               <label className="form-label">{t.taskDelivery}</label>
               <select className="form-control" value={form.delivery_method} onChange={e => setF('delivery_method', e.target.value)}>
                 <option value="">—</option>
-                <option value="يدوي">يدوي</option>
-                <option value="بريد">بريد</option>
-                <option value="إيميل">إيميل</option>
-                <option value="فاكس">فاكس</option>
-                <option value="أخرى">أخرى</option>
+                <option value="يدوي">{t.deliveryManual}</option>
+                <option value="بريد">{t.deliveryMail}</option>
+                <option value="إيميل">{t.deliveryEmail}</option>
+                <option value="فاكس">{t.deliveryFax}</option>
+                <option value="أخرى">{t.deliveryOther}</option>
               </select>
             </div>
             <div className="form-group">

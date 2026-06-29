@@ -24,9 +24,7 @@ export default function LoginPage() {
     }
   }
 
-  const features = lang === 'ar'
-    ? ['تتبع المراسلات الرسمية الصادرة والواردة', 'إدارة الاستفسارات وطلبات الجمهور', 'متابعة العقود والشيكات والبحوث الاجتماعية', 'لوحة إدارة متكاملة مع صلاحيات LDAP']
-    : ['Track official inbound & outbound correspondence', 'Manage public inquiries and service requests', 'Follow up on contracts, cheques & social research', 'Full admin panel with LDAP role management'];
+  const features = t.loginFeatures;
 
   return (
     <div className="login-shell">
@@ -74,7 +72,7 @@ export default function LoginPage() {
           <div style={{ textAlign: 'center' }}>
             <div className="login-card-title">{t.signIn}</div>
             <div className="login-card-sub" style={{ marginTop: '0.3rem' }}>
-              {lang === 'ar' ? 'أدخل بيانات حساب المؤسسة' : 'Enter your corporate credentials'}
+              {t.loginSubtitle}
             </div>
           </div>
 

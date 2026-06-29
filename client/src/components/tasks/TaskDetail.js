@@ -30,11 +30,11 @@ const EVENT_COLORS = {
   closed:       'var(--success)',
 };
 
-function daysBetween(from, to) {
+function daysBetween(from, to, t) {
   const ms = new Date(to) - new Date(from);
   if (isNaN(ms) || ms < 0) return null;
   const d = ms / (1000 * 60 * 60 * 24);
-  return d < 1 ? `${Math.round(ms / 60000)}د` : `${d.toFixed(1)}ي`;
+  return d < 1 ? `${Math.round(ms / 60000)}${t.minSuffix}` : `${d.toFixed(1)}${t.daySuffix}`;
 }
 
 // Count how many forward→return cycles have completed
@@ -61,7 +61,7 @@ function Modal({ title, onClose, children }) {
 }
 
 // ── Where-is-the-task banner ──────────────────────────────────
-function LocationBanner({ task, depts }) {
+function LocationBanner({ task, depts, t }) {
   const isAtCS     = !task.current_dept_id;
   const isReturned = task.status === 'returned';
   const isClosed   = task.status === 'closed';
@@ -79,8 +79,8 @@ function LocationBanner({ task, depts }) {
         color: isReturned ? '#92400e' : 'var(--accent-hover)',
       }}>
         {isReturned
-          ? <><RotateCcw size={15} strokeWidth={2} /> مُعاد من القسم — بانتظار مراجعة خدمة العملاء</>
-          : <><Building2 size={15} strokeWidth={1.8} /> عند خدمة العملاء — لم يُرسل بعد</>}
+          ? <><RotateCcw size={15} strokeWidth={2} /> {t.returnedFromDeptBanner}</>
+          : <><Building2 size={15} strokeWidth={1.8} /> {t.atCSNotSentBanner}</>}
       </div>
     );
   }
@@ -99,8 +99,8 @@ function LocationBanner({ task, depts }) {
       color: isInProgress ? '#15803d' : '#1d4ed8',
     }}>
       {isInProgress
-        ? <><PlayCircle size={15} strokeWidth={2} /> قيد التنفيذ عند {deptName}</>
-        : <><Send size={15} strokeWidth={2} /> أُرسلت إلى {deptName} — بانتظار الاستلام</>}
+        ? <><PlayCircle size={15} strokeWidth={2} /> {t.inProgressAtDept.replace('{dept}', deptName)}</>
+        : <><Send size={15} strokeWidth={2} /> {t.sentAwaitingReceipt.replace('{dept}', deptName)}</>}
     </div>
   );
 }
@@ -149,7 +149,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
   }
 
   if (loading) return <div className="page-loading"><span className="spinner" /></div>;
-  if (!task)   return <div className="empty-state"><div className="empty-sub">Task not found.</div></div>;
+  if (!task)   return <div className="empty-state"><div className="empty-sub">{t.taskNotFound}</div></div>;
 
   const isClosed   = task.status === 'closed';
   const isMyDept   = !isCS && task.current_dept_id === (user?.dept_id || '');
@@ -182,7 +182,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
         </div>
       )}
 
-      <LocationBanner task={task} depts={depts} />
+      <LocationBanner task={task} depts={depts} t={t} />
 
       {/* Task card */}
       <div className="card" style={{ marginBottom: '1.25rem' }}>
@@ -194,7 +194,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
               <PriorityBadge priority={task.priority} t={t} />
               {cycles > 0 && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.72rem', background: '#fef3c7', border: '1px solid #d97706', color: '#92400e', padding: '1px 8px', borderRadius: 99, fontWeight: 700 }}>
-                  <RefreshCw size={10} strokeWidth={2.5} /> {cycles} دورة
+                  <RefreshCw size={10} strokeWidth={2.5} /> {cycles} {t.cycleSuffix}
                 </span>
               )}
             </div>
@@ -210,9 +210,9 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
               </button>
             )}
             {canAccept && (
-              <button className="btn btn-sm" onClick={() => act(() => acceptTask(task.id), 'تم تأكيد الاستلام')} disabled={busy}
+              <button className="btn btn-sm" onClick={() => act(() => acceptTask(task.id), t.confirmReceived)} disabled={busy}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: '#15803d', color: '#fff', border: 'none', fontWeight: 600 }}>
-                <PlayCircle size={13} strokeWidth={2} /> قبول / بدء التنفيذ
+                <PlayCircle size={13} strokeWidth={2} /> {t.acceptStart}
               </button>
             )}
             {canReturn && (
@@ -242,7 +242,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
               [t.taskType,     t.types?.[task.type] || task.type],
               [t.taskAssigned, task.current_dept_id
                 ? (depts.find(d => d.id === task.current_dept_id)?.label || task.current_dept_id)
-                : 'خدمة العملاء'],
+                : t.customerServiceFallback],
               [t.taskSource,   task.source_entity  || '—'],
               [t.taskDelivery, task.delivery_method || '—'],
               [t.taskCreated,  task.created_at?.slice(0, 16)],
@@ -265,19 +265,19 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
               <div style={{ marginTop: '1.1rem', borderTop: '1px solid var(--border)', paddingTop: '0.85rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
                 {ed._sender_type && (
                   <div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>الجهة المرسلة</div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t.senderLabelField}</div>
                     <div style={{ marginTop: '0.2rem', fontSize: '0.9rem' }}>{ed._sender_type}</div>
                   </div>
                 )}
                 {ed._sender_name && (
                   <div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>الاسم</div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t.nameField}</div>
                     <div style={{ marginTop: '0.2rem', fontSize: '0.9rem' }}>{ed._sender_name}</div>
                   </div>
                 )}
                 {ed._sender_phone && (
                   <div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>الهاتف</div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t.phoneField}</div>
                     <div style={{ marginTop: '0.2rem', fontSize: '0.9rem' }} dir="ltr">{ed._sender_phone}</div>
                   </div>
                 )}
@@ -311,7 +311,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.85rem' }}>
                   {displayFields.map(f => {
                     const val = ed[f.key];
-                    const display = f.type === 'checkbox' ? (val ? '✓ نعم' : '✗ لا') : String(val);
+                    const display = f.type === 'checkbox' ? (val ? t.yesValue : t.noValue) : String(val);
                     return (
                       <div key={f.key}>
                         <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{f.label}</div>
@@ -332,7 +332,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
           <div className="card-title">{t.taskHistory}</div>
           {cycles > 0 && (
             <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>
-              {cycles} دورة إرسال وإرجاع
+              {cycles} {t.cyclesNote}
             </span>
           )}
         </div>
@@ -344,7 +344,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
               {task.events.map((ev, i) => {
                 const nextEv = task.events[i + 1];
                 const held = (ev.type === 'forwarded' || ev.type === 'accepted') && nextEv
-                  ? daysBetween(ev.created_at, nextEv.created_at)
+                  ? daysBetween(ev.created_at, nextEv.created_at, t)
                   : null;
                 const color = EVENT_COLORS[ev.type] || 'var(--text-3)';
 
@@ -352,7 +352,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
                 let cycleLabel = null;
                 if (ev.type === 'forwarded') {
                   const cycleNum = task.events.slice(0, i + 1).filter(e => e.type === 'forwarded').length;
-                  cycleLabel = cycleNum > 1 ? `دورة ${cycleNum}` : null;
+                  cycleLabel = cycleNum > 1 ? t.cycleLabel.replace('{n}', cycleNum) : null;
                 }
 
                 const deptLabel = (id) => depts.find(d => d.id === id)?.label || id;
@@ -365,13 +365,13 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
                     <div className="timeline-content">
                       <div style={{ fontWeight: 600, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <span style={{ color }}>
-                          {ev.type === 'created'      && 'تم الإنشاء'}
-                          {ev.type === 'forwarded'    && 'أُرسل إلى'}
-                          {ev.type === 'returned'     && 'أُعيد إلى خدمة العملاء'}
-                          {ev.type === 'accepted'     && 'تم الاستلام / بدء التنفيذ'}
-                          {ev.type === 'commented'    && 'ملاحظة'}
-                          {ev.type === 'consultation' && 'استشارة →'}
-                          {ev.type === 'closed'       && 'تم الإغلاق'}
+                          {ev.type === 'created'      && t.eventCreated}
+                          {ev.type === 'forwarded'    && t.eventForwardedTo}
+                          {ev.type === 'returned'     && t.eventReturnedToCS}
+                          {ev.type === 'accepted'     && t.eventAcceptedStarted}
+                          {ev.type === 'commented'    && t.eventCommented}
+                          {ev.type === 'consultation' && t.eventConsultation}
+                          {ev.type === 'closed'       && t.eventClosed}
                         </span>
                         {ev.type === 'forwarded' && ev.to_dept && (
                           <span style={{ fontWeight: 700, color: '#0e7490' }}>
@@ -380,7 +380,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
                         )}
                         {ev.type === 'returned' && ev.from_dept && (
                           <span style={{ fontWeight: 400, color: '#b45309', fontSize: '0.82rem' }}>
-                            من {deptLabel(ev.from_dept)}
+                            {t.fromDeptLabel.replace('{dept}', deptLabel(ev.from_dept))}
                           </span>
                         )}
                         {ev.type === 'consultation' && ev.to_dept && (
@@ -390,7 +390,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
                         )}
                         {ev.type === 'consultation' && (
                           <span style={{ fontSize: '0.7rem', background: '#f5f3ff', border: '1px solid #c4b5fd', color: '#6d28d9', padding: '1px 7px', borderRadius: 99, fontWeight: 600 }}>
-                            استشارة
+                            {t.consultationTag}
                           </span>
                         )}
                         {cycleLabel && (
@@ -425,7 +425,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
           <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label className="form-label">{t.selectDeptFwd} <span className="req">*</span></label>
             <select className="form-control" value={toDept} onChange={e => setToDept(e.target.value)}>
-              <option value="">— اختر الإدارة —</option>
+              <option value="">{t.selectDeptPH}</option>
               {fwdDepts.map(d => (
                 <option key={d.id} value={d.id}>{d.label}</option>
               ))}
@@ -433,7 +433,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
           </div>
           <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label className="form-label">{t.taskNote}</label>
-            <textarea className="form-control" rows={3} value={note} onChange={e => setNote(e.target.value)} placeholder="ملاحظة للقسم…" />
+            <textarea className="form-control" rows={3} value={note} onChange={e => setNote(e.target.value)} placeholder={t.notePHForDept} />
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>{t.cancel}</button>
@@ -450,12 +450,12 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
       {modal === 'return' && (
         <Modal title={t.returnToCS} onClose={() => setModal(null)}>
           <p style={{ marginBottom: '1rem', color: 'var(--text-2)', fontSize: '0.9rem' }}>
-            سيتم إرجاع المعاملة إلى خدمة العملاء للمراجعة. أضف ملاحظة توضح ما تم إنجازه.
+            {t.returnExplain}
           </p>
           <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label className="form-label">{t.taskNote} <span className="req">*</span></label>
             <textarea className="form-control" rows={3} value={note} onChange={e => setNote(e.target.value)}
-              placeholder="ما الذي تم إنجازه؟ هل هناك متابعة مطلوبة؟" autoFocus />
+              placeholder={t.returnNotePH} autoFocus />
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>{t.cancel}</button>
@@ -473,12 +473,12 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
         <Modal title={t.closeTask} onClose={() => setModal(null)}>
           <p style={{ marginBottom: '1rem', color: 'var(--text-2)', fontSize: '0.9rem' }}>
             {task.status === 'returned'
-              ? 'تمت مراجعة المعاملة المُعادة — هل تريد إغلاقها نهائياً؟'
-              : 'هل أنت متأكد من إغلاق هذه المعاملة نهائياً؟'}
+              ? t.closeConfirmReturned
+              : t.closeConfirmDefault}
           </p>
           <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label className="form-label">{t.taskNote}</label>
-            <textarea className="form-control" rows={3} value={note} onChange={e => setNote(e.target.value)} placeholder="ملاحظة ختامية (اختياري)" />
+            <textarea className="form-control" rows={3} value={note} onChange={e => setNote(e.target.value)} placeholder={t.closingNotePH} />
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>{t.cancel}</button>
@@ -501,10 +501,10 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
           <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Users size={13} strokeWidth={2} style={{ color: '#7c3aed' }} />
-              استشارة قسم (اختياري)
+              {t.consultDeptOptional}
             </label>
             <select className="form-control" value={tagDept} onChange={e => setTagDept(e.target.value)}>
-              <option value="">— بدون استشارة —</option>
+              <option value="">{t.noConsultation}</option>
               {depts.filter(d => (d.services || []).length > 0).map(d => (
                 <option key={d.id} value={d.id}>{d.label}</option>
               ))}
@@ -512,7 +512,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
             {tagDept && (
               <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <Users size={12} strokeWidth={2} />
-                سيتم إشعار {depts.find(d => d.id === tagDept)?.label} بهذه الملاحظة
+                {t.consultationNotify.replace('{dept}', depts.find(d => d.id === tagDept)?.label || '')}
               </div>
             )}
           </div>
@@ -521,7 +521,7 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
             <button className="btn btn-primary btn-sm" disabled={!note.trim() || busy}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
               onClick={() => act(() => addComment(task.id, note, tagDept || undefined), t.commentAdded)}>
-              <MessageSquare size={13} strokeWidth={2} />{tagDept ? 'إرسال استشارة' : t.addComment}
+              <MessageSquare size={13} strokeWidth={2} />{tagDept ? t.sendConsultation : t.addComment}
             </button>
           </div>
         </Modal>
