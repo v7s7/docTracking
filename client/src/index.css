@@ -1413,6 +1413,10 @@ code.tag {
   background: #f59e0b;
 }
 
+.msg-online-dot.offline {
+  background: #9ca3af;
+}
+
 .msg-list-item-body { flex: 1; min-width: 0; }
 
 .msg-list-item-top {

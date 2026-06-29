@@ -43,7 +43,10 @@ function isOnline(user) {
 }
 
 function isAway(user) {
-  return isOnline(user) && user?.presence_status === 'away';
+  if (!isOnline(user)) return false;
+  // A manually-set custom status (e.g. "In a meeting", "Out of office") means
+  // the user is connected but not really available, so show it as away too.
+  return user?.presence_status === 'away' || !!user?.status_text;
 }
 
 // Managers and above can pin/unpin announcements in a conversation.
@@ -130,7 +133,9 @@ function Avatar({ name, isGroup, isDept, online, away, avatarUrl, avatarColor })
           : avatarUrl
             ? <img src={fileUrl(avatarUrl)} alt="" className="msg-avatar-img" />
             : initials(name)}
-      {online && <span className={`msg-online-dot${away ? ' away' : ''}`} />}
+      {!isGroup && !isDept && online !== undefined && (
+        <span className={`msg-online-dot${away ? ' away' : online ? '' : ' offline'}`} />
+      )}
     </div>
   );
 }
