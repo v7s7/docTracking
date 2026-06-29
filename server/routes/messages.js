@@ -270,7 +270,7 @@ router.get('/conversations', (req, res) => {
       display = { name: deptLabel(conv.dept_id), dept_id: conv.dept_id };
     } else if (conv.type === 'group') {
       const others = groupMembers(conv.id).filter(m => m.id !== req.user.id);
-      display = { name: others.map(o => o.full_name).join(', ') };
+      display = { name: others.map(o => o.full_name).join(', '), avatar_url: conv.avatar_url, avatar_color: conv.avatar_color };
     } else {
       const other = db.prepare(`
         SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text, u.avatar_url, u.avatar_color
@@ -397,7 +397,79 @@ router.post('/group', (req, res) => {
   }
 
   const others = groupMembers(conv.id).filter(m => m.id !== req.user.id);
-  res.json({ success: true, conversation: { id: conv.id, type: 'group', name: others.map(o => o.full_name).join(', '), unread: 0, last_message: null } });
+  res.json({ success: true, conversation: { id: conv.id, type: 'group', name: others.map(o => o.full_name).join(', '), avatar_url: conv.avatar_url, avatar_color: conv.avatar_color, unread: 0, last_message: null } });
+});
+
+const GROUP_AVATAR_DIR = path.join(__dirname, '..', 'data', 'uploads', 'group-avatars');
+fs.mkdirSync(GROUP_AVATAR_DIR, { recursive: true });
+
+const GROUP_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+const groupAvatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, GROUP_AVATAR_DIR),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${req.params.id}-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!GROUP_AVATAR_TYPES.includes(file.mimetype)) return cb(new Error('Only JPG, PNG, WEBP or GIF images are allowed.'));
+    cb(null, true);
+  },
+});
+
+// Any member of an ad-hoc group chat can change its icon — department channels
+// keep their fixed building icon and aren't customizable here.
+function getOwnGroupConversation(req, res) {
+  const conv = getAccessibleConversation(Number(req.params.id), req.user);
+  if (!conv) { res.status(404).json({ success: false, message: 'Conversation not found.' }); return null; }
+  if (conv.type !== 'group') { res.status(400).json({ success: false, message: 'Only group chats have a customizable icon.' }); return null; }
+  return conv;
+}
+
+// POST /messages/conversations/:id/avatar — upload/replace the group's icon
+router.post('/conversations/:id/avatar', (req, res) => {
+  const conv = getOwnGroupConversation(req, res);
+  if (!conv) return;
+  groupAvatarUpload.single('avatar')(req, res, (err) => {
+    if (err) return res.status(400).json({ success: false, message: err.message });
+    if (!req.file) return res.status(400).json({ success: false, message: 'No image provided.' });
+
+    const avatar_url = `/uploads/group-avatars/${req.file.filename}`;
+    db.prepare('UPDATE conversations SET avatar_url = ? WHERE id = ?').run(avatar_url, conv.id);
+
+    if (conv.avatar_url) {
+      const oldPath = path.join(GROUP_AVATAR_DIR, path.basename(conv.avatar_url));
+      fs.unlink(oldPath, () => {});
+    }
+    res.json({ success: true, avatar_url });
+  });
+});
+
+// PUT /messages/conversations/:id/avatar-color — flat background color for the group icon
+router.put('/conversations/:id/avatar-color', (req, res) => {
+  const conv = getOwnGroupConversation(req, res);
+  if (!conv) return;
+  const { color } = req.body || {};
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return res.status(400).json({ success: false, message: 'Color must be a hex value like #4f46e5.' });
+  }
+  db.prepare('UPDATE conversations SET avatar_color = ? WHERE id = ?').run(color, conv.id);
+  res.json({ success: true, avatar_color: color });
+});
+
+// DELETE /messages/conversations/:id/avatar — remove the uploaded icon, fall back to the default
+router.delete('/conversations/:id/avatar', (req, res) => {
+  const conv = getOwnGroupConversation(req, res);
+  if (!conv) return;
+  db.prepare('UPDATE conversations SET avatar_url = NULL WHERE id = ?').run(conv.id);
+  if (conv.avatar_url) {
+    const oldPath = path.join(GROUP_AVATAR_DIR, path.basename(conv.avatar_url));
+    fs.unlink(oldPath, () => {});
+  }
+  res.json({ success: true });
 });
 
 // GET /messages/conversations/:id/messages — fetch (optionally only messages after a given id, for polling)

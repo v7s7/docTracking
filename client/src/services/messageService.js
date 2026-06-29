@@ -81,3 +81,24 @@ export function sendMessage(convId, { content, file, replyToId }) {
 export function fileUrl(path) {
   return `${BASE}${path}`;
 }
+
+export async function uploadGroupAvatar(convId, file) {
+  const form = new FormData();
+  form.append('avatar', file);
+  const res  = await fetch(`${BASE}/messages/conversations/${convId}/avatar`, {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body:    form,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Upload failed');
+  return data;
+}
+
+export const setGroupAvatarColor = (convId, color) => req(`/messages/conversations/${convId}/avatar-color`, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ color }),
+});
+
+export const removeGroupAvatar = (convId) => req(`/messages/conversations/${convId}/avatar`, { method: 'DELETE' });

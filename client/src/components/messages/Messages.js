@@ -6,12 +6,15 @@ import {
   getConversationMembers, streamUrl, startGroupChat, hideConversation, unhideConversation,
   getReadStatus, sendTyping, toggleReaction, searchMessages,
   getPinnedMessage, pinMessage, unpinMessage,
+  uploadGroupAvatar, setGroupAvatarColor as setGroupAvatarColorApi, removeGroupAvatar,
 } from '../../services/messageService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
   Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff, Loader2,
-  Settings,
+  Settings, Camera, Trash2,
 } from 'lucide-react';
+
+const AVATAR_COLORS = ['#4f46e5', '#0891b2', '#16a34a', '#d97706', '#dc2626', '#9333ea', '#475569'];
 
 const THREAD_POLL_MS = 4000;
 const LIST_POLL_MS   = 15000;
@@ -123,15 +126,15 @@ function renderContent(content, mentions, currentUserId, searchQuery) {
 }
 
 function Avatar({ name, isGroup, isDept, online, away, avatarUrl, avatarColor }) {
-  const style = !isGroup && !avatarUrl && avatarColor ? { background: avatarColor } : undefined;
+  const style = !isDept && !avatarUrl && avatarColor ? { background: avatarColor } : undefined;
   return (
     <div className={`msg-avatar${isGroup ? ' dept' : ''}`} style={style}>
       {isDept
         ? <Building2 size={18} strokeWidth={1.8} />
-        : isGroup
-          ? <Users size={18} strokeWidth={1.8} />
-          : avatarUrl
-            ? <img src={fileUrl(avatarUrl)} alt="" className="msg-avatar-img" />
+        : avatarUrl
+          ? <img src={fileUrl(avatarUrl)} alt="" className="msg-avatar-img" />
+          : isGroup
+            ? <Users size={18} strokeWidth={1.8} />
             : initials(name)}
       {!isGroup && !isDept && online !== undefined && (
         <span className={`msg-online-dot${away ? ' away' : online ? '' : ' offline'}`} />
@@ -157,7 +160,8 @@ function ConversationItem({ conv, active, onClick, onToggleHide, t }) {
   return (
     <div className={`msg-list-item${active ? ' active' : ''}`} onClick={onClick}>
       <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away}
-        avatarUrl={conv.other_user?.avatar_url} avatarColor={conv.other_user?.avatar_color} />
+        avatarUrl={conv.type === 'group' ? conv.avatar_url : conv.other_user?.avatar_url}
+        avatarColor={conv.type === 'group' ? conv.avatar_color : conv.other_user?.avatar_color} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-top">
           <span className="msg-list-item-name">{name}</span>
@@ -445,9 +449,64 @@ function ChatThread({
   const lastIdRef     = useRef(0);
   const lastTypingRef = useRef(0);
 
-  const isDept  = conv.type === 'department';
-  const isGroup = isDept || conv.type === 'group';
-  const name    = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
+  const isDept     = conv.type === 'department';
+  const isGroup    = isDept || conv.type === 'group';
+  const isAdHocGroup = conv.type === 'group';
+  const name       = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
+
+  // Any member of an ad-hoc group can change its icon — kept as local state so
+  // the header updates immediately without waiting on the conversation list to refetch.
+  const [groupAvatarUrl, setGroupAvatarUrl]     = useState(conv.avatar_url || null);
+  const [groupAvatarColor, setGroupAvatarColor] = useState(conv.avatar_color || null);
+  const [showAvatarEditor, setShowAvatarEditor] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarErr, setAvatarErr]   = useState('');
+  const avatarFileInput = useRef(null);
+
+  useEffect(() => {
+    setGroupAvatarUrl(conv.avatar_url || null);
+    setGroupAvatarColor(conv.avatar_color || null);
+    setShowAvatarEditor(false);
+  }, [conv.id, conv.avatar_url, conv.avatar_color]);
+
+  async function handleGroupAvatarFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAvatarBusy(true);
+    setAvatarErr('');
+    try {
+      const { avatar_url } = await uploadGroupAvatar(conv.id, file);
+      setGroupAvatarUrl(avatar_url);
+    } catch (err) {
+      setAvatarErr(err.message || 'Upload failed.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function handlePickGroupColor(color) {
+    setAvatarErr('');
+    try {
+      await setGroupAvatarColorApi(conv.id, color);
+      setGroupAvatarColor(color);
+    } catch (err) {
+      setAvatarErr(err.message || 'Failed to set color.');
+    }
+  }
+
+  async function handleRemoveGroupAvatar() {
+    setAvatarBusy(true);
+    setAvatarErr('');
+    try {
+      await removeGroupAvatar(conv.id);
+      setGroupAvatarUrl(null);
+    } catch (err) {
+      setAvatarErr(err.message || 'Failed to remove picture.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -818,8 +877,46 @@ function ChatThread({
         <button className="msg-back-btn btn-ghost btn-sm" onClick={onBack} aria-label="back">
           <ArrowLeft size={16} strokeWidth={2} />
         </button>
-        <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away}
-          avatarUrl={conv.other_user?.avatar_url} avatarColor={conv.other_user?.avatar_color} />
+        <div
+          style={{ position: 'relative', cursor: isAdHocGroup ? 'pointer' : undefined }}
+          onClick={() => isAdHocGroup && setShowAvatarEditor(s => !s)}
+        >
+          <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away}
+            avatarUrl={isAdHocGroup ? groupAvatarUrl : conv.other_user?.avatar_url}
+            avatarColor={isAdHocGroup ? groupAvatarColor : conv.other_user?.avatar_color} />
+          {showAvatarEditor && (
+            <>
+              <div className="msg-members-backdrop" onClick={e => { e.stopPropagation(); setShowAvatarEditor(false); }} />
+              <div className="avatar-settings group-avatar-popover" onClick={e => e.stopPropagation()}>
+                <input ref={avatarFileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+                  style={{ display: 'none' }} onChange={handleGroupAvatarFile} />
+                <div className="avatar-settings-row">
+                  <button className="btn-ghost btn-sm" disabled={avatarBusy} onClick={() => avatarFileInput.current?.click()}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <Camera size={14} strokeWidth={2} />{t.uploadPicture}
+                  </button>
+                  {groupAvatarUrl && (
+                    <button className="btn-ghost btn-sm" disabled={avatarBusy} onClick={handleRemoveGroupAvatar}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <Trash2 size={14} strokeWidth={2} />{t.removePicture}
+                    </button>
+                  )}
+                </div>
+                <div className="avatar-settings-row" style={{ marginTop: '0.4rem' }}>
+                  {AVATAR_COLORS.map(c => (
+                    <button key={c} type="button"
+                      className={`avatar-color-swatch${groupAvatarColor === c ? ' active' : ''}`}
+                      style={{ background: c }}
+                      onClick={() => handlePickGroupColor(c)}
+                      aria-label={c}
+                    />
+                  ))}
+                </div>
+                {avatarErr && <div className="alert alert-error" style={{ marginTop: '0.4rem', fontSize: '0.78rem' }}>{avatarErr}</div>}
+              </div>
+            </>
+          )}
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="msg-thread-title">{name}</div>
           <div className={`msg-thread-status${typingText ? ' typing' : ''}`}>{typingText || status}</div>

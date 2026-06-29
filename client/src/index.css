@@ -225,6 +225,20 @@ a { color: inherit; text-decoration: none; }
   flex-shrink: 0;
 }
 
+.group-avatar-popover {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  inset-inline-start: 0;
+  z-index: 30;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  padding: 0.6rem;
+  width: 200px;
+}
+
 .avatar-color-swatch.active {
   border-color: var(--text-1);
 }
