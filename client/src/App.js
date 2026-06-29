@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LangProvider, useLang } from './context/LangContext';
 import {
-  LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, Building2, MessageCircle,
+  LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, MessageCircle,
 } from 'lucide-react';
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
@@ -33,16 +33,16 @@ function navItems(role, t, hasMessages, chatOnly) {
   // The desktop app is chat-focused for now: show only Messages.
   // (Easy to revert — just stop passing chatOnly.)
   if (chatOnly && hasMessages) {
-    return [{ id: 'messages', icon: <MessageCircle size={17} strokeWidth={1.8} />, label: t.messages }];
+    return [{ id: 'messages', icon: <MessageCircle size={20} strokeWidth={1.8} />, label: t.messages }];
   }
 
   const items = [
-    { id: 'dashboard', icon: <LayoutDashboard size={17} strokeWidth={1.8} />, label: t.dashboard },
-    { id: 'tasks',     icon: <ClipboardList   size={17} strokeWidth={1.8} />, label: t.tasks },
+    { id: 'dashboard', icon: <LayoutDashboard size={20} strokeWidth={1.8} />, label: t.dashboard },
+    { id: 'tasks',     icon: <ClipboardList   size={20} strokeWidth={1.8} />, label: t.tasks },
   ];
-  if (hasMessages) items.push({ id: 'messages', icon: <MessageCircle size={17} strokeWidth={1.8} />, label: t.messages });
-  if (isSuperAdmin(role)) items.push({ id: 'users',    icon: <Users    size={17} strokeWidth={1.8} />, label: t.users });
-  if (isSuperAdmin(role)) items.push({ id: 'settings', icon: <Settings size={17} strokeWidth={1.8} />, label: t.settings });
+  if (hasMessages) items.push({ id: 'messages', icon: <MessageCircle size={20} strokeWidth={1.8} />, label: t.messages });
+  if (isSuperAdmin(role)) items.push({ id: 'users',    icon: <Users    size={20} strokeWidth={1.8} />, label: t.users });
+  if (isSuperAdmin(role)) items.push({ id: 'settings', icon: <Settings size={20} strokeWidth={1.8} />, label: t.settings });
   return items;
 }
 
@@ -78,7 +78,7 @@ function Header({ user, onTaskClick }) {
     <header className="app-header">
       <div className="header-brand">
         <div className="header-logo">
-          <Building2 size={18} strokeWidth={1.6} />
+          <img src="/logo.png" alt="" className="header-logo-img" />
         </div>
         <div>
           <div className="header-title">{t.orgName}</div>
