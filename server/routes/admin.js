@@ -5,6 +5,7 @@ const { verifyToken, requireRole } = require('../middleware/authMiddleware');
 const { readConfig, writeConfig }  = require('../services/configService');
 const { runReminderCheck }         = require('../services/reminderService');
 const { runChatReminderCheck }     = require('../services/chatReminderService');
+const { runPersonalTaskReminderCheck } = require('../services/personalTaskReminderService');
 
 const router    = express.Router();
 const SUPER_ONLY = [verifyToken, requireRole('SUPER_ADMIN')];
@@ -262,6 +263,15 @@ router.post('/reminders/run', ...SUPER_ONLY, async (req, res) => {
 router.post('/chat-reminders/run', ...SUPER_ONLY, async (req, res) => {
   try {
     const result = await runChatReminderCheck();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/personal-task-reminders/run', ...SUPER_ONLY, async (req, res) => {
+  try {
+    const result = await runPersonalTaskReminderCheck();
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

@@ -320,7 +320,7 @@ function DirectoryPanel({ onPick, onClose, t }) {
   );
 }
 
-function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply, canPin, isPinned, onTogglePin }) {
+function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply, canPin, isPinned, onTogglePin, onImageLoad }) {
   const isImage = msg.file_type?.startsWith('image/');
   const [showPicker, setShowPicker] = useState(false);
 
@@ -337,7 +337,7 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
           )}
           {msg.file_url && isImage && (
             <a href={fileUrl(msg.file_url)} target="_blank" rel="noopener noreferrer">
-              <img src={fileUrl(msg.file_url)} alt={msg.file_name || ''} className="msg-image" />
+              <img src={fileUrl(msg.file_url)} alt={msg.file_name || ''} className="msg-image" onLoad={onImageLoad} />
             </a>
           )}
           {msg.file_url && !isImage && (
@@ -405,8 +405,8 @@ function ChatThread({
 }) {
   const [messages, setMessages]     = useState([]);
   const [text, setText]             = useState('');
-  const [file, setFile]             = useState(null);
-  const [filePreviewUrl, setFilePreviewUrl] = useState(null);
+  const [files, setFiles]           = useState([]);
+  const [filePreviews, setFilePreviews] = useState({});
   const [sending, setSending]       = useState(false);
   const [error, setError]           = useState('');
   const [members, setMembers]       = useState([]);
@@ -547,42 +547,106 @@ function ChatThread({
     return () => clearTimeout(timer);
   }, [scrollToMessageId, messages, onClearScrollTarget]);
 
-  // Local thumbnail for a staged image attachment, revoked whenever it's replaced/cleared
+  // Local thumbnails for staged image attachments, revoked whenever the
+  // staged list changes (file added/removed) or the component unmounts.
   useEffect(() => {
-    if (!file || !file.type?.startsWith('image/')) {
-      setFilePreviewUrl(null);
+    const next = {};
+    for (const f of files) {
+      if (f.type?.startsWith('image/')) next[f.localId] = URL.createObjectURL(f);
+    }
+    setFilePreviews(next);
+    return () => { Object.values(next).forEach(URL.revokeObjectURL); };
+  }, [files]);
+
+  // Grow the compose box with its content (up to the CSS max-height, which then
+  // scrolls) so a big pasted block is visible/editable instead of hiding inside
+  // a single-line box.
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [text]);
+
+  const MAX_ATTACHMENTS = 10;
+
+  // Stages new files for sending, enforcing the per-file size cap and the
+  // max-attachments-per-send cap. Used by both the paperclip picker and paste.
+  function addFiles(list) {
+    const incoming = Array.from(list || []);
+    if (!incoming.length) return;
+    if (files.length >= MAX_ATTACHMENTS) {
+      setError(t.tooManyAttachments);
       return;
     }
-    const url = URL.createObjectURL(file);
-    setFilePreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    const room = MAX_ATTACHMENTS - files.length;
+    const candidates = incoming.slice(0, room);
+    const tooBig = candidates.some(f => f.size > 15 * 1024 * 1024);
+    const accepted = candidates.filter(f => f.size <= 15 * 1024 * 1024);
+    accepted.forEach(f => { f.localId = `${Date.now()}-${Math.random().toString(36).slice(2)}`; });
+    if (accepted.length) setFiles(prev => [...prev, ...accepted]);
+    setError(tooBig ? t.fileTooLarge : (incoming.length > room ? t.tooManyAttachments : ''));
+  }
 
   function handleFileChange(e) {
-    const f = e.target.files?.[0];
-    if (f && f.size > 15 * 1024 * 1024) {
-      setError(t.fileTooLarge);
-      e.target.value = '';
-      return;
+    addFiles(e.target.files);
+    e.target.value = '';
+  }
+
+  function removeFile(localId) {
+    setFiles(prev => prev.filter(f => f.localId !== localId));
+  }
+
+  // Pasting images (screenshots, copied from another app/page, etc.) attaches
+  // them just like picking via the paperclip button. Plain text paste — including
+  // large blocks with emoji — is left alone and handled natively by the textarea.
+  function handlePaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const images = [];
+    for (const item of items) {
+      if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
+      const f = item.getAsFile();
+      if (!f) continue;
+      const ext = f.type.split('/')[1] || 'png';
+      images.push(new File([f], `pasted-image-${Date.now()}-${images.length}.${ext}`, { type: f.type }));
     }
-    setError('');
-    setFile(f || null);
+    if (!images.length) return;
+    e.preventDefault();
+    addFiles(images);
   }
 
   async function handleSend() {
     const content = text.trim();
-    if (!content && !file) return;
+    if (!content && !files.length) return;
     setSending(true);
     setError('');
+    const pending = files;
+    let sentCount = 0;
     try {
-      await sendMessage(conv.id, { content, file, replyToId: replyTo?.id });
+      if (pending.length) {
+        // One attachment per message (the API is one-file-per-message) — sent
+        // sequentially so they land in order. The typed text rides along with
+        // the first attachment as its caption, same as the reply quote.
+        for (let i = 0; i < pending.length; i++) {
+          await sendMessage(conv.id, {
+            content: i === 0 ? content : '',
+            file: pending[i],
+            replyToId: i === 0 ? replyTo?.id : undefined,
+          });
+          sentCount += 1;
+        }
+      } else {
+        await sendMessage(conv.id, { content, replyToId: replyTo?.id });
+      }
       setText('');
-      setFile(null);
+      setFiles([]);
       setReplyTo(null);
       if (fileInput.current) fileInput.current.value = '';
       await load(false);
     } catch (e) {
       setError(e.message);
+      if (sentCount > 0) setFiles(prev => prev.slice(sentCount));
     } finally {
       setSending(false);
     }
@@ -835,6 +899,7 @@ function ChatThread({
             canPin={isManager(user.role)}
             isPinned={msg.id === pinnedMessage?.id}
             onTogglePin={handleTogglePin}
+            onImageLoad={scrollToBottom}
           />
         ))}
       </div>
@@ -858,28 +923,30 @@ function ChatThread({
         </div>
       )}
 
-      {file && (
+      {files.length > 0 && (
         <div style={{ padding: '0 1.1rem' }}>
-          <div className="msg-attach-preview">
-            {filePreviewUrl ? (
-              <img src={filePreviewUrl} alt="" className="msg-attach-preview-thumb" />
-            ) : (
-              <div className="msg-attach-preview-icon"><FileText size={16} strokeWidth={1.8} /></div>
-            )}
-            <div className="msg-attach-preview-info">
-              <span className="msg-attach-preview-name">{file.name}</span>
-              <span className="msg-attach-preview-status">{t.attachmentPending}</span>
+          {files.map(f => (
+            <div className="msg-attach-preview" key={f.localId}>
+              {filePreviews[f.localId] ? (
+                <img src={filePreviews[f.localId]} alt="" className="msg-attach-preview-thumb" />
+              ) : (
+                <div className="msg-attach-preview-icon"><FileText size={16} strokeWidth={1.8} /></div>
+              )}
+              <div className="msg-attach-preview-info">
+                <span className="msg-attach-preview-name">{f.name}</span>
+                <span className="msg-attach-preview-status">{t.attachmentPending}</span>
+              </div>
+              <button
+                className="modal-close"
+                style={{ width: 22, height: 22, flexShrink: 0 }}
+                onClick={() => removeFile(f.localId)}
+                aria-label={t.removeAttachment}
+                title={t.removeAttachment}
+              >
+                <X size={13} strokeWidth={2} />
+              </button>
             </div>
-            <button
-              className="modal-close"
-              style={{ width: 22, height: 22, flexShrink: 0 }}
-              onClick={() => { setFile(null); if (fileInput.current) fileInput.current.value = ''; }}
-              aria-label={t.removeAttachment}
-              title={t.removeAttachment}
-            >
-              <X size={13} strokeWidth={2} />
-            </button>
-          </div>
+          ))}
         </div>
       )}
 
@@ -899,7 +966,7 @@ function ChatThread({
             ))}
           </div>
         )}
-        <input ref={fileInput} type="file" style={{ display: 'none' }} onChange={handleFileChange} />
+        <input ref={fileInput} type="file" multiple style={{ display: 'none' }} onChange={handleFileChange} />
         <button className="btn-ghost btn-sm" style={{ padding: '0.5rem' }} onClick={() => fileInput.current?.click()} aria-label={t.attachFile} title={t.attachFile}>
           <Paperclip size={17} strokeWidth={1.8} />
         </button>
@@ -911,8 +978,9 @@ function ChatThread({
           value={text}
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
         />
-        <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={sending || (!text.trim() && !file)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+        <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={sending || (!text.trim() && !files.length)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
           {sending ? (
             <><Loader2 size={14} strokeWidth={2} className="spin" />{t.sending}</>
           ) : (

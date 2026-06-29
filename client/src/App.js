@@ -19,6 +19,7 @@ import { getUnreadCount, getConversations, sendPresence, getStatusText, setStatu
 const PRESENCE_MS      = 60_000;
 const MSG_POLL_MS      = 20_000;
 const AWAY_IDLE_SECONDS = 5 * 60;
+const NOTIF_BATCH_MS   = 5 * 60_000;
 
 // True when running inside the docTracking desktop app (see /desktop).
 const isElectron = typeof window !== 'undefined' && !!window.electron?.isElectron;
@@ -183,6 +184,8 @@ function AppShell() {
   const [refresh, setRefresh]       = useState(0);
   const [unreadMsgs, setUnreadMsgs] = useState(0);
   const lastSeenMsgRef = useRef({});
+  const pendingNotifRef = useRef({});
+  const notifBatchTimerRef = useRef(null);
   const viewRef = useRef(view);
   viewRef.current = view;
   const lastActivityRef = useRef(Date.now());
@@ -237,6 +240,33 @@ function AppShell() {
     if (!user?.id) return;
 
     let cancelled = false;
+
+    // Fires once per burst, NOTIF_BATCH_MS after the first unseen message —
+    // not reset by later arrivals — so a flurry of messages collapses into
+    // one popup instead of one per message. Conversations the user already
+    // read before the timer fires are dropped from pendingNotifRef (see
+    // poll()) and so are left out of the summary, or skip it entirely if
+    // everything pending got read in time.
+    function fireBatch() {
+      notifBatchTimerRef.current = null;
+      const entries = Object.values(pendingNotifRef.current);
+      pendingNotifRef.current = {};
+      if (!entries.length) return;
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+      if (!document.hidden && viewRef.current === 'messages') return;
+
+      let notif;
+      if (entries.length === 1) {
+        notif = new Notification(entries[0].title, { body: entries[0].body, icon: '/favicon.ico' });
+      } else {
+        const totalUnread = entries.reduce((sum, e) => sum + e.unread, 0);
+        const body = (t.newMessagesBatch || '{n} new messages in {c} conversations')
+          .replace('{n}', String(totalUnread)).replace('{c}', String(entries.length));
+        notif = new Notification(t.notifTitle || 'Doc Tracking', { body, icon: '/favicon.ico' });
+      }
+      notif.onclick = () => { window.focus(); setView('messages'); setTaskId(null); };
+    }
+
     async function poll() {
       try {
         const { unread } = await getUnreadCount();
@@ -252,10 +282,18 @@ function AppShell() {
           const prevSeen = lastSeenMsgRef.current[conv.id];
           const isNew = prevSeen !== undefined && prevSeen !== last.created_at && last.sender_id !== user.id;
           lastSeenMsgRef.current[conv.id] = last.created_at;
+
           if (isNew && (document.hidden || viewRef.current !== 'messages')) {
             const title = conv.type === 'department' ? (t.groupLabels?.[conv.dept_id] || conv.name) : (last.sender_name || conv.name);
-            const notif = new Notification(title, { body: last.content || last.file_name || '', icon: '/favicon.ico' });
-            notif.onclick = () => { window.focus(); setView('messages'); setTaskId(null); };
+            const body = conv.unread > 1
+              ? (t.newMessagesCount || '{n} new messages').replace('{n}', String(conv.unread))
+              : (last.content || last.file_name || '');
+            pendingNotifRef.current[conv.id] = { title, body, unread: conv.unread || 1 };
+            if (notifBatchTimerRef.current === null) {
+              notifBatchTimerRef.current = setTimeout(fireBatch, NOTIF_BATCH_MS);
+            }
+          } else if (!conv.unread) {
+            delete pendingNotifRef.current[conv.id];
           }
         }
       } catch (_) {}
@@ -264,7 +302,12 @@ function AppShell() {
     poll();
     const id = setInterval(poll, MSG_POLL_MS);
     window.addEventListener('focus', poll);
-    return () => { cancelled = true; clearInterval(id); window.removeEventListener('focus', poll); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      window.removeEventListener('focus', poll);
+      if (notifBatchTimerRef.current) { clearTimeout(notifBatchTimerRef.current); notifBatchTimerRef.current = null; }
+    };
   }, [user?.id, t]);
 
   if (loading) return <div className="page-loading"><span className="spinner" /><span>{t.loading}</span></div>;

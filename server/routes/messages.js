@@ -30,7 +30,9 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
+  // 15MB per attachment; fieldSize covers the "content" text field itself —
+  // default is 1MB, too small for a very large pasted block of text.
+  limits: { fileSize: 15 * 1024 * 1024, fieldSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (BLOCKED_EXT.includes(ext)) return cb(new Error('This file type is not allowed.'));

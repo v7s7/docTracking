@@ -76,6 +76,23 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_events_task_id ON task_events(task_id);
   CREATE INDEX IF NOT EXISTS idx_notifs_dept    ON notifications(dept_id, is_read);
 
+  -- A user's own to-do list — separate from the dept-routed tasks table,
+  -- which models document hand-offs between departments, not individual
+  -- ownership. No dept_id/routing here; any user manages only their own rows.
+  CREATE TABLE IF NOT EXISTS personal_tasks (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id          INTEGER NOT NULL,
+    title            TEXT NOT NULL,
+    due_at           TEXT,
+    done             INTEGER NOT NULL DEFAULT 0,
+    completed_at     TEXT,
+    last_reminder_at TEXT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_personal_tasks_user ON personal_tasks(user_id, done);
+
   CREATE TABLE IF NOT EXISTS sessions (
     jti        TEXT PRIMARY KEY,
     username   TEXT NOT NULL,
