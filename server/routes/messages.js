@@ -600,10 +600,11 @@ router.post('/conversations/:convId/messages/:msgId/unpin', (req, res) => {
   broadcastToUsers(recipientIds, 'pin', { conversation_id: conv.id, pinned: null });
 });
 
-// GET /messages/search?q=...&conversationId=optional — search message text
+// GET /messages/search?q=...&conversationId=optional&senderId=optional&from=YYYY-MM-DD&to=YYYY-MM-DD&before=messageId
+const SEARCH_PAGE_SIZE = 30;
 router.get('/search', (req, res) => {
   const q = (req.query.q || '').trim();
-  if (q.length < 2) return res.json({ success: true, results: [] });
+  if (q.length < 2) return res.json({ success: true, results: [], hasMore: false });
 
   let conversationIds;
   if (req.query.conversationId) {
@@ -617,16 +618,29 @@ router.get('/search', (req, res) => {
     conversationIds = [...new Set([...deptIds, ...memberIds])];
   }
 
-  if (!conversationIds.length) return res.json({ success: true, results: [] });
+  if (!conversationIds.length) return res.json({ success: true, results: [], hasMore: false });
+
+  const senderId = req.query.senderId ? Number(req.query.senderId) : null;
+  const from     = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from || '') ? req.query.from : null;
+  const to       = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to   || '') ? req.query.to   : null;
+  const before   = req.query.before ? Number(req.query.before) : null;
 
   const placeholders = conversationIds.map(() => '?').join(',');
-  const rows = db.prepare(`
-    SELECT m.id as message_id, m.conversation_id, m.content, m.sender_name, m.created_at,
+  let sql = `
+    SELECT m.id as message_id, m.conversation_id, m.content, m.sender_id, m.sender_name, m.created_at,
            c.type as conv_type, c.dept_id
     FROM messages m JOIN conversations c ON c.id = m.conversation_id
     WHERE m.conversation_id IN (${placeholders}) AND m.content LIKE ?
-    ORDER BY m.id DESC LIMIT 30
-  `).all(...conversationIds, `%${q}%`);
+  `;
+  const params = [...conversationIds, `%${q}%`];
+  if (senderId) { sql += ' AND m.sender_id = ?';     params.push(senderId); }
+  if (from)     { sql += ' AND m.created_at >= ?';   params.push(`${from} 00:00:00`); }
+  if (to)       { sql += ' AND m.created_at <= ?';   params.push(`${to} 23:59:59`); }
+  if (before)   { sql += ' AND m.id < ?';            params.push(before); }
+  sql += ' ORDER BY m.id DESC LIMIT ?';
+  params.push(SEARCH_PAGE_SIZE);
+
+  const rows = db.prepare(sql).all(...params);
 
   const results = rows.map(r => {
     let conversation_name;
@@ -649,12 +663,13 @@ router.get('/search', (req, res) => {
       conversation_name,
       dept_id: r.conv_type === 'department' ? r.dept_id : undefined,
       content: r.content,
+      sender_id: r.sender_id,
       sender_name: r.sender_name,
       created_at: r.created_at,
     };
   });
 
-  res.json({ success: true, results });
+  res.json({ success: true, results, hasMore: rows.length === SEARCH_PAGE_SIZE });
 });
 
 // POST /messages/conversations/:id/hide — tuck a chat away in the "hidden" section.

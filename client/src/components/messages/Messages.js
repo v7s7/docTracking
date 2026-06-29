@@ -1008,7 +1008,53 @@ export default function Messages() {
   const [typingUsers, setTypingUsers]      = useState({});
   const [showHidden, setShowHidden]        = useState(false);
   const [messageResults, setMessageResults] = useState([]);
+  const [messageResultsHasMore, setMessageResultsHasMore] = useState(false);
+  const [messageResultsLoadingMore, setMessageResultsLoadingMore] = useState(false);
+  const [showSearchFilters, setShowSearchFilters] = useState(false);
+  const [searchSenderId, setSearchSenderId] = useState('');
+  const [searchFrom, setSearchFrom] = useState('');
+  const [searchTo, setSearchTo] = useState('');
   const [scrollToMessageId, setScrollToMessageId] = useState(null);
+
+  const [notifPermission, setNotifPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
+  const [notifBannerDismissed, setNotifBannerDismissed] = useState(
+    () => localStorage.getItem('msg_notif_banner_dismissed') === '1'
+  );
+  const conversationsRef = useRef([]);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+  const handleSelectRef = useRef(() => {});
+
+  function requestNotifPermission() {
+    if (typeof Notification === 'undefined') return;
+    Notification.requestPermission().then(setNotifPermission);
+  }
+
+  function dismissNotifBanner() {
+    localStorage.setItem('msg_notif_banner_dismissed', '1');
+    setNotifBannerDismissed(true);
+  }
+
+  function notifyNewMessage(conversationId, message) {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    // Already looking at it — no need to interrupt.
+    if (!document.hidden && conversationId === activeIdRef.current) return;
+    const conv = conversationsRef.current.find(c => c.id === conversationId);
+    const convName = conv
+      ? (conv.type === 'department' ? deptDisplayName(conv, t) : (conv.name || t.messages))
+      : t.messages;
+    const body = message.content || (message.file_name ? `📎 ${message.file_name}` : '');
+    let n;
+    try {
+      n = new Notification(`${message.sender_name} · ${convName}`, { body, tag: `msg-${conversationId}`, icon: '/icon.svg' });
+    } catch (_) { return; }
+    n.onclick = () => {
+      window.focus();
+      handleSelectRef.current(conversationId);
+      n.close();
+    };
+  }
   const activeIdRef = useRef(null);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
@@ -1068,6 +1114,7 @@ export default function Messages() {
       });
 
       setLiveMessage({ conversation_id, message });
+      if (message.sender_id !== user.id) notifyNewMessage(conversation_id, message);
     });
 
     es.addEventListener('read', e => {
@@ -1133,12 +1180,29 @@ export default function Messages() {
   // Global message search (debounced) — shown as a "Messages" section in the sidebar
   useEffect(() => {
     const q = search.trim();
-    if (q.length < 2) { setMessageResults([]); return; }
+    if (q.length < 2) { setMessageResults([]); setMessageResultsHasMore(false); return; }
     const id = setTimeout(() => {
-      searchMessages(q).then(d => setMessageResults(d.results || [])).catch(() => {});
+      searchMessages(q, { senderId: searchSenderId || undefined, from: searchFrom || undefined, to: searchTo || undefined })
+        .then(d => { setMessageResults(d.results || []); setMessageResultsHasMore(!!d.hasMore); })
+        .catch(() => {});
     }, 300);
     return () => clearTimeout(id);
-  }, [search]);
+  }, [search, searchSenderId, searchFrom, searchTo]);
+
+  async function handleLoadMoreResults() {
+    const q = search.trim();
+    if (q.length < 2 || !messageResults.length) return;
+    setMessageResultsLoadingMore(true);
+    try {
+      const before = messageResults[messageResults.length - 1].message_id;
+      const d = await searchMessages(q, {
+        senderId: searchSenderId || undefined, from: searchFrom || undefined, to: searchTo || undefined, before,
+      });
+      setMessageResults(prev => [...prev, ...(d.results || [])]);
+      setMessageResultsHasMore(!!d.hasMore);
+    } catch (_) {}
+    setMessageResultsLoadingMore(false);
+  }
 
   async function handlePickUser(otherUser) {
     try {
@@ -1174,6 +1238,7 @@ export default function Messages() {
     setActiveId(convId);
     setConversations(prev => prev.map(c => c.id === convId ? { ...c, unread: 0, mentioned: false } : c));
   }
+  useEffect(() => { handleSelectRef.current = handleSelect; });
 
   function handleResultClick(result) {
     handleSelect(result.conversation_id);
@@ -1209,6 +1274,17 @@ export default function Messages() {
               <Plus size={16} strokeWidth={2} />
             </button>
           </div>
+          {notifPermission === 'default' && !notifBannerDismissed && (
+            <div className="msg-notif-banner">
+              <span>{t.enableNotifPrompt}</span>
+              <div className="msg-notif-banner-actions">
+                <button className="btn-sm" onClick={requestNotifPermission}>{t.enableNotif}</button>
+                <button className="btn-ghost btn-sm" onClick={dismissNotifBanner} aria-label="dismiss">
+                  <X size={14} strokeWidth={2} />
+                </button>
+              </div>
+            </div>
+          )}
           <div className="msg-search">
             <div style={{ position: 'relative' }}>
               <Search size={14} strokeWidth={2} style={{ position: 'absolute', top: '50%', insetInlineStart: '0.6rem', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }} />
@@ -1219,7 +1295,34 @@ export default function Messages() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
+              {search.trim().length >= 2 && (
+                <button
+                  className="btn-ghost btn-sm msg-search-filter-toggle"
+                  onClick={() => setShowSearchFilters(s => !s)}
+                  aria-label={t.searchFilters}
+                  title={t.searchFilters}
+                >
+                  <ChevronDown size={14} strokeWidth={2} />
+                </button>
+              )}
             </div>
+            {showSearchFilters && search.trim().length >= 2 && (
+              <div className="msg-search-filters">
+                <select className="form-control form-control-sm" value={searchSenderId} onChange={e => setSearchSenderId(e.target.value)}>
+                  <option value="">{t.anySender}</option>
+                  {directory.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                </select>
+                <input type="date" className="form-control form-control-sm" value={searchFrom} max={searchTo || undefined}
+                  onChange={e => setSearchFrom(e.target.value)} aria-label={t.fromDate} />
+                <input type="date" className="form-control form-control-sm" value={searchTo} min={searchFrom || undefined}
+                  onChange={e => setSearchTo(e.target.value)} aria-label={t.toDate} />
+                {(searchSenderId || searchFrom || searchTo) && (
+                  <button className="btn-ghost btn-sm" onClick={() => { setSearchSenderId(''); setSearchFrom(''); setSearchTo(''); }}>
+                    {t.clearFilters}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div className="msg-list">
             {loading ? (
@@ -1263,6 +1366,11 @@ export default function Messages() {
                         </div>
                       );
                     })}
+                    {messageResultsHasMore && (
+                      <button className="btn-ghost btn-sm msg-load-more" onClick={handleLoadMoreResults} disabled={messageResultsLoadingMore}>
+                        {messageResultsLoadingMore ? <Loader2 size={14} className="spin" strokeWidth={2} /> : t.loadMoreResults}
+                      </button>
+                    )}
                   </>
                 )}
                 {hiddenConversations.length > 0 && (

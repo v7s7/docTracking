@@ -56,9 +56,13 @@ export const setStatusText = (text) => req('/messages/status-text', {
   body: JSON.stringify({ text }),
 });
 
-export const searchMessages = (q, conversationId) => {
+export const searchMessages = (q, opts = {}) => {
   const params = new URLSearchParams({ q });
-  if (conversationId) params.set('conversationId', conversationId);
+  if (opts.conversationId) params.set('conversationId', opts.conversationId);
+  if (opts.senderId) params.set('senderId', opts.senderId);
+  if (opts.from)     params.set('from', opts.from);
+  if (opts.to)       params.set('to', opts.to);
+  if (opts.before)   params.set('before', opts.before);
   return req(`/messages/search?${params.toString()}`);
 };
 

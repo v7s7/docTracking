@@ -1161,6 +1161,56 @@ code.tag {
   border-bottom: 1px solid var(--border);
 }
 
+.msg-notif-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  background: var(--accent-soft, #fef3f2);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.msg-notif-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.msg-search-filter-toggle {
+  position: absolute;
+  top: 50%;
+  inset-inline-end: 0.3rem;
+  transform: translateY(-50%);
+}
+
+.msg-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.msg-search-filters .form-control-sm {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.form-control-sm {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+.msg-load-more {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 0.6rem;
+}
+
 .msg-list {
   flex: 1;
   overflow-y: auto;
