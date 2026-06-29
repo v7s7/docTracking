@@ -1154,6 +1154,9 @@ export default function Messages() {
     });
 
     return () => es.close();
+    // notifyNewMessage only reads from refs (conversationsRef/activeIdRef/handleSelectRef),
+    // so it doesn't need to be in deps — including it would reopen the SSE connection on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadConversations, user.id]);
 
   // Drop typing indicators that have gone stale
