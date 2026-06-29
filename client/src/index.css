@@ -1211,6 +1211,45 @@ code.tag {
   padding: 0.6rem;
 }
 
+.msg-muted-icon { color: var(--text-3); flex-shrink: 0; }
+
+.msg-notif-level-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+}
+
+.msg-notif-level-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.msg-notif-level-option:hover { background: var(--bg-2, #f9fafb); }
+.msg-notif-level-option.active { border-color: var(--primary); background: var(--accent-soft, #fef3f2); }
+.msg-notif-level-option input { margin-top: 0.2rem; flex-shrink: 0; }
+.msg-notif-level-option strong { display: block; font-size: 0.85rem; }
+
+.msg-notif-level-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-3);
+  margin-top: 0.1rem;
+}
+
+.msg-notif-mute-hint {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  padding: 0 1rem 1rem;
+  margin: 0;
+}
+
 .msg-list {
   flex: 1;
   overflow-y: auto;

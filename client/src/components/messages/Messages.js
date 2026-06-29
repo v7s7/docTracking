@@ -10,6 +10,7 @@ import {
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
   Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff, Loader2,
+  Bell, BellOff, Settings,
 } from 'lucide-react';
 
 const THREAD_POLL_MS = 4000;
@@ -17,6 +18,9 @@ const LIST_POLL_MS   = 15000;
 const ONLINE_MS      = 2 * 60 * 1000;
 const TYPING_IDLE_MS = 4000;
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+// Don't fire more than one desktop notification per conversation within this window —
+// a fast back-and-forth in a busy channel shouldn't trigger a notification per message.
+const NOTIF_THROTTLE_MS = 8000;
 
 function initials(name) {
   return (name || '?').split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
@@ -124,7 +128,7 @@ function Avatar({ name, isGroup, isDept, online, away }) {
   );
 }
 
-function ConversationItem({ conv, active, onClick, onToggleHide, t }) {
+function ConversationItem({ conv, active, onClick, onToggleHide, muted, onToggleMute, t }) {
   const isDept  = conv.type === 'department';
   const isGroup = isDept || conv.type === 'group';
   const name = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
@@ -149,11 +153,20 @@ function ConversationItem({ conv, active, onClick, onToggleHide, t }) {
         <div className="msg-list-item-preview">
           <span className="msg-list-item-snippet">{snippet || (t.noMessagesYet || '')}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}>
+            {muted && <BellOff size={12} strokeWidth={2} className="msg-muted-icon" aria-label={t.muted} title={t.muted} />}
             {conv.mentioned && <span className="msg-mention-badge" title={t.mentionedYou}>@</span>}
             {conv.unread > 0 && <span className="msg-unread-badge">{conv.unread > 99 ? '99+' : conv.unread}</span>}
           </span>
         </div>
       </div>
+      <button
+        className={`msg-hide-btn btn-ghost btn-sm${muted ? ' always' : ''}`}
+        onClick={e => { e.stopPropagation(); onToggleMute?.(conv); }}
+        title={muted ? t.unmuteChat : t.muteChat}
+        aria-label={muted ? t.unmuteChat : t.muteChat}
+      >
+        {muted ? <BellOff size={14} strokeWidth={2} /> : <Bell size={14} strokeWidth={2} />}
+      </button>
       <button
         className={`msg-hide-btn btn-ghost btn-sm${conv.hidden ? ' always' : ''}`}
         onClick={e => { e.stopPropagation(); onToggleHide?.(conv); }}
@@ -1022,9 +1035,27 @@ export default function Messages() {
   const [notifBannerDismissed, setNotifBannerDismissed] = useState(
     () => localStorage.getItem('msg_notif_banner_dismissed') === '1'
   );
+  // Default to "mentions & DMs only" — pinging on every message in a busy department
+  // channel is the #1 reason people mute/disable chat notifications entirely.
+  const [notifLevel, setNotifLevel] = useState(
+    () => localStorage.getItem('msg_notif_level') || 'mentions_dms'
+  );
+  const [mutedIds, setMutedIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('msg_muted_conversations') || '[]')); }
+    catch { return new Set(); }
+  });
+  const [showNotifSettings, setShowNotifSettings] = useState(false);
+
   const conversationsRef = useRef([]);
   useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
   const handleSelectRef = useRef(() => {});
+  // Refs mirror state so the long-lived SSE listener (registered once) always
+  // reads the current notification preferences instead of a stale snapshot.
+  const notifLevelRef = useRef(notifLevel);
+  useEffect(() => { notifLevelRef.current = notifLevel; }, [notifLevel]);
+  const mutedIdsRef = useRef(mutedIds);
+  useEffect(() => { mutedIdsRef.current = mutedIds; }, [mutedIds]);
+  const lastNotifiedAtRef = useRef({});
 
   function requestNotifPermission() {
     if (typeof Notification === 'undefined') return;
@@ -1036,11 +1067,38 @@ export default function Messages() {
     setNotifBannerDismissed(true);
   }
 
+  function changeNotifLevel(level) {
+    setNotifLevel(level);
+    localStorage.setItem('msg_notif_level', level);
+  }
+
+  function toggleMuteConversation(conv) {
+    setMutedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(conv.id)) next.delete(conv.id); else next.add(conv.id);
+      localStorage.setItem('msg_muted_conversations', JSON.stringify([...next]));
+      return next;
+    });
+  }
+
   function notifyNewMessage(conversationId, message) {
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (notifLevelRef.current === 'off') return;
+    if (mutedIdsRef.current.has(conversationId)) return;
     // Already looking at it — no need to interrupt.
     if (!document.hidden && conversationId === activeIdRef.current) return;
+
     const conv = conversationsRef.current.find(c => c.id === conversationId);
+    const isMentioned = !!message.mentions?.some(m => m.id === user.id);
+    const isDirect = conv ? conv.type !== 'department' : false;
+    // "Mentions & DMs only" mode skips ordinary department-channel chatter,
+    // which is almost always the highest-volume, lowest-signal source of pings.
+    if (notifLevelRef.current === 'mentions_dms' && !isMentioned && !isDirect) return;
+
+    const last = lastNotifiedAtRef.current[conversationId] || 0;
+    if (Date.now() - last < NOTIF_THROTTLE_MS) return;
+    lastNotifiedAtRef.current[conversationId] = Date.now();
+
     const convName = conv
       ? (conv.type === 'department' ? deptDisplayName(conv, t) : (conv.name || t.messages))
       : t.messages;
@@ -1273,9 +1331,14 @@ export default function Messages() {
         <div className="msg-sidebar">
           <div className="msg-sidebar-header">
             <span className="card-title">{t.messages}</span>
-            <button className="btn-header" onClick={() => setShowDirectory(true)} aria-label={t.newChat} title={t.newChat}>
-              <Plus size={16} strokeWidth={2} />
-            </button>
+            <span style={{ display: 'flex', gap: '0.25rem' }}>
+              <button className="btn-header" onClick={() => setShowNotifSettings(true)} aria-label={t.notifSettings} title={t.notifSettings}>
+                <Settings size={16} strokeWidth={2} />
+              </button>
+              <button className="btn-header" onClick={() => setShowDirectory(true)} aria-label={t.newChat} title={t.newChat}>
+                <Plus size={16} strokeWidth={2} />
+              </button>
+            </span>
           </div>
           {notifPermission === 'default' && !notifBannerDismissed && (
             <div className="msg-notif-banner">
@@ -1340,7 +1403,7 @@ export default function Messages() {
             ) : (
               <>
                 {visibleConversations.map(conv => (
-                  <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} />
+                  <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} muted={mutedIds.has(conv.id)} onToggleMute={toggleMuteConversation} t={t} />
                 ))}
                 {filteredPeople.length > 0 && (
                   <>
@@ -1383,7 +1446,7 @@ export default function Messages() {
                       <span>{t.hiddenChats} ({hiddenConversations.length})</span>
                     </button>
                     {showHidden && hiddenConversations.map(conv => (
-                      <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} />
+                      <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} muted={mutedIds.has(conv.id)} onToggleMute={toggleMuteConversation} t={t} />
                     ))}
                   </div>
                 )}
@@ -1422,6 +1485,67 @@ export default function Messages() {
       {showDirectory && (
         <DirectoryPanel onPick={handlePickUser} onClose={() => setShowDirectory(false)} t={t} />
       )}
+
+      {showNotifSettings && (
+        <NotificationSettingsModal
+          level={notifLevel}
+          onChangeLevel={changeNotifLevel}
+          permission={notifPermission}
+          onRequestPermission={requestNotifPermission}
+          onClose={() => setShowNotifSettings(false)}
+          t={t}
+        />
+      )}
+    </div>
+  );
+}
+
+function NotificationSettingsModal({ level, onChangeLevel, permission, onRequestPermission, onClose, t }) {
+  const options = [
+    { value: 'mentions_dms', label: t.notifLevelMentionsDms, hint: t.notifLevelMentionsDmsHint },
+    { value: 'all',          label: t.notifLevelAll,         hint: t.notifLevelAllHint },
+    { value: 'off',          label: t.notifLevelOff,         hint: t.notifLevelOffHint },
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+        <div className="modal-head">
+          <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Settings size={15} strokeWidth={1.8} style={{ color: 'var(--primary)' }} />{t.notifSettings}
+          </h3>
+          <button className="modal-close" onClick={onClose}><X size={16} strokeWidth={2} /></button>
+        </div>
+
+        {permission !== 'granted' && (
+          <div className="msg-notif-banner" style={{ borderBottom: 'none', borderRadius: '0.4rem', margin: '0 1rem' }}>
+            <span>{permission === 'denied' ? t.notifDeniedHint : t.enableNotifPrompt}</span>
+            {permission === 'default' && (
+              <button className="btn-sm" onClick={onRequestPermission}>{t.enableNotif}</button>
+            )}
+          </div>
+        )}
+
+        <div className="msg-notif-level-options">
+          {options.map(opt => (
+            <label key={opt.value} className={`msg-notif-level-option${level === opt.value ? ' active' : ''}`}>
+              <input
+                type="radio"
+                name="notif-level"
+                value={opt.value}
+                checked={level === opt.value}
+                onChange={() => onChangeLevel(opt.value)}
+              />
+              <span>
+                <strong>{opt.label}</strong>
+                <span className="msg-notif-level-hint">{opt.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <p className="msg-notif-mute-hint">{t.muteHint}</p>
+      </div>
     </div>
   );
 }
