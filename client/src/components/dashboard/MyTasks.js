@@ -52,6 +52,28 @@ export default function MyTasks() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    function checkReminders() {
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+      let notified = [];
+      try { notified = JSON.parse(localStorage.getItem('myTasksNotified') || '[]'); } catch (_) {}
+      const overdue = items.filter(task => isRowOverdue(task) && !notified.includes(task.id));
+      if (!overdue.length) return;
+      overdue.forEach(task => {
+        const n = new Notification(t.myTasksReminderTitle, {
+          body: t.myTasksReminderBody.replace('{title}', task.title),
+          tag: `my-task-${task.id}`,
+        });
+        n.onclick = () => window.focus();
+      });
+      const updated = [...notified, ...overdue.map(task => task.id)];
+      try { localStorage.setItem('myTasksNotified', JSON.stringify(updated)); } catch (_) {}
+    }
+    checkReminders();
+    const id = setInterval(checkReminders, 60000);
+    return () => clearInterval(id);
+  }, [items, t]);
+
   async function handleAdd(e) {
     e.preventDefault();
     const trimmed = title.trim();

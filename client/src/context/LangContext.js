@@ -228,6 +228,8 @@ const T = {
     myTasksShowDone:    'Show completed ({n})',
     myTasksHideDone:    'Hide completed',
     myTasksDue:         'Due',
+    myTasksReminderTitle: 'Task reminder',
+    myTasksReminderBody:  'Due today (or overdue): {title}',
 
     overdue:           'Overdue',
     overdueTasks:      'Overdue Tasks',
@@ -572,6 +574,8 @@ const T = {
     myTasksShowDone:    'إظهار المكتملة ({n})',
     myTasksHideDone:    'إخفاء المكتملة',
     myTasksDue:         'الاستحقاق',
+    myTasksReminderTitle: 'تذكير بمهمة',
+    myTasksReminderBody:  'مستحقة اليوم (أو متأخرة): {title}',
 
     overdue:           'متأخرة',
     overdueTasks:      'المهام المتأخرة',
