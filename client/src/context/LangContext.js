@@ -427,10 +427,6 @@ const T = {
     clearFilters:      'Clear filters',
     loadMoreResults:   'Load more results',
     notifSettings:     'Notification settings',
-    muteChat:          'Mute notifications for this chat',
-    unmuteChat:        'Unmute notifications for this chat',
-    muted:             'Muted',
-    muteHint:          'Tip: mute a noisy department channel from its list item while still getting notified for direct messages and mentions.',
     notifDeniedHint:   'Notifications are blocked in your browser settings. Enable them for this site to use desktop alerts.',
     notifLevelMentionsDms:     'Mentions & direct messages',
     notifLevelMentionsDmsHint: 'Recommended — notify for DMs, group chats, and @mentions only. Stays quiet during regular department-channel chatter.',
@@ -451,6 +447,10 @@ const T = {
     statusPlaceholder: 'What are you up to?',
     clearStatus:       'Clear status',
     statusPresets: ['In a meeting', 'On leave', 'Out of office', 'Be right back'],
+    profilePicture: 'Profile picture',
+    uploadPicture:  'Upload picture',
+    removePicture:  'Remove',
+    avatarColor:    'Avatar color',
   },
 
   ar: {
@@ -877,10 +877,6 @@ const T = {
     clearFilters:      'إزالة الفلاتر',
     loadMoreResults:   'عرض نتائج أخرى',
     notifSettings:     'إعدادات الإشعارات',
-    muteChat:          'إيقاف إشعارات هذه المحادثة',
-    unmuteChat:        'تفعيل إشعارات هذه المحادثة',
-    muted:             'مكتومة',
-    muteHint:          'نصيحة: يمكنك كتم إشعارات قناة قسم مزدحمة من قائمة المحادثات مع استمرار تنبيهك للرسائل المباشرة والإشارات.',
     notifDeniedHint:   'الإشعارات محظورة في إعدادات المتصفح. يرجى تفعيلها لهذا الموقع لاستخدام التنبيهات على سطح المكتب.',
     notifLevelMentionsDms:     'الإشارات والرسائل المباشرة',
     notifLevelMentionsDmsHint: 'الموصى به — تنبيه فقط للرسائل المباشرة والمحادثات الجماعية والإشارات. لا تنبيه لدردشة قنوات الأقسام العادية.',
@@ -901,6 +897,10 @@ const T = {
     statusPlaceholder: 'ما الذي تفعله؟',
     clearStatus:       'إزالة الحالة',
     statusPresets: ['في اجتماع', 'في إجازة', 'خارج المكتب', 'سأعود حالاً'],
+    profilePicture: 'الصورة الشخصية',
+    uploadPicture:  'رفع صورة',
+    removePicture:  'إزالة',
+    avatarColor:    'لون الأيقونة',
   },
 };
 

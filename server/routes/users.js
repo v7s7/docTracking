@@ -1,5 +1,8 @@
-// All routes here require SUPER_ADMIN.
+// Most routes here require SUPER_ADMIN; the /me/avatar* routes are self-service.
 const express = require('express');
+const fs      = require('fs');
+const path    = require('path');
+const multer  = require('multer');
 const bcrypt  = require('bcryptjs');
 const { db }  = require('../db');
 const { verifyToken, requireRole } = require('../middleware/authMiddleware');
@@ -8,6 +11,26 @@ const { browseAllUsers } = require('../services/ldapService');
 const router    = express.Router();
 const SA_ONLY   = [verifyToken, requireRole('SUPER_ADMIN')];
 const SALT_ROUNDS = 10;
+
+const AVATAR_DIR = path.join(__dirname, '..', 'data', 'uploads', 'avatars');
+fs.mkdirSync(AVATAR_DIR, { recursive: true });
+
+const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+const avatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, AVATAR_DIR),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${req.user.id}-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!AVATAR_TYPES.includes(file.mimetype)) return cb(new Error('Only JPG, PNG, WEBP or GIF images are allowed.'));
+    cb(null, true);
+  },
+});
 
 const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
 
@@ -134,6 +157,48 @@ router.put('/:id', ...SA_ONLY, (req, res) => {
   `).run(updates.full_name, updates.email, updates.role, updates.dept_id, updates.is_active, updates.password_hash, user.id);
 
   res.json({ success: true, user: safeUser(db.prepare('SELECT * FROM users WHERE id = ?').get(user.id)) });
+});
+
+// POST /users/me/avatar — upload/replace the current user's own picture
+router.post('/me/avatar', verifyToken, (req, res) => {
+  if (!req.user.id) return res.status(403).json({ success: false, message: 'Your account is not fully set up yet.' });
+  avatarUpload.single('avatar')(req, res, (err) => {
+    if (err) return res.status(400).json({ success: false, message: err.message });
+    if (!req.file) return res.status(400).json({ success: false, message: 'No image provided.' });
+
+    const old = db.prepare('SELECT avatar_url FROM users WHERE id = ?').get(req.user.id);
+    const avatar_url = `/uploads/avatars/${req.file.filename}`;
+    db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').run(avatar_url, req.user.id);
+
+    if (old?.avatar_url) {
+      const oldPath = path.join(AVATAR_DIR, path.basename(old.avatar_url));
+      fs.unlink(oldPath, () => {});
+    }
+    res.json({ success: true, avatar_url });
+  });
+});
+
+// PUT /users/me/avatar-color — pick a flat background color for the initials avatar
+router.put('/me/avatar-color', verifyToken, (req, res) => {
+  if (!req.user.id) return res.status(403).json({ success: false, message: 'Your account is not fully set up yet.' });
+  const { color } = req.body || {};
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return res.status(400).json({ success: false, message: 'Color must be a hex value like #4f46e5.' });
+  }
+  db.prepare('UPDATE users SET avatar_color = ? WHERE id = ?').run(color, req.user.id);
+  res.json({ success: true, avatar_color: color });
+});
+
+// DELETE /users/me/avatar — remove the uploaded picture, fall back to initials/color
+router.delete('/me/avatar', verifyToken, (req, res) => {
+  if (!req.user.id) return res.status(403).json({ success: false, message: 'Your account is not fully set up yet.' });
+  const old = db.prepare('SELECT avatar_url FROM users WHERE id = ?').get(req.user.id);
+  db.prepare('UPDATE users SET avatar_url = NULL WHERE id = ?').run(req.user.id);
+  if (old?.avatar_url) {
+    const oldPath = path.join(AVATAR_DIR, path.basename(old.avatar_url));
+    fs.unlink(oldPath, () => {});
+  }
+  res.json({ success: true });
 });
 
 // DELETE /users/:id

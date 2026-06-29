@@ -193,6 +193,40 @@ a { color: inherit; text-decoration: none; }
   justify-content: center;
   flex-shrink: 0;
   text-transform: uppercase;
+  overflow: hidden;
+  position: relative;
+}
+
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-settings {
+  border-top: 1px solid var(--border);
+  margin-top: 0.5rem;
+  padding-top: 0.6rem;
+}
+
+.avatar-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.avatar-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.avatar-color-swatch.active {
+  border-color: var(--text-1);
 }
 
 .user-role-badge {
@@ -1287,7 +1321,6 @@ code.tag {
   padding: 0.6rem;
 }
 
-.msg-muted-icon { color: var(--text-3); flex-shrink: 0; }
 
 .msg-notif-level-options {
   display: flex;
@@ -1319,12 +1352,6 @@ code.tag {
   margin-top: 0.1rem;
 }
 
-.msg-notif-mute-hint {
-  font-size: 0.75rem;
-  color: var(--text-3);
-  padding: 0 1rem 1rem;
-  margin: 0;
-}
 
 .msg-list {
   flex: 1;
@@ -1362,6 +1389,13 @@ code.tag {
 .msg-avatar.dept {
   background: var(--primary-light);
   color: var(--primary);
+}
+
+.msg-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .msg-online-dot {

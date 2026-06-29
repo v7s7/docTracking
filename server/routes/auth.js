@@ -52,8 +52,10 @@ router.post('/login', async (req, res) => {
       name:     localUser.full_name,
       email:    localUser.email || '',
       role,
-      dept_id:  localUser.dept_id || '',
-      is_local: true,
+      dept_id:      localUser.dept_id || '',
+      is_local:     true,
+      avatar_url:   localUser.avatar_url || null,
+      avatar_color: localUser.avatar_color || null,
     };
 
     const jti = randomUUID();
@@ -100,6 +102,8 @@ router.post('/login', async (req, res) => {
       dept_id,
       groups:   extractGroupNames(ldapUser.memberOf),
       is_local: false,
+      avatar_url:   stored?.avatar_url || null,
+      avatar_color: stored?.avatar_color || null,
     };
 
     const jti = randomUUID();
@@ -130,7 +134,12 @@ router.post('/login', async (req, res) => {
 
 // ── GET /auth/me ─────────────────────────────────────────────
 router.get('/me', verifyToken, (req, res) => {
-  return res.json({ success: true, user: req.user });
+  // avatar_url/avatar_color can change after the token was issued, so always
+  // read the latest values from the DB instead of trusting the JWT payload.
+  const row = req.user.id
+    ? db.prepare('SELECT avatar_url, avatar_color FROM users WHERE id = ?').get(req.user.id)
+    : null;
+  return res.json({ success: true, user: { ...req.user, avatar_url: row?.avatar_url || null, avatar_color: row?.avatar_color || null } });
 });
 
 // ── POST /auth/logout ────────────────────────────────────────

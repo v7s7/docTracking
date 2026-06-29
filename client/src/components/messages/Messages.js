@@ -10,7 +10,7 @@ import {
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
   Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff, Loader2,
-  Bell, BellOff, Settings,
+  Settings,
 } from 'lucide-react';
 
 const THREAD_POLL_MS = 4000;
@@ -119,16 +119,23 @@ function renderContent(content, mentions, currentUserId, searchQuery) {
   return parts;
 }
 
-function Avatar({ name, isGroup, isDept, online, away }) {
+function Avatar({ name, isGroup, isDept, online, away, avatarUrl, avatarColor }) {
+  const style = !isGroup && !avatarUrl && avatarColor ? { background: avatarColor } : undefined;
   return (
-    <div className={`msg-avatar${isGroup ? ' dept' : ''}`}>
-      {isDept ? <Building2 size={18} strokeWidth={1.8} /> : isGroup ? <Users size={18} strokeWidth={1.8} /> : initials(name)}
+    <div className={`msg-avatar${isGroup ? ' dept' : ''}`} style={style}>
+      {isDept
+        ? <Building2 size={18} strokeWidth={1.8} />
+        : isGroup
+          ? <Users size={18} strokeWidth={1.8} />
+          : avatarUrl
+            ? <img src={fileUrl(avatarUrl)} alt="" className="msg-avatar-img" />
+            : initials(name)}
       {online && <span className={`msg-online-dot${away ? ' away' : ''}`} />}
     </div>
   );
 }
 
-function ConversationItem({ conv, active, onClick, onToggleHide, muted, onToggleMute, t }) {
+function ConversationItem({ conv, active, onClick, onToggleHide, t }) {
   const isDept  = conv.type === 'department';
   const isGroup = isDept || conv.type === 'group';
   const name = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
@@ -144,7 +151,8 @@ function ConversationItem({ conv, active, onClick, onToggleHide, muted, onToggle
 
   return (
     <div className={`msg-list-item${active ? ' active' : ''}`} onClick={onClick}>
-      <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away} />
+      <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away}
+        avatarUrl={conv.other_user?.avatar_url} avatarColor={conv.other_user?.avatar_color} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-top">
           <span className="msg-list-item-name">{name}</span>
@@ -153,20 +161,11 @@ function ConversationItem({ conv, active, onClick, onToggleHide, muted, onToggle
         <div className="msg-list-item-preview">
           <span className="msg-list-item-snippet">{snippet || (t.noMessagesYet || '')}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}>
-            {muted && <BellOff size={12} strokeWidth={2} className="msg-muted-icon" aria-label={t.muted} title={t.muted} />}
             {conv.mentioned && <span className="msg-mention-badge" title={t.mentionedYou}>@</span>}
             {conv.unread > 0 && <span className="msg-unread-badge">{conv.unread > 99 ? '99+' : conv.unread}</span>}
           </span>
         </div>
       </div>
-      <button
-        className={`msg-hide-btn btn-ghost btn-sm${muted ? ' always' : ''}`}
-        onClick={e => { e.stopPropagation(); onToggleMute?.(conv); }}
-        title={muted ? t.unmuteChat : t.muteChat}
-        aria-label={muted ? t.unmuteChat : t.muteChat}
-      >
-        {muted ? <BellOff size={14} strokeWidth={2} /> : <Bell size={14} strokeWidth={2} />}
-      </button>
       <button
         className={`msg-hide-btn btn-ghost btn-sm${conv.hidden ? ' always' : ''}`}
         onClick={e => { e.stopPropagation(); onToggleHide?.(conv); }}
@@ -182,7 +181,8 @@ function ConversationItem({ conv, active, onClick, onToggleHide, muted, onToggle
 function PersonItem({ person, onClick, t }) {
   return (
     <div className="msg-list-item" onClick={onClick}>
-      <Avatar name={person.full_name} online={isOnline(person)} away={isAway(person)} />
+      <Avatar name={person.full_name} online={isOnline(person)} away={isAway(person)}
+        avatarUrl={person.avatar_url} avatarColor={person.avatar_color} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-name">{person.full_name}</div>
         <div className="msg-list-item-snippet">{t.roles?.[person.role] || person.role}</div>
@@ -214,7 +214,8 @@ function MemberItem({ member, t, isSelf, selected, onToggleSelect, onOpenChat })
           aria-label={member.full_name}
         />
       )}
-      <Avatar name={member.full_name} online={online} away={away} />
+      <Avatar name={member.full_name} online={online} away={away}
+        avatarUrl={member.avatar_url} avatarColor={member.avatar_color} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-name">{member.full_name}{isSelf ? ` (${t.you})` : ''}</div>
         <div className="msg-list-item-snippet">{status}</div>
@@ -812,7 +813,8 @@ function ChatThread({
         <button className="msg-back-btn btn-ghost btn-sm" onClick={onBack} aria-label="back">
           <ArrowLeft size={16} strokeWidth={2} />
         </button>
-        <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away} />
+        <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away}
+          avatarUrl={conv.other_user?.avatar_url} avatarColor={conv.other_user?.avatar_color} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="msg-thread-title">{name}</div>
           <div className={`msg-thread-status${typingText ? ' typing' : ''}`}>{typingText || status}</div>
@@ -1040,10 +1042,6 @@ export default function Messages() {
   const [notifLevel, setNotifLevel] = useState(
     () => localStorage.getItem('msg_notif_level') || 'mentions_dms'
   );
-  const [mutedIds, setMutedIds] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('msg_muted_conversations') || '[]')); }
-    catch { return new Set(); }
-  });
   const [showNotifSettings, setShowNotifSettings] = useState(false);
 
   const conversationsRef = useRef([]);
@@ -1053,8 +1051,6 @@ export default function Messages() {
   // reads the current notification preferences instead of a stale snapshot.
   const notifLevelRef = useRef(notifLevel);
   useEffect(() => { notifLevelRef.current = notifLevel; }, [notifLevel]);
-  const mutedIdsRef = useRef(mutedIds);
-  useEffect(() => { mutedIdsRef.current = mutedIds; }, [mutedIds]);
   const lastNotifiedAtRef = useRef({});
 
   function requestNotifPermission() {
@@ -1072,19 +1068,9 @@ export default function Messages() {
     localStorage.setItem('msg_notif_level', level);
   }
 
-  function toggleMuteConversation(conv) {
-    setMutedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(conv.id)) next.delete(conv.id); else next.add(conv.id);
-      localStorage.setItem('msg_muted_conversations', JSON.stringify([...next]));
-      return next;
-    });
-  }
-
   function notifyNewMessage(conversationId, message) {
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
     if (notifLevelRef.current === 'off') return;
-    if (mutedIdsRef.current.has(conversationId)) return;
     // Already looking at it — no need to interrupt.
     if (!document.hidden && conversationId === activeIdRef.current) return;
 
@@ -1403,7 +1389,7 @@ export default function Messages() {
             ) : (
               <>
                 {visibleConversations.map(conv => (
-                  <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} muted={mutedIds.has(conv.id)} onToggleMute={toggleMuteConversation} t={t} />
+                  <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} />
                 ))}
                 {filteredPeople.length > 0 && (
                   <>
@@ -1446,7 +1432,7 @@ export default function Messages() {
                       <span>{t.hiddenChats} ({hiddenConversations.length})</span>
                     </button>
                     {showHidden && hiddenConversations.map(conv => (
-                      <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} muted={mutedIds.has(conv.id)} onToggleMute={toggleMuteConversation} t={t} />
+                      <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} />
                     ))}
                   </div>
                 )}
@@ -1543,8 +1529,6 @@ function NotificationSettingsModal({ level, onChangeLevel, permission, onRequest
             </label>
           ))}
         </div>
-
-        <p className="msg-notif-mute-hint">{t.muteHint}</p>
       </div>
     </div>
   );

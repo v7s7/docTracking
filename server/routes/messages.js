@@ -190,7 +190,7 @@ function isUserOnline(userId) {
 // All members of a conversation (used for ad-hoc group chats), with live presence
 function groupMembers(convId) {
   return db.prepare(`
-    SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text
+    SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text, u.avatar_url, u.avatar_color
     FROM conversation_members cm JOIN users u ON u.id = cm.user_id
     WHERE cm.conversation_id = ? ORDER BY u.full_name COLLATE NOCASE
   `).all(convId).map(u => ({ ...u, online: isUserOnline(u.id) }));
@@ -209,7 +209,7 @@ function getAccessibleConversation(conversationId, user) {
 // GET /messages/directory — colleagues available to start a DM with
 router.get('/directory', (req, res) => {
   const users = db.prepare(
-    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
+    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
   ).all(req.user.id).map(u => ({ ...u, online: isUserOnline(u.id) }));
   res.json({ success: true, users });
 });
@@ -273,7 +273,7 @@ router.get('/conversations', (req, res) => {
       display = { name: others.map(o => o.full_name).join(', ') };
     } else {
       const other = db.prepare(`
-        SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text
+        SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text, u.avatar_url, u.avatar_color
         FROM conversation_members cm JOIN users u ON u.id = cm.user_id
         WHERE cm.conversation_id = ? AND cm.user_id != ?
       `).get(conv.id, req.user.id);
@@ -311,7 +311,7 @@ router.post('/dm/:userId', (req, res) => {
   if (otherId === req.user.id) {
     return res.status(400).json({ success: false, message: 'Cannot message yourself.' });
   }
-  const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE id=? AND is_active=1").get(otherId);
+  const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE id=? AND is_active=1").get(otherId);
   if (!other) return res.status(404).json({ success: false, message: 'User not found.' });
   other.online = isUserOnline(other.id);
 
@@ -343,7 +343,7 @@ router.post('/group', (req, res) => {
 
   const placeholders = otherIds.map(() => '?').join(',');
   const users = db.prepare(
-    `SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE is_active=1 AND id IN (${placeholders})`
+    `SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE is_active=1 AND id IN (${placeholders})`
   ).all(...otherIds);
   if (users.length !== otherIds.length) {
     return res.status(404).json({ success: false, message: 'One or more users not found.' });
@@ -474,7 +474,7 @@ router.get('/conversations/:id/members', (req, res) => {
   let members;
   if (conv.type === 'department') {
     members = db.prepare(
-      "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
+      "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
     ).all(conv.dept_id).map(m => ({ ...m, online: isUserOnline(m.id) }));
   } else if (conv.type === 'group') {
     members = groupMembers(conv.id);

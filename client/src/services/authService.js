@@ -38,6 +38,10 @@ export function getStoredUser() {
   catch { return null; }
 }
 
+export function persistUser(user) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 export async function fetchMe() {
   const token = getToken();
   if (!token) return null;

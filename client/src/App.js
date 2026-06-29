@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LangProvider, useLang } from './context/LangContext';
 import {
-  LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, MessageCircle,
+  LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, MessageCircle, Camera, Trash2,
 } from 'lucide-react';
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
@@ -14,7 +14,10 @@ import UserManagement from './components/users/UserManagement';
 import NotificationBell from './components/notifications/NotificationBell';
 import Messages from './components/messages/Messages';
 import { getDepartments } from './services/deptService';
-import { getUnreadCount, getConversations, sendPresence, getStatusText, setStatusText } from './services/messageService';
+import { getUnreadCount, getConversations, sendPresence, getStatusText, setStatusText, fileUrl } from './services/messageService';
+import { uploadAvatar, setAvatarColor, removeAvatar } from './services/userService';
+
+const AVATAR_COLORS = ['#4f46e5', '#0891b2', '#16a34a', '#d97706', '#dc2626', '#9333ea', '#475569'];
 
 const PRESENCE_MS      = 60_000;
 const MSG_POLL_MS      = 20_000;
@@ -48,11 +51,14 @@ function navItems(role, t, hasMessages, chatOnly) {
 
 // ── Header ───────────────────────────────────────────────────
 function Header({ user, onTaskClick }) {
-  const { logout } = useAuth();
+  const { logout, updateUser } = useAuth();
   const { t, lang, toggle } = useLang();
   const [statusText, setStatusTextState] = useState('');
   const [statusInput, setStatusInput] = useState('');
   const [showStatusPopover, setShowStatusPopover] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarErr, setAvatarErr] = useState('');
+  const avatarFileInput = useRef(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -69,6 +75,45 @@ function Header({ user, onTaskClick }) {
       setStatusInput(saved);
       setShowStatusPopover(false);
     } catch (_) {}
+  }
+
+  async function handleAvatarFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAvatarBusy(true);
+    setAvatarErr('');
+    try {
+      const { avatar_url } = await uploadAvatar(file);
+      updateUser({ avatar_url });
+    } catch (err) {
+      setAvatarErr(err.message || 'Upload failed.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function handlePickColor(color) {
+    setAvatarErr('');
+    try {
+      await setAvatarColor(color);
+      updateUser({ avatar_color: color });
+    } catch (err) {
+      setAvatarErr(err.message || 'Failed to set color.');
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    setAvatarBusy(true);
+    setAvatarErr('');
+    try {
+      await removeAvatar();
+      updateUser({ avatar_url: null });
+    } catch (err) {
+      setAvatarErr(err.message || 'Failed to remove picture.');
+    } finally {
+      setAvatarBusy(false);
+    }
   }
 
   const initials = (user?.name || user?.username || '?')
@@ -95,7 +140,9 @@ function Header({ user, onTaskClick }) {
         <NotificationBell onTaskClick={onTaskClick} />
         <div style={{ position: 'relative' }}>
           <div className="user-chip" onClick={() => setShowStatusPopover(s => !s)} role="button" tabIndex={0} style={{ cursor: 'pointer' }}>
-            <div className="user-avatar">{initials}</div>
+            <div className="user-avatar" style={!user?.avatar_url && user?.avatar_color ? { background: user.avatar_color } : undefined}>
+              {user?.avatar_url ? <img src={fileUrl(user.avatar_url)} alt="" /> : initials}
+            </div>
             <div style={{ lineHeight: 1.3 }}>
               <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{user?.name || user?.username}</div>
               <span className="user-role-badge">{t.roles?.[user?.role] || user?.role}</span>
@@ -127,6 +174,36 @@ function Header({ user, onTaskClick }) {
                 <div className="status-popover-actions">
                   <button className="btn-ghost btn-sm" onClick={() => saveStatus('')}>{t.clearStatus}</button>
                   <button className="btn btn-primary btn-sm" onClick={() => saveStatus(statusInput.trim())}>{t.save}</button>
+                </div>
+
+                <div className="avatar-settings">
+                  <div className="status-popover-title">{t.profilePicture}</div>
+                  <input ref={avatarFileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+                    style={{ display: 'none' }} onChange={handleAvatarFile} />
+                  <div className="avatar-settings-row">
+                    <button className="btn-ghost btn-sm" disabled={avatarBusy} onClick={() => avatarFileInput.current?.click()}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <Camera size={14} strokeWidth={2} />{t.uploadPicture}
+                    </button>
+                    {user?.avatar_url && (
+                      <button className="btn-ghost btn-sm" disabled={avatarBusy} onClick={handleRemoveAvatar}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <Trash2 size={14} strokeWidth={2} />{t.removePicture}
+                      </button>
+                    )}
+                  </div>
+                  <div className="status-popover-title" style={{ marginTop: '0.5rem' }}>{t.avatarColor}</div>
+                  <div className="avatar-settings-row">
+                    {AVATAR_COLORS.map(c => (
+                      <button key={c} type="button"
+                        className={`avatar-color-swatch${user?.avatar_color === c ? ' active' : ''}`}
+                        style={{ background: c }}
+                        onClick={() => handlePickColor(c)}
+                        aria-label={c}
+                      />
+                    ))}
+                  </div>
+                  {avatarErr && <div className="alert alert-error" style={{ marginTop: '0.4rem', fontSize: '0.78rem' }}>{avatarErr}</div>}
                 </div>
               </div>
             </>
