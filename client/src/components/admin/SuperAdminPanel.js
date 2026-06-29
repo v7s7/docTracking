@@ -97,19 +97,24 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
   const [addingF,   setAddingF]  = useState(false);
   const [editingF,  setEditingF] = useState(null);
   const [err,       setErr]      = useState('');
+  const [busy,      setBusy]     = useState(false);
+  const [busyField, setBusyField] = useState(null);
   const [confirm, confirmDialog] = useConfirm();
 
   async function saveLabel() {
+    setBusy(true);
     try {
       const { service: updated } = await api.updateService(deptId, service.id, { label, description: desc });
       onUpdated(updated); setEditing(false); setErr('');
     } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
   }
 
   async function handleDelete() {
     if (!await confirm(t.confirmDel)) return;
+    setBusy(true);
     try { await api.deleteService(deptId, service.id); onDeleted(service.id); }
-    catch (e) { setErr(e.message); }
+    catch (e) { setErr(e.message); setBusy(false); }
   }
 
   function buildFieldBody(f) {
@@ -138,10 +143,12 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
 
   async function handleDeleteField(key) {
     if (!await confirm(t.confirmDel)) return;
+    setBusyField(key);
     try {
       await api.deleteField(deptId, service.id, key);
       onUpdated({ ...service, fields: (service.fields || []).filter(fi => fi.key !== key) });
     } catch (e) { setErr(e.message); }
+    finally { setBusyField(null); }
   }
 
   return (
@@ -167,8 +174,8 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
                 value={desc} onChange={e => setDesc(e.target.value)} placeholder="وصف مختصر (اختياري)" />
             </div>
             <div style={{ display: 'flex', gap: '0.35rem', alignSelf: 'flex-start', paddingTop: '0.1rem' }}>
-              <button className="btn btn-primary btn-sm" onClick={saveLabel}>{t.save}</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(service.label); setDesc(service.description || ''); }}>{t.cancel}</button>
+              <button className="btn btn-primary btn-sm" onClick={saveLabel} disabled={busy}>{busy ? '…' : t.save}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(service.label); setDesc(service.description || ''); }} disabled={busy}>{t.cancel}</button>
             </div>
           </div>
         ) : (
@@ -186,12 +193,12 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
         {!editing && (
           <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
             <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
-              onClick={() => setEditing(true)}>
+              onClick={() => setEditing(true)} disabled={busy}>
               <Edit2 size={11} strokeWidth={2} />{t.edit}
             </button>
             <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
-              onClick={handleDelete}>
-              <Trash2 size={11} strokeWidth={2} />{t.del}
+              onClick={handleDelete} disabled={busy}>
+              <Trash2 size={11} strokeWidth={2} />{busy ? '…' : t.del}
             </button>
           </div>
         )}
@@ -231,8 +238,8 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
                           {Array.isArray(f.options) ? f.options.join(', ') : (f.placeholder || '—')}
                         </td>
                         <td>
-                          <button className="btn btn-sm btn-ghost" style={{ marginInlineEnd: '0.25rem', fontSize: '0.78rem' }} onClick={() => setEditingF(f.key)}>{t.edit}</button>
-                          <button className="btn btn-sm btn-danger" style={{ fontSize: '0.78rem' }} onClick={() => handleDeleteField(f.key)}>{t.del}</button>
+                          <button className="btn btn-sm btn-ghost" style={{ marginInlineEnd: '0.25rem', fontSize: '0.78rem' }} onClick={() => setEditingF(f.key)} disabled={busyField === f.key}>{t.edit}</button>
+                          <button className="btn btn-sm btn-danger" style={{ fontSize: '0.78rem' }} onClick={() => handleDeleteField(f.key)} disabled={busyField === f.key}>{busyField === f.key ? '…' : t.del}</button>
                         </td>
                       </tr>
                     )
@@ -269,30 +276,36 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
   const [newSvcLabel, setNewSvcLabel] = useState('');
   const [newSvcDesc,  setNewSvcDesc]  = useState('');
   const [err,       setErr]       = useState('');
+  const [busy,      setBusy]      = useState(false);
   const [confirm, confirmDialog] = useConfirm();
 
   const services = dept.services || [];
 
   async function saveLabel() {
+    setBusy(true);
     try {
       const { department } = await api.updateDept(dept.id, { label, ldapGroup: group });
       onUpdated(department); setEditing(false); setErr('');
     } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
   }
 
   async function handleDelete() {
     if (!await confirm(t.confirmDel)) return;
+    setBusy(true);
     try { await api.deleteDept(dept.id); onDeleted(dept.id); }
-    catch (e) { setErr(e.message); }
+    catch (e) { setErr(e.message); setBusy(false); }
   }
 
   async function handleAddService() {
     if (!newSvcLabel.trim()) return;
+    setBusy(true);
     try {
       const { service } = await api.createService(dept.id, { label: newSvcLabel.trim(), description: newSvcDesc.trim() });
       onUpdated({ ...dept, services: [...services, service] });
       setNewSvcLabel(''); setNewSvcDesc(''); setAddingSvc(false); setErr('');
     } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
   }
 
   function handleSvcUpdated(updated) {
@@ -334,8 +347,8 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
               </div>
             )}
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <button className="btn btn-primary btn-sm" onClick={saveLabel}>{t.save}</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(dept.label); setGroup(dept.ldapGroup || ''); }}>{t.cancel}</button>
+              <button className="btn btn-primary btn-sm" onClick={saveLabel} disabled={busy}>{busy ? '…' : t.save}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(dept.label); setGroup(dept.ldapGroup || ''); }} disabled={busy}>{t.cancel}</button>
             </div>
           </div>
         ) : (
@@ -356,12 +369,12 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
         {!editing && (
           <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
             <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-              onClick={() => setEditing(true)}>
+              onClick={() => setEditing(true)} disabled={busy}>
               <Edit2 size={12} strokeWidth={2} />{t.edit}
             </button>
             <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-              onClick={handleDelete}>
-              <Trash2 size={12} strokeWidth={2} />{t.del}
+              onClick={handleDelete} disabled={busy}>
+              <Trash2 size={12} strokeWidth={2} />{busy ? '…' : t.del}
             </button>
           </div>
         )}
@@ -401,8 +414,8 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.65rem' }}>
-                <button className="btn btn-primary btn-sm" onClick={handleAddService} disabled={!newSvcLabel.trim()}>إضافة</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setAddingSvc(false); setNewSvcLabel(''); setNewSvcDesc(''); }}>إلغاء</button>
+                <button className="btn btn-primary btn-sm" onClick={handleAddService} disabled={!newSvcLabel.trim() || busy}>{busy ? '…' : 'إضافة'}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setAddingSvc(false); setNewSvcLabel(''); setNewSvcDesc(''); }} disabled={busy}>إلغاء</button>
               </div>
             </div>
           )}
@@ -538,6 +551,7 @@ function AutoRolesTab({ t }) {
   const [editingG, setEG]    = useState(null);
   const [editRole, setER]    = useState('STAFF');
   const [err,      setErr]   = useState('');
+  const [busy,     setBusy]  = useState(null); // group key currently in flight, or 'add'
   const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(async () => {
@@ -548,17 +562,23 @@ function AutoRolesTab({ t }) {
 
   async function handleAdd() {
     if (!newGroup.trim()) return;
+    setBusy('add');
     try { const { roleGroupMap } = await api.setRoleMapEntry({ ldapGroup: newGroup.trim(), role: newRole }); setMap(roleGroupMap); setNG(''); setErr(''); }
     catch (e) { setErr(e.message); }
+    finally { setBusy(null); }
   }
   async function handleUpdate(group) {
+    setBusy(group);
     try { const { roleGroupMap } = await api.setRoleMapEntry({ ldapGroup: group, role: editRole }); setMap(roleGroupMap); setEG(null); }
     catch (e) { setErr(e.message); }
+    finally { setBusy(null); }
   }
   async function handleDelete(group) {
     if (!await confirm(t.confirmDel)) return;
+    setBusy(group);
     try { const { roleGroupMap } = await api.deleteRoleEntry(group); setMap(roleGroupMap); }
     catch (e) { setErr(e.message); }
+    finally { setBusy(null); }
   }
 
   const entries = Object.entries(map);
@@ -602,18 +622,18 @@ function AutoRolesTab({ t }) {
                 <td>
                   {editingG === group ? (
                     <div style={{ display: 'flex', gap: '0.3rem' }}>
-                      <button className="btn btn-sm btn-primary" onClick={() => handleUpdate(group)}>{t.save}</button>
-                      <button className="btn btn-sm btn-ghost" onClick={() => setEG(null)}>{t.cancel}</button>
+                      <button className="btn btn-sm btn-primary" onClick={() => handleUpdate(group)} disabled={busy === group}>{busy === group ? '…' : t.save}</button>
+                      <button className="btn btn-sm btn-ghost" onClick={() => setEG(null)} disabled={busy === group}>{t.cancel}</button>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', gap: '0.3rem' }}>
                       <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                        onClick={() => { setEG(group); setER(role); }}>
+                        onClick={() => { setEG(group); setER(role); }} disabled={busy === group}>
                         <Edit2 size={11} strokeWidth={2} />{t.edit}
                       </button>
                       <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                        onClick={() => handleDelete(group)}>
-                        <Trash2 size={11} strokeWidth={2} />{t.del}
+                        onClick={() => handleDelete(group)} disabled={busy === group}>
+                        <Trash2 size={11} strokeWidth={2} />{busy === group ? '…' : t.del}
                       </button>
                     </div>
                   )}
@@ -635,8 +655,8 @@ function AutoRolesTab({ t }) {
               </td>
               <td style={{ padding: '0.5rem 0.75rem' }}>
                 <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                  onClick={handleAdd} disabled={!newGroup.trim()}>
-                  <Plus size={13} strokeWidth={2.5} />{t.add}
+                  onClick={handleAdd} disabled={!newGroup.trim() || busy === 'add'}>
+                  <Plus size={13} strokeWidth={2.5} />{busy === 'add' ? '…' : t.add}
                 </button>
               </td>
             </tr>
@@ -718,6 +738,8 @@ function TemplatesTab({ t }) {
   const [form,      setForm]      = useState({ ...blankTpl });
   const [msg,       setMsg]       = useState({ text: '', type: 'success' });
   const [loading,   setLoading]   = useState(true);
+  const [busy,      setBusy]      = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [confirm, confirmDialog] = useConfirm();
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -748,6 +770,7 @@ function TemplatesTab({ t }) {
   async function handleSave() {
     if (!form.name.trim()) return;
     const body = { ...form, expected_days: form.expected_days ? Number(form.expected_days) : null };
+    setBusy(true);
     try {
       if (editingId) {
         const { template } = await updateTemplate(editingId, body);
@@ -758,15 +781,18 @@ function TemplatesTab({ t }) {
       }
       flash(t.templateSaved); cancel();
     } catch (e) { flash(e.message, 'error'); }
+    finally { setBusy(false); }
   }
 
   async function handleDelete(id) {
     if (!await confirm(t.confirmDel)) return;
+    setDeletingId(id);
     try {
       await deleteTemplate(id);
       setTemplates(p => p.filter(x => x.id !== id));
       flash(t.templateDeleted);
     } catch (e) { flash(e.message, 'error'); }
+    finally { setDeletingId(null); }
   }
 
   return (
@@ -838,8 +864,8 @@ function TemplatesTab({ t }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={!form.name.trim()}>{t.save}</button>
-            <button className="btn btn-ghost btn-sm" onClick={cancel}>{t.cancel}</button>
+            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={!form.name.trim() || busy}>{busy ? '…' : t.save}</button>
+            <button className="btn btn-ghost btn-sm" onClick={cancel} disabled={busy}>{t.cancel}</button>
           </div>
         </div>
       )}
@@ -877,12 +903,12 @@ function TemplatesTab({ t }) {
                   <td>
                     <div style={{ display: 'flex', gap: '0.3rem' }}>
                       <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                        onClick={() => startEdit(tpl)}>
+                        onClick={() => startEdit(tpl)} disabled={deletingId === tpl.id}>
                         <Edit2 size={11} strokeWidth={2} />{t.edit}
                       </button>
                       <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                        onClick={() => handleDelete(tpl.id)}>
-                        <Trash2 size={11} strokeWidth={2} />{t.del}
+                        onClick={() => handleDelete(tpl.id)} disabled={deletingId === tpl.id}>
+                        <Trash2 size={11} strokeWidth={2} />{deletingId === tpl.id ? '…' : t.del}
                       </button>
                     </div>
                   </td>
@@ -902,6 +928,7 @@ function SessionsTab({ t }) {
   const [sessions,  setSessions]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [flash,     setFlash]     = useState({ text: '', type: 'success' });
+  const [loggingOut, setLoggingOut] = useState(null);
   const [confirm, confirmDialog] = useConfirm();
 
   function showFlash(text, type = 'success') {
@@ -920,11 +947,12 @@ function SessionsTab({ t }) {
 
   async function handleForceLogout(jti) {
     if (!await confirm(`${t.forceLogout}?`, { danger: true })) return;
+    setLoggingOut(jti);
     try {
       await forceLogoutApi(jti);
       setSessions(p => p.filter(s => s.jti !== jti));
       showFlash(t.sessionTerminated);
-    } catch (e) { showFlash(e.message, 'error'); }
+    } catch (e) { showFlash(e.message, 'error'); setLoggingOut(null); }
   }
 
   function fmt(dt) { return dt ? new Date(dt).toLocaleString() : '—'; }
@@ -979,8 +1007,8 @@ function SessionsTab({ t }) {
                     <td>
                       {!isYou && (
                         <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                          onClick={() => handleForceLogout(s.jti)}>
-                          <LogOut size={11} strokeWidth={2} />{t.forceLogout}
+                          onClick={() => handleForceLogout(s.jti)} disabled={loggingOut === s.jti}>
+                          <LogOut size={11} strokeWidth={2} />{loggingOut === s.jti ? '…' : t.forceLogout}
                         </button>
                       )}
                     </td>
