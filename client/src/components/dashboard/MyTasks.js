@@ -154,11 +154,14 @@ export default function MyTasks() {
         </div>
       ) : (
         <>
+          <div className="my-tasks-section-label">
+            {(t.myTasksToDo || 'To do').replace('{n}', open.length)}
+          </div>
           <div className="my-tasks-list">
             {open.map(task => (
               <MyTaskRow key={task.id} task={task} busy={busyId === task.id} onToggle={() => toggleDone(task)} onDelete={() => remove(task)} />
             ))}
-            {!open.length && <div className="empty-sub" style={{ padding: '0.75rem 1rem' }}>{t.myTasksEmpty}</div>}
+            {!open.length && <div className="empty-sub" style={{ padding: '0.75rem 1rem' }}>{t.myTasksAllDone || t.myTasksEmpty}</div>}
           </div>
 
           {done.length > 0 && (

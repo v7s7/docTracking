@@ -131,6 +131,7 @@ const T = {
     // Navigation
     dashboard:  'Dashboard',
     tasks:      'Tasks',
+    comingSoon: 'Coming soon.',
     myTasks:    'My Tasks',
     allTasks:   'All Tasks',
     users:      'Users',
@@ -316,6 +317,8 @@ const T = {
     myTasksAddPH:       'Add a task for yourself…',
     myTasksDueOptional: 'Due date (optional)',
     myTasksEmpty:       'Nothing on your list. Add one above.',
+    myTasksToDo:        'To do ({n})',
+    myTasksAllDone:     'All done — nothing pending.',
     myTasksShowDone:    'Show completed ({n})',
     myTasksHideDone:    'Hide completed',
     myTasksDue:         'Due',
@@ -581,6 +584,7 @@ const T = {
     // Navigation
     dashboard:  'لوحة المتابعة',
     tasks:      'المهام',
+    comingSoon: 'قريبًا.',
     myTasks:    'مهامي',
     allTasks:   'جميع المهام',
     users:      'المستخدمون',
@@ -766,6 +770,8 @@ const T = {
     myTasksAddPH:       'أضف مهمة خاصة بك…',
     myTasksDueOptional: 'تاريخ الاستحقاق (اختياري)',
     myTasksEmpty:       'لا توجد مهام في قائمتك. أضف مهمة أعلاه.',
+    myTasksToDo:        'قيد التنفيذ ({n})',
+    myTasksAllDone:     'تم إنجاز كل المهام.',
     myTasksShowDone:    'إظهار المكتملة ({n})',
     myTasksHideDone:    'إخفاء المكتملة',
     myTasksDue:         'الاستحقاق',

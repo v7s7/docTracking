@@ -7,9 +7,7 @@ import {
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
 import Dashboard from './components/dashboard/Dashboard';
-import TaskList from './components/tasks/TaskList';
 import TaskDetail from './components/tasks/TaskDetail';
-import CreateTaskModal from './components/tasks/CreateTaskModal';
 import UserManagement from './components/users/UserManagement';
 import NotificationBell from './components/notifications/NotificationBell';
 import Messages from './components/messages/Messages';
@@ -28,7 +26,6 @@ const NOTIF_BATCH_MS   = 5 * 60_000;
 const isElectron = typeof window !== 'undefined' && !!window.electron?.isElectron;
 
 // ── Role helpers ─────────────────────────────────────────────
-function isCS(role)      { return ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(role); }
 function isSuperAdmin(r) { return r === 'SUPER_ADMIN'; }
 
 // ── Nav items per role ───────────────────────────────────────
@@ -257,7 +254,6 @@ function AppShell() {
   const { t }             = useLang();
   const [view, setView]   = useState(() => (isElectron && user?.id) ? 'messages' : 'dashboard');
   const [taskId, setTaskId] = useState(null);
-  const [showCreate, setShowCreate] = useState(false);
   const [refresh, setRefresh]       = useState(0);
   const [unreadMsgs, setUnreadMsgs] = useState(0);
   const lastSeenMsgRef = useRef({});
@@ -390,14 +386,6 @@ function AppShell() {
   if (loading) return <div className="page-loading"><span className="spinner" /><span>{t.loading}</span></div>;
   if (!user)   return <LoginPage />;
 
-  const canCreateTask = isCS(user.role);
-
-  const createBtn = canCreateTask ? (
-    <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
-      + {t.createTask}
-    </button>
-  ) : null;
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Header user={user} onTaskClick={id => { setView('tasks'); setTaskId(id); }} />
@@ -415,11 +403,10 @@ function AppShell() {
           ) : view === 'dashboard' ? (
             <Dashboard onTaskClick={id => { setView('tasks'); setTaskId(id); }} key={refresh} />
           ) : view === 'tasks' ? (
-            <TaskList
-              key={refresh}
-              onSelect={id => setTaskId(id)}
-              createButton={createBtn}
-            />
+            <div className="empty-state">
+              <div className="empty-icon"><ClipboardList size={32} strokeWidth={1.5} /></div>
+              <div className="empty-sub">{t.comingSoon}</div>
+            </div>
           ) : view === 'messages' && user.id ? (
             <Messages />
           ) : view === 'users' && isSuperAdmin(user.role) ? (
@@ -434,13 +421,6 @@ function AppShell() {
           )}
         </main>
       </div>
-
-      {showCreate && (
-        <CreateTaskModal
-          onClose={() => setShowCreate(false)}
-          onCreated={() => { setRefresh(r => r + 1); setView('tasks'); }}
-        />
-      )}
     </div>
   );
 }
