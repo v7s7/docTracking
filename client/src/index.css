@@ -1,8 +1,8 @@
 /* ── CSS Variables ─────────────────────────────────────────── */
 :root {
-  --primary:        #C41E1E;   /* Crimson red — logo shield/arch */
-  --primary-hover:  #A51818;
-  --primary-light:  #FDEEEE;
+  --primary:        #2B5797;   /* Placeholder slate-blue — replace once logo colors are extracted */
+  --primary-hover:  #1F4275;
+  --primary-light:  #EAF1FA;
   --accent:         #2D6E2D;   /* Forest green — logo palm tree */
   --accent-hover:   #245724;
   --accent-light:   #EAF4EA;
@@ -766,7 +766,7 @@ tr:hover td { background: var(--surface-2); }
 
 .login-brand {
   flex: 1;
-  background: linear-gradient(155deg, #C41E1E 0%, #9A1818 60%, #7A1212 100%);
+  background: linear-gradient(155deg, #2B5797 0%, #1F4275 60%, #163058 100%);
   display: flex;
   flex-direction: column;
   align-items: center;

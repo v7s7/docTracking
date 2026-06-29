@@ -54,7 +54,7 @@ export default function LoginPage() {
             <div className="lang-toggle" style={{ background: '#f0f4f8', border: '1px solid #e2e8f0' }}>
               <button
                 className={`lang-btn${lang === 'ar' ? ' active' : ''}`}
-                style={{ color: lang === 'ar' ? '#C41E1E' : '#718096', background: lang === 'ar' ? '#fff' : 'transparent' }}
+                style={{ color: lang === 'ar' ? 'var(--primary)' : '#718096', background: lang === 'ar' ? '#fff' : 'transparent' }}
                 onClick={() => lang !== 'ar' && toggle()}
                 type="button"
               >
@@ -62,7 +62,7 @@ export default function LoginPage() {
               </button>
               <button
                 className={`lang-btn${lang === 'en' ? ' active' : ''}`}
-                style={{ color: lang === 'en' ? '#C41E1E' : '#718096', background: lang === 'en' ? '#fff' : 'transparent' }}
+                style={{ color: lang === 'en' ? 'var(--primary)' : '#718096', background: lang === 'en' ? '#fff' : 'transparent' }}
                 onClick={() => lang !== 'en' && toggle()}
                 type="button"
               >
