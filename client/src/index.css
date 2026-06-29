@@ -1079,6 +1079,46 @@ code.tag {
 
 .modal-close:hover { background: var(--surface-2); color: var(--text); }
 
+/* ── Confirm dialog (replaces window.confirm) ───────────────── */
+.confirm-box {
+  max-width: 380px;
+  padding: 1.75rem 1.5rem 1.5rem;
+  align-items: center;
+  text-align: center;
+}
+
+.confirm-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.9rem;
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.confirm-icon[data-danger="false"] {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.confirm-message {
+  margin: 0 0 1.4rem;
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.confirm-actions .btn { flex: 1; justify-content: center; }
+
 .modal-body {
   padding: 1.25rem 1.5rem;
   overflow-y: auto;

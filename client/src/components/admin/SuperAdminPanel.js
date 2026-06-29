@@ -12,6 +12,7 @@ import {
   Users, Settings2, LayoutTemplate, Monitor, Activity,
   LogOut, RefreshCw, ChevronLeft, Filter, ClipboardList,
 } from 'lucide-react';
+import { useConfirm } from '../common/ConfirmDialog';
 
 const FIELD_TYPES  = ['text', 'number', 'textarea', 'select', 'date', 'email', 'checkbox'];
 const VALID_ROLES  = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
@@ -96,6 +97,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
   const [addingF,   setAddingF]  = useState(false);
   const [editingF,  setEditingF] = useState(null);
   const [err,       setErr]      = useState('');
+  const [confirm, confirmDialog] = useConfirm();
 
   async function saveLabel() {
     try {
@@ -105,7 +107,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
   }
 
   async function handleDelete() {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
     try { await api.deleteService(deptId, service.id); onDeleted(service.id); }
     catch (e) { setErr(e.message); }
   }
@@ -135,7 +137,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
   }
 
   async function handleDeleteField(key) {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
     try {
       await api.deleteField(deptId, service.id, key);
       onUpdated({ ...service, fields: (service.fields || []).filter(fi => fi.key !== key) });
@@ -147,6 +149,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
       border: '1px solid var(--border)', borderRadius: 8, marginBottom: '0.4rem',
       background: 'var(--surface)', overflow: 'hidden',
     }}>
+      {confirmDialog}
       {/* Service header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.65rem 0.85rem', flexWrap: 'wrap' }}>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 0, display: 'flex' }}
@@ -266,6 +269,7 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
   const [newSvcLabel, setNewSvcLabel] = useState('');
   const [newSvcDesc,  setNewSvcDesc]  = useState('');
   const [err,       setErr]       = useState('');
+  const [confirm, confirmDialog] = useConfirm();
 
   const services = dept.services || [];
 
@@ -277,7 +281,7 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
   }
 
   async function handleDelete() {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
     try { await api.deleteDept(dept.id); onDeleted(dept.id); }
     catch (e) { setErr(e.message); }
   }
@@ -301,6 +305,7 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
 
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 10, marginBottom: '0.6rem', background: 'var(--surface)', overflow: 'hidden' }}>
+      {confirmDialog}
       {/* Dept header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem', flexWrap: 'wrap' }}>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 0, display: 'flex' }}
@@ -533,6 +538,7 @@ function AutoRolesTab({ t }) {
   const [editingG, setEG]    = useState(null);
   const [editRole, setER]    = useState('STAFF');
   const [err,      setErr]   = useState('');
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(async () => {
     try { const { roleGroupMap } = await api.getRoleMap(); setMap(roleGroupMap); }
@@ -550,7 +556,7 @@ function AutoRolesTab({ t }) {
     catch (e) { setErr(e.message); }
   }
   async function handleDelete(group) {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
     try { const { roleGroupMap } = await api.deleteRoleEntry(group); setMap(roleGroupMap); }
     catch (e) { setErr(e.message); }
   }
@@ -559,6 +565,7 @@ function AutoRolesTab({ t }) {
 
   return (
     <div>
+      {confirmDialog}
       <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 700 }}>{t.roleMaps}</h3>
       <p className="text-sm text-muted" style={{ marginBottom: '0.5rem' }}>{t.ldapNote}</p>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '0.6rem 0.85rem', marginBottom: '1.25rem', fontSize: '0.8rem', color: 'var(--accent-hover)' }}>
@@ -711,6 +718,7 @@ function TemplatesTab({ t }) {
   const [form,      setForm]      = useState({ ...blankTpl });
   const [msg,       setMsg]       = useState({ text: '', type: 'success' });
   const [loading,   setLoading]   = useState(true);
+  const [confirm, confirmDialog] = useConfirm();
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -753,7 +761,7 @@ function TemplatesTab({ t }) {
   }
 
   async function handleDelete(id) {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
     try {
       await deleteTemplate(id);
       setTemplates(p => p.filter(x => x.id !== id));
@@ -763,6 +771,7 @@ function TemplatesTab({ t }) {
 
   return (
     <div>
+      {confirmDialog}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.6rem' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.templates}</h3>
@@ -893,6 +902,7 @@ function SessionsTab({ t }) {
   const [sessions,  setSessions]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [flash,     setFlash]     = useState({ text: '', type: 'success' });
+  const [confirm, confirmDialog] = useConfirm();
 
   function showFlash(text, type = 'success') {
     setFlash({ text, type });
@@ -909,7 +919,7 @@ function SessionsTab({ t }) {
   useEffect(() => { load(); }, [load]);
 
   async function handleForceLogout(jti) {
-    if (!window.confirm(t.forceLogout + '?')) return;
+    if (!await confirm(`${t.forceLogout}?`, { danger: true })) return;
     try {
       await forceLogoutApi(jti);
       setSessions(p => p.filter(s => s.jti !== jti));
@@ -921,6 +931,7 @@ function SessionsTab({ t }) {
 
   return (
     <div>
+      {confirmDialog}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.6rem' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.activeSessions}</h3>

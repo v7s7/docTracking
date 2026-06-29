@@ -4,6 +4,7 @@ import {
   getPersonalTasks, createPersonalTask, updatePersonalTask, deletePersonalTask,
 } from '../../services/personalTaskService';
 import { ListTodo, Circle, CheckCircle2, Trash2, Plus, Calendar } from 'lucide-react';
+import { useConfirm } from '../common/ConfirmDialog';
 
 function isRowOverdue(task) {
   if (task.done || !task.due_at) return false;
@@ -40,6 +41,7 @@ export default function MyTasks() {
   const [adding,  setAdding]  = useState(false);
   const [busyId,  setBusyId]  = useState(null);
   const [showDone, setShowDone] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(() => {
     getPersonalTasks()
@@ -78,7 +80,7 @@ export default function MyTasks() {
   }
 
   async function remove(task) {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
     setBusyId(task.id);
     try {
       await deletePersonalTask(task.id);
@@ -93,6 +95,7 @@ export default function MyTasks() {
 
   return (
     <div className="card my-tasks-card">
+      {confirmDialog}
       <div className="card-header">
         <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <ListTodo size={17} strokeWidth={1.8} />

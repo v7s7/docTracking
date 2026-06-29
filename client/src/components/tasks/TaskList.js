@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getTasks, bulkAction } from '../../services/taskService';
 import { getDepartments } from '../../services/deptService';
 import { AlertTriangle, Search, Inbox, Send, X, CheckSquare, Clock, RotateCcw } from 'lucide-react';
+import { useConfirm } from '../common/ConfirmDialog';
 
 const STATUS_COLORS = {
   new:         { bg: '#FFF0F0', color: '#C41E1E' },
@@ -130,6 +131,8 @@ export default function TaskList({ onSelect, createButton }) {
   const [selected,     setSelected]     = useState(new Set());
   const [showFwd,      setShowFwd]      = useState(false);
   const [flash,        setFlash]        = useState('');
+  const [bulkBusy,     setBulkBusy]     = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   // Tab → status filter mapping
   const TAB_STATUS = {
@@ -193,12 +196,14 @@ export default function TaskList({ onSelect, createButton }) {
   }
 
   async function handleBulkClose() {
-    if (!window.confirm(`${t.bulkClose} (${selected.size})?`)) return;
+    if (!await confirm(`${t.bulkClose} (${selected.size})?`)) return;
+    setBulkBusy(true);
     try {
       const { processed } = await bulkAction({ action: 'close', task_ids: [...selected] });
       showFlash((t.bulkDone || 'Done — {n} tasks updated.').replace('{n}', processed));
       setSelected(new Set()); load();
     } catch (e) { showFlash(`ERR:${e.message}`); }
+    finally { setBulkBusy(false); }
   }
 
   async function handleBulkForward(dept_id, note) {
@@ -218,6 +223,7 @@ export default function TaskList({ onSelect, createButton }) {
 
   return (
     <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+      {confirmDialog}
       <div className="card">
         <div className="card-header" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
@@ -420,9 +426,9 @@ export default function TaskList({ onSelect, createButton }) {
             </button>
           )}
           {isCS && (
-            <button onClick={handleBulkClose}
-              style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 7, padding: '0.4rem 0.9rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.83rem' }}>
-              {t.bulkClose}
+            <button onClick={handleBulkClose} disabled={bulkBusy}
+              style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 7, padding: '0.4rem 0.9rem', cursor: bulkBusy ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.83rem', opacity: bulkBusy ? 0.6 : 1 }}>
+              {bulkBusy ? '…' : t.bulkClose}
             </button>
           )}
           <button onClick={() => setSelected(new Set())}

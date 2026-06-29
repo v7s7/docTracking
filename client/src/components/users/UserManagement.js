@@ -8,6 +8,7 @@ import {
   X, AlertTriangle, Users, Network, UserPlus, Search,
   RefreshCw, CheckCircle, XCircle, Edit2, Trash2, ShieldCheck,
 } from 'lucide-react';
+import { useConfirm } from '../common/ConfirmDialog';
 
 // Dropdown order: most-common role first so STAFF is visible at the top
 const VALID_ROLES = ['STAFF', 'CUSTOMER_SERVICE', 'MANAGER', 'ADMIN', 'SUPER_ADMIN', 'READONLY'];
@@ -418,6 +419,8 @@ function LocalUsersSection({ t, onChanged }) {
   const [modal,   setModal]   = useState(null);
   const [msg,     setMsg]     = useState('');
   const [search,  setSearch]  = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(async () => {
     try {
@@ -446,13 +449,14 @@ function LocalUsersSection({ t, onChanged }) {
   }
 
   async function handleDelete(u) {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
+    setDeletingId(u.id);
     try {
       await deleteUser(u.id);
       setUsers(p => p.filter(x => x.id !== u.id));
       flash(t.userDeleted);
       onChanged?.();
-    } catch (e) { flash(`ERR:${e.message}`); }
+    } catch (e) { flash(`ERR:${e.message}`); setDeletingId(null); }
   }
 
   const filtered = users.filter(u => {
@@ -465,6 +469,7 @@ function LocalUsersSection({ t, onChanged }) {
 
   return (
     <div className="card">
+      {confirmDialog}
       <div className="card-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           <UserPlus size={18} strokeWidth={1.7} style={{ color: 'var(--primary)' }} />
@@ -532,9 +537,9 @@ function LocalUsersSection({ t, onChanged }) {
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
                         <Edit2 size={12} strokeWidth={2} />{t.edit}
                       </button>
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(u)}
+                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(u)} disabled={deletingId === u.id}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <Trash2 size={12} strokeWidth={2} />{t.del}
+                        <Trash2 size={12} strokeWidth={2} />{deletingId === u.id ? '…' : t.del}
                       </button>
                     </div>
                   </td>
