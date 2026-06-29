@@ -779,29 +779,29 @@ tr:hover td { background: var(--surface-2); }
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 80% 80% at 20% 20%, rgba(13,124,126,0.25) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 60% at 80% 80%, rgba(27,58,92,0.4) 0%, transparent 50%);
+    radial-gradient(ellipse 80% 80% at 20% 20%, rgba(255,255,255,0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 60% at 80% 80%, rgba(0,0,0,0.25) 0%, transparent 50%);
 }
 
 .login-brand-inner { position: relative; z-index: 1; text-align: center; }
 
 .login-logo-ring {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
+  width: 132px;
+  height: 132px;
+  border-radius: 18px;
   background: #FFFFFF;
   border: 2px solid rgba(255,255,255,0.4);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.2rem;
   margin: 0 auto 1.5rem;
-  overflow: hidden;
+  padding: 10px;
 }
 
 .login-logo-img {
-  width: 78%;
-  height: 78%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 

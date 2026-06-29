@@ -105,6 +105,7 @@ export default function MyTasks() {
 
       <form className="my-tasks-add-row" onSubmit={handleAdd}>
         <input
+          type="text"
           className="form-control"
           value={title}
           onChange={e => setTitle(e.target.value)}
