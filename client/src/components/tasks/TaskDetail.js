@@ -7,7 +7,7 @@ import { StatusBadge, PriorityBadge } from './TaskList';
 import {
   PlusCircle, ArrowRight, RotateCcw, MessageSquare, CheckCircle,
   ChevronLeft, X, Send, AlertTriangle, Clock, PlayCircle,
-  Building2, RefreshCw, Users,
+  Building2, RefreshCw, Users, Shuffle,
 } from 'lucide-react';
 
 const EVENT_ICONS = {
@@ -156,7 +156,10 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
   const cycles     = countCycles(task.events);
 
   // Button visibility
-  const canForward  = isCS  && !isClosed;
+  // Forward = CS sends a task that's still at reception (no dept yet)
+  // Reassign = CS moves a task that's already at a dept directly to another dept
+  const canForward  = isCS && !task.current_dept_id && !isClosed;
+  const canReassign = isCS && !!task.current_dept_id && !isClosed;
   const canClose    = isCS  && !isClosed;
   const canAccept   = isMyDept && (task.status === 'assigned');
   const canReturn   = isMyDept && (task.status === 'assigned' || task.status === 'in_progress');
@@ -207,6 +210,12 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
               <button className="btn btn-primary btn-sm" onClick={() => setModal('forward')} disabled={busy}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                 <Send size={13} strokeWidth={2} />{t.forwardTask}
+              </button>
+            )}
+            {canReassign && (
+              <button className="btn btn-sm" onClick={() => setModal('reassign')} disabled={busy}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: '#7c3aed', color: '#fff', border: 'none', fontWeight: 600 }}>
+                <Shuffle size={13} strokeWidth={2} />{t.reassignTask}
               </button>
             )}
             {canAccept && (
@@ -486,6 +495,37 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
               onClick={() => act(() => closeTask(task.id, { note }), t.taskClosed)}>
               <CheckCircle size={13} strokeWidth={2} />{t.closeTask}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Reassign modal ── */}
+      {modal === 'reassign' && (
+        <Modal title={t.reassignTask} onClose={() => setModal(null)}>
+          <p style={{ marginBottom: '1rem', color: 'var(--text-2)', fontSize: '0.9rem' }}>
+            {t.reassignExplain}
+          </p>
+          <div className="form-group" style={{ marginBottom: '1rem' }}>
+            <label className="form-label">{t.selectDeptFwd} <span className="req">*</span></label>
+            <select className="form-control" value={toDept} onChange={e => setToDept(e.target.value)}>
+              <option value="">{t.selectDeptPH}</option>
+              {fwdDepts.filter(d => d.id !== task.current_dept_id).map(d => (
+                <option key={d.id} value={d.id}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ marginBottom: '1rem' }}>
+            <label className="form-label">{t.taskNote}</label>
+            <textarea className="form-control" rows={3} value={note} onChange={e => setNote(e.target.value)}
+              placeholder={t.reassignNotePH} autoFocus />
+          </div>
+          <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}>{t.cancel}</button>
+            <button className="btn btn-sm" disabled={!toDept || busy}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: '#7c3aed', color: '#fff', border: 'none', fontWeight: 600 }}
+              onClick={() => act(() => forwardTask(task.id, { to_dept_id: toDept, note }), t.taskReassigned)}>
+              <Shuffle size={13} strokeWidth={2} />{t.reassignTask}
             </button>
           </div>
         </Modal>

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LangProvider, useLang } from './context/LangContext';
 import {
-  LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, MessageCircle, Camera, Trash2,
+  LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, MessageCircle, Camera, Trash2, Download,
 } from 'lucide-react';
+import { exportTasks } from './services/taskService';
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
 import Dashboard from './components/dashboard/Dashboard';
@@ -406,6 +407,12 @@ function AppShell() {
             <div className="empty-state">
               <div className="empty-icon"><ClipboardList size={32} strokeWidth={1.5} /></div>
               <div className="empty-sub">{t.comingSoon}</div>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                onClick={() => exportTasks()}>
+                <Download size={14} strokeWidth={2} />{t.exportCSV}
+              </button>
             </div>
           ) : view === 'messages' && user.id ? (
             <Messages />

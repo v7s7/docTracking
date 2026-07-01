@@ -23,3 +23,19 @@ export const closeTask   = (id, body)    => req(`/tasks/${id}/close`, { method: 
 export const addComment   = (id, note, tagged_dept_id) => req(`/tasks/${id}/comment`, { method: 'POST', body: JSON.stringify({ note, tagged_dept_id: tagged_dept_id || undefined }) });
 export const getDashboard = (params = {}) => req(`/dashboard?${new URLSearchParams(params)}`);
 export const bulkAction   = (body)        => req('/tasks/bulk', { method: 'POST', body: JSON.stringify(body) });
+
+export function exportTasks(params = {}) {
+  const qs  = new URLSearchParams(params).toString();
+  const url = `${BASE}/tasks/export${qs ? '?' + qs : ''}`;
+  fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } })
+    .then(r => r.blob())
+    .then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `tasks-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    });
+}

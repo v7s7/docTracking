@@ -124,6 +124,57 @@ router.post('/bulk', AUTH, requireCS, (req, res) => {
   res.json({ success: true, processed });
 });
 
+// ── GET /tasks/export — download as CSV ──────────────────────
+router.get('/export', AUTH, (req, res) => {
+  const user = req.user;
+  const { status, dept, search } = req.query;
+
+  let where = [];
+  let params = [];
+
+  if (!canSeeAll(user.role)) {
+    where.push(`(
+      current_dept_id = ?
+      OR id IN (SELECT task_id FROM task_events WHERE type = 'consultation' AND to_dept = ?)
+    )`);
+    params.push(user.dept_id || '', user.dept_id || '');
+  }
+  if (status) { where.push('status = ?'); params.push(status); }
+  if (dept)   { where.push('current_dept_id = ?'); params.push(dept); }
+  if (search) {
+    where.push('(title LIKE ? OR serial LIKE ? OR source_entity LIKE ?)');
+    const q = `%${search}%`;
+    params.push(q, q, q);
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const tasks = db.prepare(
+    `SELECT * FROM tasks ${whereClause} ORDER BY updated_at DESC`
+  ).all(...params);
+
+  const escape = v => `"${String(v || '').replace(/"/g, '""')}"`;
+  const headers = ['Serial', 'Title', 'Status', 'Priority', 'Type', 'Source', 'Department', 'Expected', 'Completed', 'Created'];
+  const rows = tasks.map(t => [
+    t.serial,
+    escape(t.title),
+    t.status,
+    t.priority,
+    t.type,
+    escape(t.source_entity),
+    t.current_dept_id || '',
+    t.expected_at   ? t.expected_at.slice(0, 10) : '',
+    t.completed_at  ? t.completed_at.slice(0, 10) : '',
+    t.created_at    ? t.created_at.slice(0, 10) : '',
+  ]);
+
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+  const filename = `tasks-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send('﻿' + csv); // BOM prefix for Excel UTF-8 compatibility
+});
+
 // ── GET /tasks/:id ───────────────────────────────────────────
 router.get('/:id', AUTH, (req, res) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);

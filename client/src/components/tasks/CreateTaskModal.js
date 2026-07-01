@@ -93,10 +93,22 @@ function CSWizard({ departments, onClose, onCreated }) {
   const { t } = useLang();
 
   // Step: 'sender' | 'select' | 'fields'
-  const [step,         setStep]        = useState('sender');
-  const [senderType,   setSenderType]  = useState('شخص');
-  const [senderName,   setSenderName]  = useState('');
-  const [senderPhone,  setSenderPhone] = useState('');
+  const [step,          setStep]         = useState('sender');
+  const [senderType,    setSenderType]   = useState('شخص');
+  const [senderName,    setSenderName]   = useState('');
+  const [senderPhone,   setSenderPhone]  = useState('');
+  const [recentSenders, setRecentSenders] = useState([]);
+
+  useEffect(() => {
+    try { setRecentSenders(JSON.parse(localStorage.getItem('recentSenders') || '[]')); } catch(_) {}
+  }, []);
+
+  function saveRecentSender(type, name, phone) {
+    let recent = [];
+    try { recent = JSON.parse(localStorage.getItem('recentSenders') || '[]'); } catch(_) {}
+    recent = [{ type, name, phone }, ...recent.filter(s => s.name !== name)].slice(0, 5);
+    try { localStorage.setItem('recentSenders', JSON.stringify(recent)); } catch(_) {}
+  }
 
   // Department + service selection
   const [selectedDept,    setSelectedDept]    = useState(null);
@@ -220,6 +232,7 @@ function CSWizard({ departments, onClose, onCreated }) {
         target_dept_id: selectedDept.id,
       };
       const res = await createTask(payload);
+      saveRecentSender(senderType, senderName, senderPhone);
       onCreated?.(res.task);
       onClose();
     } catch (e) { setErr(e.message); }
@@ -357,6 +370,30 @@ function CSWizard({ departments, onClose, onCreated }) {
                 />
               </div>
             </div>
+
+            {recentSenders.length > 0 && (
+              <div style={{ marginTop: '1.1rem' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.45rem' }}>
+                  {t.recentSenders}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {recentSenders.map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => { setSenderType(s.type); setSenderName(s.name); setSenderPhone(s.phone || ''); }}
+                      style={{
+                        padding: '0.28rem 0.75rem', borderRadius: 99,
+                        background: 'var(--surface-2)', border: '1px solid var(--border)',
+                        cursor: 'pointer', fontSize: '0.82rem', fontWeight: 500,
+                        color: 'var(--text-2)',
+                      }}>
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {err && (
               <div className="alert alert-error" style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
