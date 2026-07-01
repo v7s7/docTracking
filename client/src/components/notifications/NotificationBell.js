@@ -110,7 +110,7 @@ export default function NotificationBell({ onTaskClick }) {
     try { localStorage.setItem('notifSnoozed', JSON.stringify(updated)); } catch(_) {}
     markOneRead(item.id).catch(() => {});
     setItems(p => p.map(i => i.id === item.id ? { ...i, is_read: 1 } : i));
-    setUnread(p => Math.max(0, p - 1));
+    if (!item.is_read) setUnread(p => Math.max(0, p - 1));
   }
 
   function handleEnableDesktopAlerts(e) {

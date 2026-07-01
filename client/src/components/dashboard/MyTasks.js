@@ -264,7 +264,7 @@ export default function MyTasks() {
               <MyTaskRow
                 key={task.id} task={task}
                 busy={busyId === task.id}
-                catLabel={task.category}
+                catLabel={t[task.category]}
                 onToggle={() => toggleDone(task)}
                 onDelete={() => remove(task)}
                 onSnooze={() => snoozeTask(task)}
@@ -284,7 +284,7 @@ export default function MyTasks() {
                     <MyTaskRow
                       key={task.id} task={task}
                       busy={busyId === task.id}
-                      catLabel={task.category}
+                      catLabel={t[task.category]}
                       onToggle={() => toggleDone(task)}
                       onDelete={() => remove(task)}
                       onSnooze={() => snoozeTask(task)}
