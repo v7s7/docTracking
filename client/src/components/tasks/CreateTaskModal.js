@@ -11,9 +11,9 @@ import {
 
 // ── Sender type icons ─────────────────────────────────────────
 const SENDER_TYPES = [
-  { value: 'شخص',  icon: <User      size={16} strokeWidth={2} />, label: 'شخص' },
-  { value: 'شركة', icon: <Briefcase size={16} strokeWidth={2} />, label: 'شركة' },
-  { value: 'أخرى', icon: <HelpCircle size={16} strokeWidth={2} />, label: 'أخرى' },
+  { value: 'شخص',  icon: <User      size={16} strokeWidth={2} />, labelKey: 'senderTypePerson' },
+  { value: 'شركة', icon: <Briefcase size={16} strokeWidth={2} />, labelKey: 'senderTypeCompany' },
+  { value: 'أخرى', icon: <HelpCircle size={16} strokeWidth={2} />, labelKey: 'senderTypeOther' },
 ];
 
 // ── Generic form defaults (SUPER_ADMIN / ADMIN uses generic form) ─────────
@@ -30,6 +30,7 @@ function addDays(n) {
 
 // ── Dynamic field renderer ────────────────────────────────────
 function DeptField({ field, value, onChange }) {
+  const { t } = useLang();
   const { key, label, type, placeholder, options } = field;
 
   if (type === 'checkbox') {
@@ -60,7 +61,7 @@ function DeptField({ field, value, onChange }) {
       <div className="form-group">
         <label className="form-label">{label} {field.required && <span className="req">*</span>}</label>
         <select className="form-control" value={value} onChange={e => onChange(e.target.value)}>
-          <option value="">— اختر —</option>
+          <option value="">{t.selectOptionPH}</option>
           {(options || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
         </select>
       </div>
@@ -89,6 +90,7 @@ function DeptField({ field, value, onChange }) {
 // ── CS multi-step wizard ──────────────────────────────────────
 function CSWizard({ departments, onClose, onCreated }) {
   const { user } = useAuth();
+  const { t } = useLang();
 
   // Step: 'sender' | 'select' | 'fields'
   const [step,         setStep]        = useState('sender');
@@ -230,12 +232,12 @@ function CSWizard({ departments, onClose, onCreated }) {
       <span
         style={{ color: step === 'sender' ? 'var(--accent-hover)' : 'var(--text-2)', fontWeight: step === 'sender' ? 700 : 400, cursor: step !== 'sender' ? 'pointer' : 'default' }}
         onClick={() => step !== 'sender' && setStep('sender')}
-      >معلومات المُراجع</span>
+      >{t.senderInfoLabel}</span>
       <ChevronRight size={12} strokeWidth={2} />
       <span
         style={{ color: (step === 'select' || step === 'fields') ? 'var(--accent-hover)' : 'var(--text-3)', fontWeight: (step === 'select') ? 700 : 400, cursor: isSenderValid() && step !== 'select' && step !== 'sender' ? 'pointer' : 'default' }}
         onClick={() => isSenderValid() && step === 'fields' && backToDepts()}
-      >{selectedDept ? selectedDept.label : 'اختر الإدارة'}</span>
+      >{selectedDept ? selectedDept.label : t.chooseDeptPH}</span>
       {selectedService && (
         <>
           <ChevronRight size={12} strokeWidth={2} />
@@ -253,7 +255,7 @@ function CSWizard({ departments, onClose, onCreated }) {
         <input
           className="form-control"
           style={{ paddingInlineStart: '2.1rem', fontSize: '0.88rem' }}
-          placeholder="ابحث عن خدمة أو إدارة..."
+          placeholder={t.searchServicePH}
           value={query}
           onChange={e => { setQuery(e.target.value); setShowDropdown(true); }}
           onFocus={() => query && setShowDropdown(true)}
@@ -301,29 +303,29 @@ function CSWizard({ departments, onClose, onCreated }) {
         {step === 'sender' && (
           <div>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-2)', marginBottom: '1.1rem' }}>
-              أدخل معلومات الجهة أو الشخص المُراجع
+              {t.enterSenderInfo}
             </p>
 
             {/* Sender type toggle */}
             <div className="form-group full-width">
-              <label className="form-label">الجهة المرسلة <span className="req">*</span></label>
+              <label className="form-label">{t.senderLabel} <span className="req">*</span></label>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {SENDER_TYPES.map(t => (
+                {SENDER_TYPES.map(st => (
                   <button
-                    key={t.value}
+                    key={st.value}
                     type="button"
-                    onClick={() => setSenderType(t.value)}
+                    onClick={() => setSenderType(st.value)}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
                       padding: '0.45rem 1rem', borderRadius: 8, cursor: 'pointer', fontWeight: 600,
                       fontSize: '0.88rem', border: '1.5px solid',
-                      borderColor: senderType === t.value ? 'var(--accent)' : 'var(--border)',
-                      background: senderType === t.value ? 'var(--accent-light)' : 'var(--surface)',
-                      color: senderType === t.value ? 'var(--accent-hover)' : 'var(--text-2)',
+                      borderColor: senderType === st.value ? 'var(--accent)' : 'var(--border)',
+                      background: senderType === st.value ? 'var(--accent-light)' : 'var(--surface)',
+                      color: senderType === st.value ? 'var(--accent-hover)' : 'var(--text-2)',
                       transition: 'all 0.15s',
                     }}
                   >
-                    {t.icon}{t.label}
+                    {st.icon}{t[st.labelKey]}
                   </button>
                 ))}
               </div>
@@ -332,19 +334,19 @@ function CSWizard({ departments, onClose, onCreated }) {
             <div className="form-grid" style={{ marginTop: '0.75rem' }}>
               <div className="form-group">
                 <label className="form-label">
-                  {senderType === 'شركة' ? 'اسم الشركة / الجهة' : 'الاسم الكامل'} <span className="req">*</span>
+                  {senderType === 'شركة' ? t.companyOrEntityName : t.fullName} <span className="req">*</span>
                 </label>
                 <input
                   className="form-control"
                   value={senderName}
                   onChange={e => setSenderName(e.target.value)}
-                  placeholder={senderType === 'شركة' ? 'اسم الشركة أو الجهة' : 'الاسم الكامل'}
+                  placeholder={senderType === 'شركة' ? t.companyOrEntityName : t.fullName}
                   autoFocus
                   required
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">رقم الهاتف</label>
+                <label className="form-label">{t.phoneNumber}</label>
                 <input
                   className="form-control"
                   value={senderPhone}
@@ -372,7 +374,7 @@ function CSWizard({ departments, onClose, onCreated }) {
             {!selectedDept ? (
               <>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-2)', marginBottom: '0.85rem' }}>
-                  اختر الإدارة المعنية بالمعاملة
+                  {t.chooseDeptForTask}
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.65rem' }}>
                   {departments.map(dept => (
@@ -393,7 +395,7 @@ function CSWizard({ departments, onClose, onCreated }) {
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.15rem' }}>{dept.label}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
-                          {(dept.services || []).length} خدمة
+                          {t.nServices.replace('{n}', (dept.services || []).length)}
                         </div>
                       </div>
                     </button>
@@ -405,13 +407,13 @@ function CSWizard({ departments, onClose, onCreated }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.85rem' }}>
                   <button type="button" onClick={backToDepts}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: 0, fontWeight: 600 }}>
-                    <ChevronRight size={14} strokeWidth={2.5} style={{ transform: 'rotate(180deg)' }} /> الإدارات
+                    <ChevronRight size={14} strokeWidth={2.5} style={{ transform: 'rotate(180deg)' }} /> {t.backToDepts}
                   </button>
                   <ChevronRight size={12} style={{ color: 'var(--text-3)' }} />
                   <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>{selectedDept.label}</span>
                 </div>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-2)', marginBottom: '0.85rem' }}>
-                  اختر نوع الخدمة
+                  {t.chooseServiceType}
                 </p>
                 <div style={{ display: 'grid', gap: '0.6rem' }}>
                   {(selectedDept.services || []).map(svc => (
@@ -440,7 +442,7 @@ function CSWizard({ departments, onClose, onCreated }) {
                   ))}
                   {(selectedDept.services || []).length === 0 && (
                     <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)', fontSize: '0.85rem' }}>
-                      لا توجد خدمات مضافة لهذه الإدارة
+                      {t.noServicesForDept}
                     </div>
                   )}
                 </div>
@@ -459,14 +461,14 @@ function CSWizard({ departments, onClose, onCreated }) {
               borderRadius: 8, display: 'flex', alignItems: 'center', gap: '0.6rem',
               fontSize: '0.82rem', flexWrap: 'wrap',
             }}>
-              <span style={{ color: 'var(--text-3)' }}>المُراجع:</span>
+              <span style={{ color: 'var(--text-3)' }}>{t.reviewerLabel}</span>
               <strong>{senderType}</strong>
               <span>·</span>
               <strong>{senderName}</strong>
               {senderPhone && <><span>·</span><span dir="ltr">{senderPhone}</span></>}
               <button type="button" onClick={() => setStep('sender')}
                 style={{ marginInlineStart: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '0.78rem', fontWeight: 600 }}>
-                تعديل
+                {t.edit}
               </button>
             </div>
 
@@ -489,7 +491,7 @@ function CSWizard({ departments, onClose, onCreated }) {
               </div>
               <button type="button" onClick={backToSelect}
                 style={{ marginInlineStart: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '0.78rem', fontWeight: 600, flexShrink: 0 }}>
-                تغيير
+                {t.changeBtn}
               </button>
             </div>
 
@@ -512,7 +514,7 @@ function CSWizard({ departments, onClose, onCreated }) {
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-3)', fontSize: '0.85rem' }}>
-                لا توجد حقول لهذه الخدمة — سيتم إنشاء المعاملة مباشرة
+                {t.noFieldsForService}
               </div>
             )}
           </div>
@@ -521,7 +523,7 @@ function CSWizard({ departments, onClose, onCreated }) {
 
       {/* ── Footer ─────────────────────────────────── */}
       <div className="modal-foot">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>إلغاء</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>{t.cancel}</button>
 
         {step === 'sender' && (
           <button
@@ -531,7 +533,7 @@ function CSWizard({ departments, onClose, onCreated }) {
             disabled={!isSenderValid()}
             onClick={() => { if (isSenderValid()) setStep('select'); }}
           >
-            التالي <ArrowRight size={14} strokeWidth={2.5} />
+            {t.nextBtn} <ArrowRight size={14} strokeWidth={2.5} />
           </button>
         )}
 
@@ -539,7 +541,7 @@ function CSWizard({ departments, onClose, onCreated }) {
           <button type="button" className="btn btn-ghost btn-sm"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
             onClick={() => setStep('sender')}>
-            <ChevronRight size={14} strokeWidth={2.5} style={{ transform: 'rotate(180deg)' }} /> رجوع
+            <ChevronRight size={14} strokeWidth={2.5} style={{ transform: 'rotate(180deg)' }} /> {t.backBtn}
           </button>
         )}
 
@@ -550,7 +552,7 @@ function CSWizard({ departments, onClose, onCreated }) {
             disabled={busy || !isFieldsValid()}
           >
             {busy && <span className="spinner" style={{ width: 14, height: 14, borderTopColor: '#fff' }} />}
-            إنشاء المعاملة
+            {t.createTransaction}
           </button>
         )}
       </div>
@@ -639,7 +641,7 @@ function StaffForm({ departments, user, onClose, onCreated }) {
       <>
         <div className="modal-body">
           <p style={{ marginBottom: '1rem', color: 'var(--text-2)', fontSize: '0.88rem' }}>
-            سيتم إرسال النموذج تلقائياً إلى خدمة العملاء
+            {t.formAutoSentToCS}
           </p>
           <div style={{ display: 'grid', gap: '0.75rem' }}>
             {availableForms.map(item => (
@@ -688,7 +690,7 @@ function StaffForm({ departments, user, onClose, onCreated }) {
                 {selectedForm.service.description || selectedForm.service.label}
               </div>
               <div style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>
-                سيتم إرسال هذا النموذج تلقائياً إلى خدمة العملاء · جميع الحقول الإلزامية مُعلّمة بـ *
+                {t.formAutoSentToCSNote}
               </div>
             </div>
           </div>
@@ -697,7 +699,7 @@ function StaffForm({ departments, user, onClose, onCreated }) {
             <button type="button"
               style={{ marginBottom: '1rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '0.82rem', fontWeight: 600, padding: 0, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
               onClick={() => { setSelectedForm(null); setShowPicker(true); }}>
-              <ChevronRight size={13} strokeWidth={2.5} style={{ transform: 'rotate(180deg)' }} /> تغيير النوع
+              <ChevronRight size={13} strokeWidth={2.5} style={{ transform: 'rotate(180deg)' }} /> {t.changeType}
             </button>
           )}
 
@@ -838,11 +840,11 @@ function GenericForm({ onClose, onCreated }) {
             <label className="form-label">{t.taskDelivery}</label>
             <select className="form-control" value={form.delivery_method} onChange={e => set('delivery_method', e.target.value)}>
               <option value="">—</option>
-              <option value="يدوي">يدوي</option>
-              <option value="بريد">بريد</option>
-              <option value="إيميل">إيميل</option>
-              <option value="فاكس">فاكس</option>
-              <option value="أخرى">أخرى</option>
+              <option value="يدوي">{t.deliveryManual}</option>
+              <option value="بريد">{t.deliveryMail}</option>
+              <option value="إيميل">{t.deliveryEmail}</option>
+              <option value="فاكس">{t.deliveryFax}</option>
+              <option value="أخرى">{t.deliveryOther}</option>
             </select>
           </div>
           <div className="form-group">
@@ -884,7 +886,7 @@ export default function CreateTaskModal({ onClose, onCreated }) {
   const isGeneric    = ['SUPER_ADMIN', 'ADMIN'].includes(user?.role);
   const isStaff      = ['STAFF', 'MANAGER'].includes(user?.role);
 
-  const modalTitle = isCS ? 'إنشاء معاملة جديدة' : t.createTask;
+  const modalTitle = isCS ? t.createTransaction : t.createTask;
 
   return (
     <div className="modal-overlay" onClick={onClose}>

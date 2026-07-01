@@ -6,17 +6,24 @@ import {
   getConversationMembers, streamUrl, startGroupChat, hideConversation, unhideConversation,
   getReadStatus, sendTyping, toggleReaction, searchMessages,
   getPinnedMessage, pinMessage, unpinMessage,
+  uploadGroupAvatar, setGroupAvatarColor as setGroupAvatarColorApi, removeGroupAvatar,
 } from '../../services/messageService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
   Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff, Loader2,
+  Settings, Camera, Trash2,
 } from 'lucide-react';
+
+const AVATAR_COLORS = ['#4f46e5', '#0891b2', '#16a34a', '#d97706', '#dc2626', '#9333ea', '#475569'];
 
 const THREAD_POLL_MS = 4000;
 const LIST_POLL_MS   = 15000;
 const ONLINE_MS      = 2 * 60 * 1000;
 const TYPING_IDLE_MS = 4000;
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+// Don't fire more than one desktop notification per conversation within this window —
+// a fast back-and-forth in a busy channel shouldn't trigger a notification per message.
+const NOTIF_THROTTLE_MS = 8000;
 
 function initials(name) {
   return (name || '?').split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
@@ -39,7 +46,10 @@ function isOnline(user) {
 }
 
 function isAway(user) {
-  return isOnline(user) && user?.presence_status === 'away';
+  if (!isOnline(user)) return false;
+  // A manually-set custom status (e.g. "In a meeting", "Out of office") means
+  // the user is connected but not really available, so show it as away too.
+  return user?.presence_status === 'away' || !!user?.status_text;
 }
 
 // Managers and above can pin/unpin announcements in a conversation.
@@ -115,11 +125,20 @@ function renderContent(content, mentions, currentUserId, searchQuery) {
   return parts;
 }
 
-function Avatar({ name, isGroup, isDept, online, away }) {
+function Avatar({ name, isGroup, isDept, online, away, avatarUrl, avatarColor }) {
+  const style = !isDept && !avatarUrl && avatarColor ? { background: avatarColor } : undefined;
   return (
-    <div className={`msg-avatar${isGroup ? ' dept' : ''}`}>
-      {isDept ? <Building2 size={18} strokeWidth={1.8} /> : isGroup ? <Users size={18} strokeWidth={1.8} /> : initials(name)}
-      {online && <span className={`msg-online-dot${away ? ' away' : ''}`} />}
+    <div className={`msg-avatar${isGroup ? ' dept' : ''}`} style={style}>
+      {isDept
+        ? <Building2 size={18} strokeWidth={1.8} />
+        : avatarUrl
+          ? <img src={fileUrl(avatarUrl)} alt="" className="msg-avatar-img" />
+          : isGroup
+            ? <Users size={18} strokeWidth={1.8} />
+            : initials(name)}
+      {!isGroup && !isDept && online !== undefined && (
+        <span className={`msg-online-dot${away ? ' away' : online ? '' : ' offline'}`} />
+      )}
     </div>
   );
 }
@@ -140,7 +159,9 @@ function ConversationItem({ conv, active, onClick, onToggleHide, t }) {
 
   return (
     <div className={`msg-list-item${active ? ' active' : ''}`} onClick={onClick}>
-      <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away} />
+      <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away}
+        avatarUrl={conv.type === 'group' ? conv.avatar_url : conv.other_user?.avatar_url}
+        avatarColor={conv.type === 'group' ? conv.avatar_color : conv.other_user?.avatar_color} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-top">
           <span className="msg-list-item-name">{name}</span>
@@ -169,7 +190,8 @@ function ConversationItem({ conv, active, onClick, onToggleHide, t }) {
 function PersonItem({ person, onClick, t }) {
   return (
     <div className="msg-list-item" onClick={onClick}>
-      <Avatar name={person.full_name} online={isOnline(person)} away={isAway(person)} />
+      <Avatar name={person.full_name} online={isOnline(person)} away={isAway(person)}
+        avatarUrl={person.avatar_url} avatarColor={person.avatar_color} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-name">{person.full_name}</div>
         <div className="msg-list-item-snippet">{t.roles?.[person.role] || person.role}</div>
@@ -201,7 +223,8 @@ function MemberItem({ member, t, isSelf, selected, onToggleSelect, onOpenChat })
           aria-label={member.full_name}
         />
       )}
-      <Avatar name={member.full_name} online={online} away={away} />
+      <Avatar name={member.full_name} online={online} away={away}
+        avatarUrl={member.avatar_url} avatarColor={member.avatar_color} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-name">{member.full_name}{isSelf ? ` (${t.you})` : ''}</div>
         <div className="msg-list-item-snippet">{status}</div>
@@ -426,9 +449,64 @@ function ChatThread({
   const lastIdRef     = useRef(0);
   const lastTypingRef = useRef(0);
 
-  const isDept  = conv.type === 'department';
-  const isGroup = isDept || conv.type === 'group';
-  const name    = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
+  const isDept     = conv.type === 'department';
+  const isGroup    = isDept || conv.type === 'group';
+  const isAdHocGroup = conv.type === 'group';
+  const name       = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
+
+  // Any member of an ad-hoc group can change its icon — kept as local state so
+  // the header updates immediately without waiting on the conversation list to refetch.
+  const [groupAvatarUrl, setGroupAvatarUrl]     = useState(conv.avatar_url || null);
+  const [groupAvatarColor, setGroupAvatarColor] = useState(conv.avatar_color || null);
+  const [showAvatarEditor, setShowAvatarEditor] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarErr, setAvatarErr]   = useState('');
+  const avatarFileInput = useRef(null);
+
+  useEffect(() => {
+    setGroupAvatarUrl(conv.avatar_url || null);
+    setGroupAvatarColor(conv.avatar_color || null);
+    setShowAvatarEditor(false);
+  }, [conv.id, conv.avatar_url, conv.avatar_color]);
+
+  async function handleGroupAvatarFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAvatarBusy(true);
+    setAvatarErr('');
+    try {
+      const { avatar_url } = await uploadGroupAvatar(conv.id, file);
+      setGroupAvatarUrl(avatar_url);
+    } catch (err) {
+      setAvatarErr(err.message || 'Upload failed.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function handlePickGroupColor(color) {
+    setAvatarErr('');
+    try {
+      await setGroupAvatarColorApi(conv.id, color);
+      setGroupAvatarColor(color);
+    } catch (err) {
+      setAvatarErr(err.message || 'Failed to set color.');
+    }
+  }
+
+  async function handleRemoveGroupAvatar() {
+    setAvatarBusy(true);
+    setAvatarErr('');
+    try {
+      await removeGroupAvatar(conv.id);
+      setGroupAvatarUrl(null);
+    } catch (err) {
+      setAvatarErr(err.message || 'Failed to remove picture.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -799,7 +877,46 @@ function ChatThread({
         <button className="msg-back-btn btn-ghost btn-sm" onClick={onBack} aria-label="back">
           <ArrowLeft size={16} strokeWidth={2} />
         </button>
-        <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away} />
+        <div
+          style={{ position: 'relative', cursor: isAdHocGroup ? 'pointer' : undefined }}
+          onClick={() => isAdHocGroup && setShowAvatarEditor(s => !s)}
+        >
+          <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away}
+            avatarUrl={isAdHocGroup ? groupAvatarUrl : conv.other_user?.avatar_url}
+            avatarColor={isAdHocGroup ? groupAvatarColor : conv.other_user?.avatar_color} />
+          {showAvatarEditor && (
+            <>
+              <div className="msg-members-backdrop" onClick={e => { e.stopPropagation(); setShowAvatarEditor(false); }} />
+              <div className="avatar-settings group-avatar-popover" onClick={e => e.stopPropagation()}>
+                <input ref={avatarFileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+                  style={{ display: 'none' }} onChange={handleGroupAvatarFile} />
+                <div className="avatar-settings-row">
+                  <button className="btn-ghost btn-sm" disabled={avatarBusy} onClick={() => avatarFileInput.current?.click()}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <Camera size={14} strokeWidth={2} />{t.uploadPicture}
+                  </button>
+                  {groupAvatarUrl && (
+                    <button className="btn-ghost btn-sm" disabled={avatarBusy} onClick={handleRemoveGroupAvatar}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <Trash2 size={14} strokeWidth={2} />{t.removePicture}
+                    </button>
+                  )}
+                </div>
+                <div className="avatar-settings-row" style={{ marginTop: '0.4rem' }}>
+                  {AVATAR_COLORS.map(c => (
+                    <button key={c} type="button"
+                      className={`avatar-color-swatch${groupAvatarColor === c ? ' active' : ''}`}
+                      style={{ background: c }}
+                      onClick={() => handlePickGroupColor(c)}
+                      aria-label={c}
+                    />
+                  ))}
+                </div>
+                {avatarErr && <div className="alert alert-error" style={{ marginTop: '0.4rem', fontSize: '0.78rem' }}>{avatarErr}</div>}
+              </div>
+            </>
+          )}
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="msg-thread-title">{name}</div>
           <div className={`msg-thread-status${typingText ? ' typing' : ''}`}>{typingText || status}</div>
@@ -1008,7 +1125,82 @@ export default function Messages() {
   const [typingUsers, setTypingUsers]      = useState({});
   const [showHidden, setShowHidden]        = useState(false);
   const [messageResults, setMessageResults] = useState([]);
+  const [messageResultsHasMore, setMessageResultsHasMore] = useState(false);
+  const [messageResultsLoadingMore, setMessageResultsLoadingMore] = useState(false);
+  const [showSearchFilters, setShowSearchFilters] = useState(false);
+  const [searchSenderId, setSearchSenderId] = useState('');
+  const [searchFrom, setSearchFrom] = useState('');
+  const [searchTo, setSearchTo] = useState('');
   const [scrollToMessageId, setScrollToMessageId] = useState(null);
+
+  const [notifPermission, setNotifPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
+  const [notifBannerDismissed, setNotifBannerDismissed] = useState(
+    () => localStorage.getItem('msg_notif_banner_dismissed') === '1'
+  );
+  // Default to "mentions & DMs only" — pinging on every message in a busy department
+  // channel is the #1 reason people mute/disable chat notifications entirely.
+  const [notifLevel, setNotifLevel] = useState(
+    () => localStorage.getItem('msg_notif_level') || 'mentions_dms'
+  );
+  const [showNotifSettings, setShowNotifSettings] = useState(false);
+
+  const conversationsRef = useRef([]);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+  const handleSelectRef = useRef(() => {});
+  // Refs mirror state so the long-lived SSE listener (registered once) always
+  // reads the current notification preferences instead of a stale snapshot.
+  const notifLevelRef = useRef(notifLevel);
+  useEffect(() => { notifLevelRef.current = notifLevel; }, [notifLevel]);
+  const lastNotifiedAtRef = useRef({});
+
+  function requestNotifPermission() {
+    if (typeof Notification === 'undefined') return;
+    Notification.requestPermission().then(setNotifPermission);
+  }
+
+  function dismissNotifBanner() {
+    localStorage.setItem('msg_notif_banner_dismissed', '1');
+    setNotifBannerDismissed(true);
+  }
+
+  function changeNotifLevel(level) {
+    setNotifLevel(level);
+    localStorage.setItem('msg_notif_level', level);
+  }
+
+  function notifyNewMessage(conversationId, message) {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (notifLevelRef.current === 'off') return;
+    // Already looking at it — no need to interrupt.
+    if (!document.hidden && conversationId === activeIdRef.current) return;
+
+    const conv = conversationsRef.current.find(c => c.id === conversationId);
+    const isMentioned = !!message.mentions?.some(m => m.id === user.id);
+    const isDirect = conv ? conv.type !== 'department' : false;
+    // "Mentions & DMs only" mode skips ordinary department-channel chatter,
+    // which is almost always the highest-volume, lowest-signal source of pings.
+    if (notifLevelRef.current === 'mentions_dms' && !isMentioned && !isDirect) return;
+
+    const last = lastNotifiedAtRef.current[conversationId] || 0;
+    if (Date.now() - last < NOTIF_THROTTLE_MS) return;
+    lastNotifiedAtRef.current[conversationId] = Date.now();
+
+    const convName = conv
+      ? (conv.type === 'department' ? deptDisplayName(conv, t) : (conv.name || t.messages))
+      : t.messages;
+    const body = message.content || (message.file_name ? `📎 ${message.file_name}` : '');
+    let n;
+    try {
+      n = new Notification(`${message.sender_name} · ${convName}`, { body, tag: `msg-${conversationId}`, icon: '/icon.svg' });
+    } catch (_) { return; }
+    n.onclick = () => {
+      window.focus();
+      handleSelectRef.current(conversationId);
+      n.close();
+    };
+  }
   const activeIdRef = useRef(null);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
@@ -1068,6 +1260,7 @@ export default function Messages() {
       });
 
       setLiveMessage({ conversation_id, message });
+      if (message.sender_id !== user.id) notifyNewMessage(conversation_id, message);
     });
 
     es.addEventListener('read', e => {
@@ -1107,6 +1300,9 @@ export default function Messages() {
     });
 
     return () => es.close();
+    // notifyNewMessage only reads from refs (conversationsRef/activeIdRef/handleSelectRef),
+    // so it doesn't need to be in deps — including it would reopen the SSE connection on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadConversations, user.id]);
 
   // Drop typing indicators that have gone stale
@@ -1133,12 +1329,29 @@ export default function Messages() {
   // Global message search (debounced) — shown as a "Messages" section in the sidebar
   useEffect(() => {
     const q = search.trim();
-    if (q.length < 2) { setMessageResults([]); return; }
+    if (q.length < 2) { setMessageResults([]); setMessageResultsHasMore(false); return; }
     const id = setTimeout(() => {
-      searchMessages(q).then(d => setMessageResults(d.results || [])).catch(() => {});
+      searchMessages(q, { senderId: searchSenderId || undefined, from: searchFrom || undefined, to: searchTo || undefined })
+        .then(d => { setMessageResults(d.results || []); setMessageResultsHasMore(!!d.hasMore); })
+        .catch(() => {});
     }, 300);
     return () => clearTimeout(id);
-  }, [search]);
+  }, [search, searchSenderId, searchFrom, searchTo]);
+
+  async function handleLoadMoreResults() {
+    const q = search.trim();
+    if (q.length < 2 || !messageResults.length) return;
+    setMessageResultsLoadingMore(true);
+    try {
+      const before = messageResults[messageResults.length - 1].message_id;
+      const d = await searchMessages(q, {
+        senderId: searchSenderId || undefined, from: searchFrom || undefined, to: searchTo || undefined, before,
+      });
+      setMessageResults(prev => [...prev, ...(d.results || [])]);
+      setMessageResultsHasMore(!!d.hasMore);
+    } catch (_) {}
+    setMessageResultsLoadingMore(false);
+  }
 
   async function handlePickUser(otherUser) {
     try {
@@ -1174,6 +1387,7 @@ export default function Messages() {
     setActiveId(convId);
     setConversations(prev => prev.map(c => c.id === convId ? { ...c, unread: 0, mentioned: false } : c));
   }
+  useEffect(() => { handleSelectRef.current = handleSelect; });
 
   function handleResultClick(result) {
     handleSelect(result.conversation_id);
@@ -1205,10 +1419,26 @@ export default function Messages() {
         <div className="msg-sidebar">
           <div className="msg-sidebar-header">
             <span className="card-title">{t.messages}</span>
-            <button className="btn-header" onClick={() => setShowDirectory(true)} aria-label={t.newChat} title={t.newChat}>
-              <Plus size={16} strokeWidth={2} />
-            </button>
+            <span style={{ display: 'flex', gap: '0.25rem' }}>
+              <button className="btn-header" onClick={() => setShowNotifSettings(true)} aria-label={t.notifSettings} title={t.notifSettings}>
+                <Settings size={16} strokeWidth={2} />
+              </button>
+              <button className="btn-header" onClick={() => setShowDirectory(true)} aria-label={t.newChat} title={t.newChat}>
+                <Plus size={16} strokeWidth={2} />
+              </button>
+            </span>
           </div>
+          {notifPermission === 'default' && !notifBannerDismissed && (
+            <div className="msg-notif-banner">
+              <span>{t.enableNotifPrompt}</span>
+              <div className="msg-notif-banner-actions">
+                <button className="btn-sm" onClick={requestNotifPermission}>{t.enableNotif}</button>
+                <button className="btn-ghost btn-sm" onClick={dismissNotifBanner} aria-label="dismiss">
+                  <X size={14} strokeWidth={2} />
+                </button>
+              </div>
+            </div>
+          )}
           <div className="msg-search">
             <div style={{ position: 'relative' }}>
               <Search size={14} strokeWidth={2} style={{ position: 'absolute', top: '50%', insetInlineStart: '0.6rem', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }} />
@@ -1219,7 +1449,34 @@ export default function Messages() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
+              {search.trim().length >= 2 && (
+                <button
+                  className="btn-ghost btn-sm msg-search-filter-toggle"
+                  onClick={() => setShowSearchFilters(s => !s)}
+                  aria-label={t.searchFilters}
+                  title={t.searchFilters}
+                >
+                  <ChevronDown size={14} strokeWidth={2} />
+                </button>
+              )}
             </div>
+            {showSearchFilters && search.trim().length >= 2 && (
+              <div className="msg-search-filters">
+                <select className="form-control form-control-sm" value={searchSenderId} onChange={e => setSearchSenderId(e.target.value)}>
+                  <option value="">{t.anySender}</option>
+                  {directory.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                </select>
+                <input type="date" className="form-control form-control-sm" value={searchFrom} max={searchTo || undefined}
+                  onChange={e => setSearchFrom(e.target.value)} aria-label={t.fromDate} />
+                <input type="date" className="form-control form-control-sm" value={searchTo} min={searchFrom || undefined}
+                  onChange={e => setSearchTo(e.target.value)} aria-label={t.toDate} />
+                {(searchSenderId || searchFrom || searchTo) && (
+                  <button className="btn-ghost btn-sm" onClick={() => { setSearchSenderId(''); setSearchFrom(''); setSearchTo(''); }}>
+                    {t.clearFilters}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div className="msg-list">
             {loading ? (
@@ -1263,6 +1520,11 @@ export default function Messages() {
                         </div>
                       );
                     })}
+                    {messageResultsHasMore && (
+                      <button className="btn-ghost btn-sm msg-load-more" onClick={handleLoadMoreResults} disabled={messageResultsLoadingMore}>
+                        {messageResultsLoadingMore ? <Loader2 size={14} className="spin" strokeWidth={2} /> : t.loadMoreResults}
+                      </button>
+                    )}
                   </>
                 )}
                 {hiddenConversations.length > 0 && (
@@ -1311,6 +1573,65 @@ export default function Messages() {
       {showDirectory && (
         <DirectoryPanel onPick={handlePickUser} onClose={() => setShowDirectory(false)} t={t} />
       )}
+
+      {showNotifSettings && (
+        <NotificationSettingsModal
+          level={notifLevel}
+          onChangeLevel={changeNotifLevel}
+          permission={notifPermission}
+          onRequestPermission={requestNotifPermission}
+          onClose={() => setShowNotifSettings(false)}
+          t={t}
+        />
+      )}
+    </div>
+  );
+}
+
+function NotificationSettingsModal({ level, onChangeLevel, permission, onRequestPermission, onClose, t }) {
+  const options = [
+    { value: 'mentions_dms', label: t.notifLevelMentionsDms, hint: t.notifLevelMentionsDmsHint },
+    { value: 'all',          label: t.notifLevelAll,         hint: t.notifLevelAllHint },
+    { value: 'off',          label: t.notifLevelOff,         hint: t.notifLevelOffHint },
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+        <div className="modal-head">
+          <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Settings size={15} strokeWidth={1.8} style={{ color: 'var(--primary)' }} />{t.notifSettings}
+          </h3>
+          <button className="modal-close" onClick={onClose}><X size={16} strokeWidth={2} /></button>
+        </div>
+
+        {permission !== 'granted' && (
+          <div className="msg-notif-banner" style={{ borderBottom: 'none', borderRadius: '0.4rem', margin: '0 1rem' }}>
+            <span>{permission === 'denied' ? t.notifDeniedHint : t.enableNotifPrompt}</span>
+            {permission === 'default' && (
+              <button className="btn-sm" onClick={onRequestPermission}>{t.enableNotif}</button>
+            )}
+          </div>
+        )}
+
+        <div className="msg-notif-level-options">
+          {options.map(opt => (
+            <label key={opt.value} className={`msg-notif-level-option${level === opt.value ? ' active' : ''}`}>
+              <input
+                type="radio"
+                name="notif-level"
+                value={opt.value}
+                checked={level === opt.value}
+                onChange={() => onChangeLevel(opt.value)}
+              />
+              <span>
+                <strong>{opt.label}</strong>
+                <span className="msg-notif-level-hint">{opt.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

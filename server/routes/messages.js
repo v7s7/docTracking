@@ -190,7 +190,7 @@ function isUserOnline(userId) {
 // All members of a conversation (used for ad-hoc group chats), with live presence
 function groupMembers(convId) {
   return db.prepare(`
-    SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text
+    SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text, u.avatar_url, u.avatar_color
     FROM conversation_members cm JOIN users u ON u.id = cm.user_id
     WHERE cm.conversation_id = ? ORDER BY u.full_name COLLATE NOCASE
   `).all(convId).map(u => ({ ...u, online: isUserOnline(u.id) }));
@@ -209,7 +209,7 @@ function getAccessibleConversation(conversationId, user) {
 // GET /messages/directory — colleagues available to start a DM with
 router.get('/directory', (req, res) => {
   const users = db.prepare(
-    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
+    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
   ).all(req.user.id).map(u => ({ ...u, online: isUserOnline(u.id) }));
   res.json({ success: true, users });
 });
@@ -270,10 +270,10 @@ router.get('/conversations', (req, res) => {
       display = { name: deptLabel(conv.dept_id), dept_id: conv.dept_id };
     } else if (conv.type === 'group') {
       const others = groupMembers(conv.id).filter(m => m.id !== req.user.id);
-      display = { name: others.map(o => o.full_name).join(', ') };
+      display = { name: others.map(o => o.full_name).join(', '), avatar_url: conv.avatar_url, avatar_color: conv.avatar_color };
     } else {
       const other = db.prepare(`
-        SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text
+        SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text, u.avatar_url, u.avatar_color
         FROM conversation_members cm JOIN users u ON u.id = cm.user_id
         WHERE cm.conversation_id = ? AND cm.user_id != ?
       `).get(conv.id, req.user.id);
@@ -311,7 +311,7 @@ router.post('/dm/:userId', (req, res) => {
   if (otherId === req.user.id) {
     return res.status(400).json({ success: false, message: 'Cannot message yourself.' });
   }
-  const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE id=? AND is_active=1").get(otherId);
+  const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE id=? AND is_active=1").get(otherId);
   if (!other) return res.status(404).json({ success: false, message: 'User not found.' });
   other.online = isUserOnline(other.id);
 
@@ -343,7 +343,7 @@ router.post('/group', (req, res) => {
 
   const placeholders = otherIds.map(() => '?').join(',');
   const users = db.prepare(
-    `SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE is_active=1 AND id IN (${placeholders})`
+    `SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE is_active=1 AND id IN (${placeholders})`
   ).all(...otherIds);
   if (users.length !== otherIds.length) {
     return res.status(404).json({ success: false, message: 'One or more users not found.' });
@@ -397,7 +397,79 @@ router.post('/group', (req, res) => {
   }
 
   const others = groupMembers(conv.id).filter(m => m.id !== req.user.id);
-  res.json({ success: true, conversation: { id: conv.id, type: 'group', name: others.map(o => o.full_name).join(', '), unread: 0, last_message: null } });
+  res.json({ success: true, conversation: { id: conv.id, type: 'group', name: others.map(o => o.full_name).join(', '), avatar_url: conv.avatar_url, avatar_color: conv.avatar_color, unread: 0, last_message: null } });
+});
+
+const GROUP_AVATAR_DIR = path.join(__dirname, '..', 'data', 'uploads', 'group-avatars');
+fs.mkdirSync(GROUP_AVATAR_DIR, { recursive: true });
+
+const GROUP_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+const groupAvatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, GROUP_AVATAR_DIR),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${req.params.id}-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!GROUP_AVATAR_TYPES.includes(file.mimetype)) return cb(new Error('Only JPG, PNG, WEBP or GIF images are allowed.'));
+    cb(null, true);
+  },
+});
+
+// Any member of an ad-hoc group chat can change its icon — department channels
+// keep their fixed building icon and aren't customizable here.
+function getOwnGroupConversation(req, res) {
+  const conv = getAccessibleConversation(Number(req.params.id), req.user);
+  if (!conv) { res.status(404).json({ success: false, message: 'Conversation not found.' }); return null; }
+  if (conv.type !== 'group') { res.status(400).json({ success: false, message: 'Only group chats have a customizable icon.' }); return null; }
+  return conv;
+}
+
+// POST /messages/conversations/:id/avatar — upload/replace the group's icon
+router.post('/conversations/:id/avatar', (req, res) => {
+  const conv = getOwnGroupConversation(req, res);
+  if (!conv) return;
+  groupAvatarUpload.single('avatar')(req, res, (err) => {
+    if (err) return res.status(400).json({ success: false, message: err.message });
+    if (!req.file) return res.status(400).json({ success: false, message: 'No image provided.' });
+
+    const avatar_url = `/uploads/group-avatars/${req.file.filename}`;
+    db.prepare('UPDATE conversations SET avatar_url = ? WHERE id = ?').run(avatar_url, conv.id);
+
+    if (conv.avatar_url) {
+      const oldPath = path.join(GROUP_AVATAR_DIR, path.basename(conv.avatar_url));
+      fs.unlink(oldPath, () => {});
+    }
+    res.json({ success: true, avatar_url });
+  });
+});
+
+// PUT /messages/conversations/:id/avatar-color — flat background color for the group icon
+router.put('/conversations/:id/avatar-color', (req, res) => {
+  const conv = getOwnGroupConversation(req, res);
+  if (!conv) return;
+  const { color } = req.body || {};
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return res.status(400).json({ success: false, message: 'Color must be a hex value like #4f46e5.' });
+  }
+  db.prepare('UPDATE conversations SET avatar_color = ? WHERE id = ?').run(color, conv.id);
+  res.json({ success: true, avatar_color: color });
+});
+
+// DELETE /messages/conversations/:id/avatar — remove the uploaded icon, fall back to the default
+router.delete('/conversations/:id/avatar', (req, res) => {
+  const conv = getOwnGroupConversation(req, res);
+  if (!conv) return;
+  db.prepare('UPDATE conversations SET avatar_url = NULL WHERE id = ?').run(conv.id);
+  if (conv.avatar_url) {
+    const oldPath = path.join(GROUP_AVATAR_DIR, path.basename(conv.avatar_url));
+    fs.unlink(oldPath, () => {});
+  }
+  res.json({ success: true });
 });
 
 // GET /messages/conversations/:id/messages — fetch (optionally only messages after a given id, for polling)
@@ -474,7 +546,7 @@ router.get('/conversations/:id/members', (req, res) => {
   let members;
   if (conv.type === 'department') {
     members = db.prepare(
-      "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
+      "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
     ).all(conv.dept_id).map(m => ({ ...m, online: isUserOnline(m.id) }));
   } else if (conv.type === 'group') {
     members = groupMembers(conv.id);
@@ -600,10 +672,11 @@ router.post('/conversations/:convId/messages/:msgId/unpin', (req, res) => {
   broadcastToUsers(recipientIds, 'pin', { conversation_id: conv.id, pinned: null });
 });
 
-// GET /messages/search?q=...&conversationId=optional — search message text
+// GET /messages/search?q=...&conversationId=optional&senderId=optional&from=YYYY-MM-DD&to=YYYY-MM-DD&before=messageId
+const SEARCH_PAGE_SIZE = 30;
 router.get('/search', (req, res) => {
   const q = (req.query.q || '').trim();
-  if (q.length < 2) return res.json({ success: true, results: [] });
+  if (q.length < 2) return res.json({ success: true, results: [], hasMore: false });
 
   let conversationIds;
   if (req.query.conversationId) {
@@ -617,16 +690,29 @@ router.get('/search', (req, res) => {
     conversationIds = [...new Set([...deptIds, ...memberIds])];
   }
 
-  if (!conversationIds.length) return res.json({ success: true, results: [] });
+  if (!conversationIds.length) return res.json({ success: true, results: [], hasMore: false });
+
+  const senderId = req.query.senderId ? Number(req.query.senderId) : null;
+  const from     = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from || '') ? req.query.from : null;
+  const to       = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to   || '') ? req.query.to   : null;
+  const before   = req.query.before ? Number(req.query.before) : null;
 
   const placeholders = conversationIds.map(() => '?').join(',');
-  const rows = db.prepare(`
-    SELECT m.id as message_id, m.conversation_id, m.content, m.sender_name, m.created_at,
+  let sql = `
+    SELECT m.id as message_id, m.conversation_id, m.content, m.sender_id, m.sender_name, m.created_at,
            c.type as conv_type, c.dept_id
     FROM messages m JOIN conversations c ON c.id = m.conversation_id
     WHERE m.conversation_id IN (${placeholders}) AND m.content LIKE ?
-    ORDER BY m.id DESC LIMIT 30
-  `).all(...conversationIds, `%${q}%`);
+  `;
+  const params = [...conversationIds, `%${q}%`];
+  if (senderId) { sql += ' AND m.sender_id = ?';     params.push(senderId); }
+  if (from)     { sql += ' AND m.created_at >= ?';   params.push(`${from} 00:00:00`); }
+  if (to)       { sql += ' AND m.created_at <= ?';   params.push(`${to} 23:59:59`); }
+  if (before)   { sql += ' AND m.id < ?';            params.push(before); }
+  sql += ' ORDER BY m.id DESC LIMIT ?';
+  params.push(SEARCH_PAGE_SIZE);
+
+  const rows = db.prepare(sql).all(...params);
 
   const results = rows.map(r => {
     let conversation_name;
@@ -649,12 +735,13 @@ router.get('/search', (req, res) => {
       conversation_name,
       dept_id: r.conv_type === 'department' ? r.dept_id : undefined,
       content: r.content,
+      sender_id: r.sender_id,
       sender_name: r.sender_name,
       created_at: r.created_at,
     };
   });
 
-  res.json({ success: true, results });
+  res.json({ success: true, results, hasMore: rows.length === SEARCH_PAGE_SIZE });
 });
 
 // POST /messages/conversations/:id/hide — tuck a chat away in the "hidden" section.

@@ -4,6 +4,7 @@ import {
   getPersonalTasks, createPersonalTask, updatePersonalTask, deletePersonalTask,
 } from '../../services/personalTaskService';
 import { ListTodo, Circle, CheckCircle2, Trash2, Plus, Calendar } from 'lucide-react';
+import { useConfirm } from '../common/ConfirmDialog';
 
 function isRowOverdue(task) {
   if (task.done || !task.due_at) return false;
@@ -40,6 +41,7 @@ export default function MyTasks() {
   const [adding,  setAdding]  = useState(false);
   const [busyId,  setBusyId]  = useState(null);
   const [showDone, setShowDone] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(() => {
     getPersonalTasks()
@@ -49,6 +51,28 @@ export default function MyTasks() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    function checkReminders() {
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+      let notified = [];
+      try { notified = JSON.parse(localStorage.getItem('myTasksNotified') || '[]'); } catch (_) {}
+      const overdue = items.filter(task => isRowOverdue(task) && !notified.includes(task.id));
+      if (!overdue.length) return;
+      overdue.forEach(task => {
+        const n = new Notification(t.myTasksReminderTitle, {
+          body: t.myTasksReminderBody.replace('{title}', task.title),
+          tag: `my-task-${task.id}`,
+        });
+        n.onclick = () => window.focus();
+      });
+      const updated = [...notified, ...overdue.map(task => task.id)];
+      try { localStorage.setItem('myTasksNotified', JSON.stringify(updated)); } catch (_) {}
+    }
+    checkReminders();
+    const id = setInterval(checkReminders, 60000);
+    return () => clearInterval(id);
+  }, [items, t]);
 
   async function handleAdd(e) {
     e.preventDefault();
@@ -78,7 +102,7 @@ export default function MyTasks() {
   }
 
   async function remove(task) {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
     setBusyId(task.id);
     try {
       await deletePersonalTask(task.id);
@@ -93,6 +117,7 @@ export default function MyTasks() {
 
   return (
     <div className="card my-tasks-card">
+      {confirmDialog}
       <div className="card-header">
         <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <ListTodo size={17} strokeWidth={1.8} />
@@ -102,6 +127,7 @@ export default function MyTasks() {
 
       <form className="my-tasks-add-row" onSubmit={handleAdd}>
         <input
+          type="text"
           className="form-control"
           value={title}
           onChange={e => setTitle(e.target.value)}
@@ -128,11 +154,14 @@ export default function MyTasks() {
         </div>
       ) : (
         <>
+          <div className="my-tasks-section-label">
+            {(t.myTasksToDo || 'To do').replace('{n}', open.length)}
+          </div>
           <div className="my-tasks-list">
             {open.map(task => (
               <MyTaskRow key={task.id} task={task} busy={busyId === task.id} onToggle={() => toggleDone(task)} onDelete={() => remove(task)} />
             ))}
-            {!open.length && <div className="empty-sub" style={{ padding: '0.75rem 1rem' }}>{t.myTasksEmpty}</div>}
+            {!open.length && <div className="empty-sub" style={{ padding: '0.75rem 1rem' }}>{t.myTasksAllDone || t.myTasksEmpty}</div>}
           </div>
 
           {done.length > 0 && (

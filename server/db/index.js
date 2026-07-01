@@ -182,6 +182,20 @@ if (!userCols.includes('status_text')) {
 if (!userCols.includes('last_chat_reminder_at')) {
   db.exec("ALTER TABLE users ADD COLUMN last_chat_reminder_at TEXT");
 }
+if (!userCols.includes('avatar_url')) {
+  db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT");
+}
+if (!userCols.includes('avatar_color')) {
+  db.exec("ALTER TABLE users ADD COLUMN avatar_color TEXT");
+}
+
+const convCols = db.prepare("PRAGMA table_info(conversations)").all().map(c => c.name);
+if (!convCols.includes('avatar_url')) {
+  db.exec("ALTER TABLE conversations ADD COLUMN avatar_url TEXT");
+}
+if (!convCols.includes('avatar_color')) {
+  db.exec("ALTER TABLE conversations ADD COLUMN avatar_color TEXT");
+}
 
 // SQLite can't ALTER a CHECK constraint — recreate the table if an older
 // version doesn't yet allow the 'group' conversation type.

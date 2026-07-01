@@ -12,6 +12,7 @@ import {
   Users, Settings2, LayoutTemplate, Monitor, Activity,
   LogOut, RefreshCw, ChevronLeft, Filter, ClipboardList,
 } from 'lucide-react';
+import { useConfirm } from '../common/ConfirmDialog';
 
 const FIELD_TYPES  = ['text', 'number', 'textarea', 'select', 'date', 'email', 'checkbox'];
 const VALID_ROLES  = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
@@ -96,18 +97,24 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
   const [addingF,   setAddingF]  = useState(false);
   const [editingF,  setEditingF] = useState(null);
   const [err,       setErr]      = useState('');
+  const [busy,      setBusy]     = useState(false);
+  const [busyField, setBusyField] = useState(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   async function saveLabel() {
+    setBusy(true);
     try {
       const { service: updated } = await api.updateService(deptId, service.id, { label, description: desc });
       onUpdated(updated); setEditing(false); setErr('');
     } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
   }
 
   async function handleDelete() {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
+    setBusy(true);
     try { await api.deleteService(deptId, service.id); onDeleted(service.id); }
-    catch (e) { setErr(e.message); }
+    catch (e) { setErr(e.message); setBusy(false); }
   }
 
   function buildFieldBody(f) {
@@ -135,11 +142,13 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
   }
 
   async function handleDeleteField(key) {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
+    setBusyField(key);
     try {
       await api.deleteField(deptId, service.id, key);
       onUpdated({ ...service, fields: (service.fields || []).filter(fi => fi.key !== key) });
     } catch (e) { setErr(e.message); }
+    finally { setBusyField(null); }
   }
 
   return (
@@ -147,6 +156,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
       border: '1px solid var(--border)', borderRadius: 8, marginBottom: '0.4rem',
       background: 'var(--surface)', overflow: 'hidden',
     }}>
+      {confirmDialog}
       {/* Service header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.65rem 0.85rem', flexWrap: 'wrap' }}>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 0, display: 'flex' }}
@@ -159,13 +169,13 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
           <div style={{ display: 'flex', gap: '0.5rem', flex: 1, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <div style={{ flex: 1, minWidth: 160 }}>
               <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.6rem', marginBottom: '0.3rem' }}
-                value={label} onChange={e => setLabel(e.target.value)} placeholder="اسم الخدمة" />
+                value={label} onChange={e => setLabel(e.target.value)} placeholder={t.serviceNamePH} />
               <input className="form-control" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
-                value={desc} onChange={e => setDesc(e.target.value)} placeholder="وصف مختصر (اختياري)" />
+                value={desc} onChange={e => setDesc(e.target.value)} placeholder={t.serviceDescPH} />
             </div>
             <div style={{ display: 'flex', gap: '0.35rem', alignSelf: 'flex-start', paddingTop: '0.1rem' }}>
-              <button className="btn btn-primary btn-sm" onClick={saveLabel}>{t.save}</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(service.label); setDesc(service.description || ''); }}>{t.cancel}</button>
+              <button className="btn btn-primary btn-sm" onClick={saveLabel} disabled={busy}>{busy ? '…' : t.save}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(service.label); setDesc(service.description || ''); }} disabled={busy}>{t.cancel}</button>
             </div>
           </div>
         ) : (
@@ -175,7 +185,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
               <span style={{ marginInlineStart: '0.5rem', fontSize: '0.75rem', color: 'var(--text-3)' }}>{service.description}</span>
             )}
             <span style={{ marginInlineStart: '0.5rem', fontSize: '0.72rem', color: 'var(--text-3)' }}>
-              · {(service.fields || []).length} {t.fields || 'حقول'}
+              · {(service.fields || []).length} {t.fieldsSuffix}
             </span>
           </div>
         )}
@@ -183,12 +193,12 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
         {!editing && (
           <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
             <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
-              onClick={() => setEditing(true)}>
+              onClick={() => setEditing(true)} disabled={busy}>
               <Edit2 size={11} strokeWidth={2} />{t.edit}
             </button>
             <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
-              onClick={handleDelete}>
-              <Trash2 size={11} strokeWidth={2} />{t.del}
+              onClick={handleDelete} disabled={busy}>
+              <Trash2 size={11} strokeWidth={2} />{busy ? '…' : t.del}
             </button>
           </div>
         )}
@@ -228,8 +238,8 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
                           {Array.isArray(f.options) ? f.options.join(', ') : (f.placeholder || '—')}
                         </td>
                         <td>
-                          <button className="btn btn-sm btn-ghost" style={{ marginInlineEnd: '0.25rem', fontSize: '0.78rem' }} onClick={() => setEditingF(f.key)}>{t.edit}</button>
-                          <button className="btn btn-sm btn-danger" style={{ fontSize: '0.78rem' }} onClick={() => handleDeleteField(f.key)}>{t.del}</button>
+                          <button className="btn btn-sm btn-ghost" style={{ marginInlineEnd: '0.25rem', fontSize: '0.78rem' }} onClick={() => setEditingF(f.key)} disabled={busyField === f.key}>{t.edit}</button>
+                          <button className="btn btn-sm btn-danger" style={{ fontSize: '0.78rem' }} onClick={() => handleDeleteField(f.key)} disabled={busyField === f.key}>{busyField === f.key ? '…' : t.del}</button>
                         </td>
                       </tr>
                     )
@@ -266,29 +276,36 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
   const [newSvcLabel, setNewSvcLabel] = useState('');
   const [newSvcDesc,  setNewSvcDesc]  = useState('');
   const [err,       setErr]       = useState('');
+  const [busy,      setBusy]      = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   const services = dept.services || [];
 
   async function saveLabel() {
+    setBusy(true);
     try {
       const { department } = await api.updateDept(dept.id, { label, ldapGroup: group });
       onUpdated(department); setEditing(false); setErr('');
     } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
   }
 
   async function handleDelete() {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
+    setBusy(true);
     try { await api.deleteDept(dept.id); onDeleted(dept.id); }
-    catch (e) { setErr(e.message); }
+    catch (e) { setErr(e.message); setBusy(false); }
   }
 
   async function handleAddService() {
     if (!newSvcLabel.trim()) return;
+    setBusy(true);
     try {
       const { service } = await api.createService(dept.id, { label: newSvcLabel.trim(), description: newSvcDesc.trim() });
       onUpdated({ ...dept, services: [...services, service] });
       setNewSvcLabel(''); setNewSvcDesc(''); setAddingSvc(false); setErr('');
     } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
   }
 
   function handleSvcUpdated(updated) {
@@ -301,6 +318,7 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
 
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 10, marginBottom: '0.6rem', background: 'var(--surface)', overflow: 'hidden' }}>
+      {confirmDialog}
       {/* Dept header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem', flexWrap: 'wrap' }}>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 0, display: 'flex' }}
@@ -329,8 +347,8 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
               </div>
             )}
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <button className="btn btn-primary btn-sm" onClick={saveLabel}>{t.save}</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(dept.label); setGroup(dept.ldapGroup || ''); }}>{t.cancel}</button>
+              <button className="btn btn-primary btn-sm" onClick={saveLabel} disabled={busy}>{busy ? '…' : t.save}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(dept.label); setGroup(dept.ldapGroup || ''); }} disabled={busy}>{t.cancel}</button>
             </div>
           </div>
         ) : (
@@ -343,7 +361,7 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
               </span>
             )}
             <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
-              {services.length} خدمة
+              {t.servicesCount.replace('{n}', services.length)}
             </span>
           </div>
         )}
@@ -351,12 +369,12 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
         {!editing && (
           <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
             <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-              onClick={() => setEditing(true)}>
+              onClick={() => setEditing(true)} disabled={busy}>
               <Edit2 size={12} strokeWidth={2} />{t.edit}
             </button>
             <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-              onClick={handleDelete}>
-              <Trash2 size={12} strokeWidth={2} />{t.del}
+              onClick={handleDelete} disabled={busy}>
+              <Trash2 size={12} strokeWidth={2} />{busy ? '…' : t.del}
             </button>
           </div>
         )}
@@ -369,12 +387,12 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
         <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)', padding: '0.75rem 1rem 0.85rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-2)' }}>
-              الخدمات / أنواع المعاملات
+              {t.servicesSectionTitle}
             </span>
             {!addingSvc && (
               <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}
                 onClick={() => setAddingSvc(true)}>
-                <Plus size={12} strokeWidth={2.5} /> إضافة خدمة
+                <Plus size={12} strokeWidth={2.5} /> {t.addService}
               </button>
             )}
           </div>
@@ -384,27 +402,27 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
             <div style={{ border: '1px solid var(--primary)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.65rem', background: 'var(--primary-light)' }}>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>اسم الخدمة *</label>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>{t.serviceNameLabel}</label>
                   <input className="form-control" value={newSvcLabel} onChange={e => setNewSvcLabel(e.target.value)}
-                    placeholder="مثال: إعانة زواج" autoFocus
+                    placeholder={t.serviceNameExample} autoFocus
                     onKeyDown={e => e.key === 'Enter' && handleAddService()} />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>الوصف (اختياري)</label>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>{t.serviceDescLabel}</label>
                   <input className="form-control" value={newSvcDesc} onChange={e => setNewSvcDesc(e.target.value)}
-                    placeholder="وصف مختصر للخدمة" />
+                    placeholder={t.serviceDescExample} />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.65rem' }}>
-                <button className="btn btn-primary btn-sm" onClick={handleAddService} disabled={!newSvcLabel.trim()}>إضافة</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setAddingSvc(false); setNewSvcLabel(''); setNewSvcDesc(''); }}>إلغاء</button>
+                <button className="btn btn-primary btn-sm" onClick={handleAddService} disabled={!newSvcLabel.trim() || busy}>{busy ? '…' : t.add}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setAddingSvc(false); setNewSvcLabel(''); setNewSvcDesc(''); }} disabled={busy}>{t.cancel}</button>
               </div>
             </div>
           )}
 
           {services.length === 0 && !addingSvc ? (
             <div style={{ textAlign: 'center', padding: '1.25rem', color: 'var(--text-3)', fontSize: '0.82rem', border: '1px dashed var(--border)', borderRadius: 8 }}>
-              لا توجد خدمات — أضف خدمة لتفعيل هذه الإدارة في واجهة خدمة العملاء
+              {t.noServicesEmpty}
             </div>
           ) : (
             services.map(svc => (
@@ -466,7 +484,7 @@ function DepartmentsTab({ t }) {
         <div>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.deptFields}</h3>
           <p className="text-sm text-muted" style={{ margin: '0.15rem 0 0' }}>
-            كل إدارة تحتوي على خدمات، وكل خدمة تحتوي على حقول خاصة بها
+            {t.deptsSubtitle}
           </p>
         </div>
         <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
@@ -483,7 +501,7 @@ function DepartmentsTab({ t }) {
             <div style={{ flex: 1, minWidth: 200 }}>
               <label className="form-label" style={{ fontSize: '0.82rem' }}>{t.deptLabel} *</label>
               <input className="form-control" value={newLabel} onChange={e => setNewLabel(e.target.value)}
-                placeholder="مثال: قسم الشؤون القانونية" autoFocus
+                placeholder={t.deptNameExample} autoFocus
                 onKeyDown={e => e.key === 'Enter' && handleAdd()} />
             </div>
             <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', marginBottom: '0.1rem' }}
@@ -533,6 +551,8 @@ function AutoRolesTab({ t }) {
   const [editingG, setEG]    = useState(null);
   const [editRole, setER]    = useState('STAFF');
   const [err,      setErr]   = useState('');
+  const [busy,     setBusy]  = useState(null); // group key currently in flight, or 'add'
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(async () => {
     try { const { roleGroupMap } = await api.getRoleMap(); setMap(roleGroupMap); }
@@ -542,23 +562,30 @@ function AutoRolesTab({ t }) {
 
   async function handleAdd() {
     if (!newGroup.trim()) return;
+    setBusy('add');
     try { const { roleGroupMap } = await api.setRoleMapEntry({ ldapGroup: newGroup.trim(), role: newRole }); setMap(roleGroupMap); setNG(''); setErr(''); }
     catch (e) { setErr(e.message); }
+    finally { setBusy(null); }
   }
   async function handleUpdate(group) {
+    setBusy(group);
     try { const { roleGroupMap } = await api.setRoleMapEntry({ ldapGroup: group, role: editRole }); setMap(roleGroupMap); setEG(null); }
     catch (e) { setErr(e.message); }
+    finally { setBusy(null); }
   }
   async function handleDelete(group) {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
+    setBusy(group);
     try { const { roleGroupMap } = await api.deleteRoleEntry(group); setMap(roleGroupMap); }
     catch (e) { setErr(e.message); }
+    finally { setBusy(null); }
   }
 
   const entries = Object.entries(map);
 
   return (
     <div>
+      {confirmDialog}
       <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 700 }}>{t.roleMaps}</h3>
       <p className="text-sm text-muted" style={{ marginBottom: '0.5rem' }}>{t.ldapNote}</p>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '0.6rem 0.85rem', marginBottom: '1.25rem', fontSize: '0.8rem', color: 'var(--accent-hover)' }}>
@@ -595,18 +622,18 @@ function AutoRolesTab({ t }) {
                 <td>
                   {editingG === group ? (
                     <div style={{ display: 'flex', gap: '0.3rem' }}>
-                      <button className="btn btn-sm btn-primary" onClick={() => handleUpdate(group)}>{t.save}</button>
-                      <button className="btn btn-sm btn-ghost" onClick={() => setEG(null)}>{t.cancel}</button>
+                      <button className="btn btn-sm btn-primary" onClick={() => handleUpdate(group)} disabled={busy === group}>{busy === group ? '…' : t.save}</button>
+                      <button className="btn btn-sm btn-ghost" onClick={() => setEG(null)} disabled={busy === group}>{t.cancel}</button>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', gap: '0.3rem' }}>
                       <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                        onClick={() => { setEG(group); setER(role); }}>
+                        onClick={() => { setEG(group); setER(role); }} disabled={busy === group}>
                         <Edit2 size={11} strokeWidth={2} />{t.edit}
                       </button>
                       <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                        onClick={() => handleDelete(group)}>
-                        <Trash2 size={11} strokeWidth={2} />{t.del}
+                        onClick={() => handleDelete(group)} disabled={busy === group}>
+                        <Trash2 size={11} strokeWidth={2} />{busy === group ? '…' : t.del}
                       </button>
                     </div>
                   )}
@@ -628,8 +655,8 @@ function AutoRolesTab({ t }) {
               </td>
               <td style={{ padding: '0.5rem 0.75rem' }}>
                 <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                  onClick={handleAdd} disabled={!newGroup.trim()}>
-                  <Plus size={13} strokeWidth={2.5} />{t.add}
+                  onClick={handleAdd} disabled={!newGroup.trim() || busy === 'add'}>
+                  <Plus size={13} strokeWidth={2.5} />{busy === 'add' ? '…' : t.add}
                 </button>
               </td>
             </tr>
@@ -711,6 +738,9 @@ function TemplatesTab({ t }) {
   const [form,      setForm]      = useState({ ...blankTpl });
   const [msg,       setMsg]       = useState({ text: '', type: 'success' });
   const [loading,   setLoading]   = useState(true);
+  const [busy,      setBusy]      = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -740,6 +770,7 @@ function TemplatesTab({ t }) {
   async function handleSave() {
     if (!form.name.trim()) return;
     const body = { ...form, expected_days: form.expected_days ? Number(form.expected_days) : null };
+    setBusy(true);
     try {
       if (editingId) {
         const { template } = await updateTemplate(editingId, body);
@@ -750,19 +781,23 @@ function TemplatesTab({ t }) {
       }
       flash(t.templateSaved); cancel();
     } catch (e) { flash(e.message, 'error'); }
+    finally { setBusy(false); }
   }
 
   async function handleDelete(id) {
-    if (!window.confirm(t.confirmDel)) return;
+    if (!await confirm(t.confirmDel)) return;
+    setDeletingId(id);
     try {
       await deleteTemplate(id);
       setTemplates(p => p.filter(x => x.id !== id));
       flash(t.templateDeleted);
     } catch (e) { flash(e.message, 'error'); }
+    finally { setDeletingId(null); }
   }
 
   return (
     <div>
+      {confirmDialog}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.6rem' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.templates}</h3>
@@ -811,11 +846,11 @@ function TemplatesTab({ t }) {
               <label className="form-label">{t.taskDelivery}</label>
               <select className="form-control" value={form.delivery_method} onChange={e => setF('delivery_method', e.target.value)}>
                 <option value="">—</option>
-                <option value="يدوي">يدوي</option>
-                <option value="بريد">بريد</option>
-                <option value="إيميل">إيميل</option>
-                <option value="فاكس">فاكس</option>
-                <option value="أخرى">أخرى</option>
+                <option value="يدوي">{t.deliveryManual}</option>
+                <option value="بريد">{t.deliveryMail}</option>
+                <option value="إيميل">{t.deliveryEmail}</option>
+                <option value="فاكس">{t.deliveryFax}</option>
+                <option value="أخرى">{t.deliveryOther}</option>
               </select>
             </div>
             <div className="form-group">
@@ -829,8 +864,8 @@ function TemplatesTab({ t }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={!form.name.trim()}>{t.save}</button>
-            <button className="btn btn-ghost btn-sm" onClick={cancel}>{t.cancel}</button>
+            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={!form.name.trim() || busy}>{busy ? '…' : t.save}</button>
+            <button className="btn btn-ghost btn-sm" onClick={cancel} disabled={busy}>{t.cancel}</button>
           </div>
         </div>
       )}
@@ -868,12 +903,12 @@ function TemplatesTab({ t }) {
                   <td>
                     <div style={{ display: 'flex', gap: '0.3rem' }}>
                       <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                        onClick={() => startEdit(tpl)}>
+                        onClick={() => startEdit(tpl)} disabled={deletingId === tpl.id}>
                         <Edit2 size={11} strokeWidth={2} />{t.edit}
                       </button>
                       <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                        onClick={() => handleDelete(tpl.id)}>
-                        <Trash2 size={11} strokeWidth={2} />{t.del}
+                        onClick={() => handleDelete(tpl.id)} disabled={deletingId === tpl.id}>
+                        <Trash2 size={11} strokeWidth={2} />{deletingId === tpl.id ? '…' : t.del}
                       </button>
                     </div>
                   </td>
@@ -893,6 +928,8 @@ function SessionsTab({ t }) {
   const [sessions,  setSessions]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [flash,     setFlash]     = useState({ text: '', type: 'success' });
+  const [loggingOut, setLoggingOut] = useState(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   function showFlash(text, type = 'success') {
     setFlash({ text, type });
@@ -909,18 +946,20 @@ function SessionsTab({ t }) {
   useEffect(() => { load(); }, [load]);
 
   async function handleForceLogout(jti) {
-    if (!window.confirm(t.forceLogout + '?')) return;
+    if (!await confirm(`${t.forceLogout}?`, { danger: true })) return;
+    setLoggingOut(jti);
     try {
       await forceLogoutApi(jti);
       setSessions(p => p.filter(s => s.jti !== jti));
       showFlash(t.sessionTerminated);
-    } catch (e) { showFlash(e.message, 'error'); }
+    } catch (e) { showFlash(e.message, 'error'); setLoggingOut(null); }
   }
 
   function fmt(dt) { return dt ? new Date(dt).toLocaleString() : '—'; }
 
   return (
     <div>
+      {confirmDialog}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.6rem' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{t.activeSessions}</h3>
@@ -968,8 +1007,8 @@ function SessionsTab({ t }) {
                     <td>
                       {!isYou && (
                         <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                          onClick={() => handleForceLogout(s.jti)}>
-                          <LogOut size={11} strokeWidth={2} />{t.forceLogout}
+                          onClick={() => handleForceLogout(s.jti)} disabled={loggingOut === s.jti}>
+                          <LogOut size={11} strokeWidth={2} />{loggingOut === s.jti ? '…' : t.forceLogout}
                         </button>
                       )}
                     </td>

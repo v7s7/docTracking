@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getTasks, bulkAction } from '../../services/taskService';
 import { getDepartments } from '../../services/deptService';
 import { AlertTriangle, Search, Inbox, Send, X, CheckSquare, Clock, RotateCcw } from 'lucide-react';
+import { useConfirm } from '../common/ConfirmDialog';
 
 const STATUS_COLORS = {
   new:         { bg: '#FFF0F0', color: '#C41E1E' },
@@ -52,16 +53,16 @@ export function OverduePill({ t }) {
 }
 
 // Duration since last update
-function sinceNow(dateStr) {
+function sinceNow(dateStr, t) {
   if (!dateStr) return null;
   const ms = Date.now() - new Date(dateStr).getTime();
   if (ms < 0) return null;
   const mins = Math.floor(ms / 60000);
-  if (mins < 60)  return `${mins}د`;
+  if (mins < 60)  return `${mins}${t.minSuffix}`;
   const hrs = Math.floor(mins / 60);
-  if (hrs  < 24)  return `${hrs}س`;
+  if (hrs  < 24)  return `${hrs}${t.hourSuffix}`;
   const days = Math.floor(hrs / 24);
-  return `${days} يوم`;
+  return `${days} ${t.daySuffix}`;
 }
 
 // Bulk forward modal
@@ -130,6 +131,8 @@ export default function TaskList({ onSelect, createButton }) {
   const [selected,     setSelected]     = useState(new Set());
   const [showFwd,      setShowFwd]      = useState(false);
   const [flash,        setFlash]        = useState('');
+  const [bulkBusy,     setBulkBusy]     = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   // Tab → status filter mapping
   const TAB_STATUS = {
@@ -142,19 +145,19 @@ export default function TaskList({ onSelect, createButton }) {
   };
 
   const csTabs = [
-    { id: 'all',         label: 'الكل' },
-    { id: 'returned',    label: 'مُعادة',       alert: true },
-    { id: 'pending',     label: 'للإرسال' },
-    { id: 'with_dept',   label: 'عند القسم' },
-    { id: 'in_progress', label: 'قيد التنفيذ' },
-    { id: 'closed',      label: 'مغلقة' },
+    { id: 'all',         label: t.tabAll },
+    { id: 'returned',    label: t.tabReturned,       alert: true },
+    { id: 'pending',     label: t.tabPending },
+    { id: 'with_dept',   label: t.tabWithDept },
+    { id: 'in_progress', label: t.tabInProgress },
+    { id: 'closed',      label: t.tabClosed },
   ];
 
   const deptTabs = [
-    { id: 'all',         label: 'الكل' },
-    { id: 'with_dept',   label: 'بانتظار الاستلام', alert: false },
-    { id: 'in_progress', label: 'قيد التنفيذ',      alert: false },
-    { id: 'closed',      label: 'مغلقة' },
+    { id: 'all',         label: t.tabAll },
+    { id: 'with_dept',   label: t.tabAwaitingReceipt, alert: false },
+    { id: 'in_progress', label: t.tabInProgress,      alert: false },
+    { id: 'closed',      label: t.tabClosed },
   ];
 
   const tabs = isCS ? csTabs : deptTabs;
@@ -193,12 +196,14 @@ export default function TaskList({ onSelect, createButton }) {
   }
 
   async function handleBulkClose() {
-    if (!window.confirm(`${t.bulkClose} (${selected.size})?`)) return;
+    if (!await confirm(`${t.bulkClose} (${selected.size})?`)) return;
+    setBulkBusy(true);
     try {
       const { processed } = await bulkAction({ action: 'close', task_ids: [...selected] });
       showFlash((t.bulkDone || 'Done — {n} tasks updated.').replace('{n}', processed));
       setSelected(new Set()); load();
     } catch (e) { showFlash(`ERR:${e.message}`); }
+    finally { setBulkBusy(false); }
   }
 
   async function handleBulkForward(dept_id, note) {
@@ -210,7 +215,7 @@ export default function TaskList({ onSelect, createButton }) {
   }
 
   function deptLabel(id) {
-    if (!id) return 'خدمة العملاء';
+    if (!id) return t.customerServiceFallback;
     return depts.find(d => d.id === id)?.label || id;
   }
 
@@ -218,6 +223,7 @@ export default function TaskList({ onSelect, createButton }) {
 
   return (
     <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+      {confirmDialog}
       <div className="card">
         <div className="card-header" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
@@ -230,7 +236,7 @@ export default function TaskList({ onSelect, createButton }) {
               <input
                 className="form-control"
                 style={{ minWidth: 180, padding: '0.4rem 0.7rem', paddingInlineStart: '2rem', fontSize: '0.85rem' }}
-                placeholder={t.search || 'بحث…'}
+                placeholder={t.search}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
@@ -312,7 +318,7 @@ export default function TaskList({ onSelect, createButton }) {
                   <th>{t.taskStatus}</th>
                   <th>{t.taskPriority}</th>
                   <th>{t.taskAssigned}</th>
-                  <th style={{ minWidth: 90 }}>المدة</th>
+                  <th style={{ minWidth: 90 }}>{t.duration}</th>
                 </tr>
               </thead>
               <tbody>
@@ -321,7 +327,7 @@ export default function TaskList({ onSelect, createButton }) {
                   const isClosed    = task.status === 'closed';
                   const isReturned  = task.status === 'returned';
                   const isSelected  = selected.has(task.id);
-                  const duration    = sinceNow(task.updated_at);
+                  const duration    = sinceNow(task.updated_at, t);
 
                   return (
                     <React.Fragment key={task.id}>
@@ -385,7 +391,7 @@ export default function TaskList({ onSelect, createButton }) {
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', fontSize: '0.8rem', color: '#92400e', paddingInlineStart: '0.25rem' }}>
                               <RotateCcw size={12} strokeWidth={2} style={{ flexShrink: 0, marginTop: 2 }} />
                               <span>
-                                <strong>{task.returned_by_name || 'القسم'}:</strong> {task.last_return_note}
+                                <strong>{task.returned_by_name || t.deptFallback}:</strong> {task.last_return_note}
                               </span>
                             </div>
                           </td>
@@ -420,9 +426,9 @@ export default function TaskList({ onSelect, createButton }) {
             </button>
           )}
           {isCS && (
-            <button onClick={handleBulkClose}
-              style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 7, padding: '0.4rem 0.9rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.83rem' }}>
-              {t.bulkClose}
+            <button onClick={handleBulkClose} disabled={bulkBusy}
+              style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 7, padding: '0.4rem 0.9rem', cursor: bulkBusy ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.83rem', opacity: bulkBusy ? 0.6 : 1 }}>
+              {bulkBusy ? '…' : t.bulkClose}
             </button>
           )}
           <button onClick={() => setSelected(new Set())}

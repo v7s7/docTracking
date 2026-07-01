@@ -17,11 +17,11 @@ const STATUS_COLORS = {
   closed:      { bg: '#F0FFF4', color: '#276749' },
 };
 
-function StatCard({ icon, label, value, color = 'var(--primary)' }) {
+function StatCard({ icon, label, value, color = 'var(--primary)', bg = 'var(--primary-light)' }) {
   return (
-    <div className="stat-card" style={{ borderTop: `3px solid ${color}` }}>
-      <div className="stat-icon" style={{ color }}>{icon}</div>
-      <div className="stat-value" style={{ color }}>{value ?? '—'}</div>
+    <div className="stat-card">
+      <div className="stat-icon" style={{ color, background: bg }}>{icon}</div>
+      <div className="stat-value">{value ?? '—'}</div>
       <div className="stat-label">{label}</div>
     </div>
   );
@@ -110,15 +110,15 @@ export default function Dashboard({ onTaskClick }) {
 
       {/* Stat cards */}
       <div className="stat-grid">
-        <StatCard icon={<FileText size={22} strokeWidth={1.5} />}    label={t.totalTasks}    value={total}            color="var(--primary)" />
-        <StatCard icon={<Clock size={22} strokeWidth={1.5} />}       label={t.openTasks}     value={open}             color="var(--warning)" />
-        <StatCard icon={<RotateCcw size={22} strokeWidth={1.5} />}   label={t.returnedTasks} value={bs.returned || 0} color="var(--danger)" />
-        <StatCard icon={<CheckCircle size={22} strokeWidth={1.5} />} label={t.closedTasks}   value={bs.closed || 0}   color="var(--success)" />
+        <StatCard icon={<FileText size={22} strokeWidth={1.5} />}    label={t.totalTasks}    value={total}            color="var(--primary)" bg="var(--primary-light)" />
+        <StatCard icon={<Clock size={22} strokeWidth={1.5} />}       label={t.openTasks}     value={open}             color="var(--warning)" bg="var(--warning-bg)" />
+        <StatCard icon={<RotateCcw size={22} strokeWidth={1.5} />}   label={t.returnedTasks} value={bs.returned || 0} color="var(--danger)" bg="var(--danger-bg)" />
+        <StatCard icon={<CheckCircle size={22} strokeWidth={1.5} />} label={t.closedTasks}   value={bs.closed || 0}   color="var(--success)" bg="var(--success-bg)" />
         {overdue > 0 && (
-          <StatCard icon={<AlertCircle size={22} strokeWidth={1.5} />} label={t.overdueTasks} value={overdue} color="var(--danger)" />
+          <StatCard icon={<AlertCircle size={22} strokeWidth={1.5} />} label={t.overdueTasks} value={overdue} color="var(--danger)" bg="var(--danger-bg)" />
         )}
         {stats?.totalUsers != null && (
-          <StatCard icon={<Users size={22} strokeWidth={1.5} />} label={t.totalUsers} value={stats.totalUsers} color="var(--accent)" />
+          <StatCard icon={<Users size={22} strokeWidth={1.5} />} label={t.totalUsers} value={stats.totalUsers} color="var(--accent)" bg="var(--accent-light)" />
         )}
       </div>
 

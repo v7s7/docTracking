@@ -56,9 +56,13 @@ export const setStatusText = (text) => req('/messages/status-text', {
   body: JSON.stringify({ text }),
 });
 
-export const searchMessages = (q, conversationId) => {
+export const searchMessages = (q, opts = {}) => {
   const params = new URLSearchParams({ q });
-  if (conversationId) params.set('conversationId', conversationId);
+  if (opts.conversationId) params.set('conversationId', opts.conversationId);
+  if (opts.senderId) params.set('senderId', opts.senderId);
+  if (opts.from)     params.set('from', opts.from);
+  if (opts.to)       params.set('to', opts.to);
+  if (opts.before)   params.set('before', opts.before);
   return req(`/messages/search?${params.toString()}`);
 };
 
@@ -77,3 +81,24 @@ export function sendMessage(convId, { content, file, replyToId }) {
 export function fileUrl(path) {
   return `${BASE}${path}`;
 }
+
+export async function uploadGroupAvatar(convId, file) {
+  const form = new FormData();
+  form.append('avatar', file);
+  const res  = await fetch(`${BASE}/messages/conversations/${convId}/avatar`, {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body:    form,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Upload failed');
+  return data;
+}
+
+export const setGroupAvatarColor = (convId, color) => req(`/messages/conversations/${convId}/avatar-color`, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ color }),
+});
+
+export const removeGroupAvatar = (convId) => req(`/messages/conversations/${convId}/avatar`, { method: 'DELETE' });

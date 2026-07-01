@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLang } from '../../context/LangContext';
-import { Landmark, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 export default function LoginPage() {
   const { login }                   = useAuth();
@@ -24,16 +24,14 @@ export default function LoginPage() {
     }
   }
 
-  const features = lang === 'ar'
-    ? ['تتبع المراسلات الرسمية الصادرة والواردة', 'إدارة الاستفسارات وطلبات الجمهور', 'متابعة العقود والشيكات والبحوث الاجتماعية', 'لوحة إدارة متكاملة مع صلاحيات LDAP']
-    : ['Track official inbound & outbound correspondence', 'Manage public inquiries and service requests', 'Follow up on contracts, cheques & social research', 'Full admin panel with LDAP role management'];
+  const features = t.loginFeatures;
 
   return (
     <div className="login-shell">
       {/* ── Brand panel ── */}
       <div className="login-brand">
         <div className="login-brand-inner">
-          <div className="login-logo-ring"><Landmark size={36} strokeWidth={1.4} /></div>
+          <div className="login-logo-ring"><img src="/logo.png" alt="" className="login-logo-img" /></div>
           <div className="login-org-name">{t.orgName}</div>
           <div className="login-org-sub" style={{ marginTop: '0.4rem' }}>{t.appName}</div>
           <div className="login-brand-features">
@@ -54,7 +52,7 @@ export default function LoginPage() {
             <div className="lang-toggle" style={{ background: '#f0f4f8', border: '1px solid #e2e8f0' }}>
               <button
                 className={`lang-btn${lang === 'ar' ? ' active' : ''}`}
-                style={{ color: lang === 'ar' ? '#C41E1E' : '#718096', background: lang === 'ar' ? '#fff' : 'transparent' }}
+                style={{ color: lang === 'ar' ? 'var(--primary)' : '#718096', background: lang === 'ar' ? '#fff' : 'transparent' }}
                 onClick={() => lang !== 'ar' && toggle()}
                 type="button"
               >
@@ -62,7 +60,7 @@ export default function LoginPage() {
               </button>
               <button
                 className={`lang-btn${lang === 'en' ? ' active' : ''}`}
-                style={{ color: lang === 'en' ? '#C41E1E' : '#718096', background: lang === 'en' ? '#fff' : 'transparent' }}
+                style={{ color: lang === 'en' ? 'var(--primary)' : '#718096', background: lang === 'en' ? '#fff' : 'transparent' }}
                 onClick={() => lang !== 'en' && toggle()}
                 type="button"
               >
@@ -74,7 +72,7 @@ export default function LoginPage() {
           <div style={{ textAlign: 'center' }}>
             <div className="login-card-title">{t.signIn}</div>
             <div className="login-card-sub" style={{ marginTop: '0.3rem' }}>
-              {lang === 'ar' ? 'أدخل بيانات حساب المؤسسة' : 'Enter your corporate credentials'}
+              {t.loginSubtitle}
             </div>
           </div>
 
