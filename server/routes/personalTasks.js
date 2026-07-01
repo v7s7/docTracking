@@ -44,9 +44,11 @@ router.post('/', verifyToken, (req, res) => {
   const { dueAt, error: dueErr } = validateDueAt(req.body?.due_at);
   if (dueErr) return res.status(400).json({ success: false, message: dueErr });
 
+  const category = String(req.body?.category || '').trim().slice(0, 50) || null;
+
   const result = db.prepare(
-    "INSERT INTO personal_tasks (user_id, title, due_at) VALUES (?, ?, ?)"
-  ).run(req.user.id, title, dueAt);
+    "INSERT INTO personal_tasks (user_id, title, due_at, category) VALUES (?, ?, ?, ?)"
+  ).run(req.user.id, title, dueAt, category);
 
   const item = db.prepare("SELECT * FROM personal_tasks WHERE id = ?").get(result.lastInsertRowid);
   res.json({ success: true, item });
@@ -64,6 +66,9 @@ router.put('/:id', verifyToken, (req, res) => {
   if (dueErr) return res.status(400).json({ success: false, message: dueErr });
 
   const done = req.body?.done !== undefined ? (req.body.done ? 1 : 0) : existing.done;
+  const category = req.body?.category !== undefined
+    ? String(req.body.category || '').trim().slice(0, 50) || null
+    : existing.category;
 
   // completed_at: stamp it the moment done flips 0 -> 1, clear it on reopen,
   // leave it alone if it was already done and stays done.
@@ -73,9 +78,9 @@ router.put('/:id', verifyToken, (req, res) => {
 
   db.prepare(`
     UPDATE personal_tasks
-    SET title = ?, due_at = ?, done = ?, completed_at = ${completedAtSql}, updated_at = datetime('now','localtime')
+    SET title = ?, due_at = ?, done = ?, category = ?, completed_at = ${completedAtSql}, updated_at = datetime('now','localtime')
     WHERE id = ?
-  `).run(title, dueAt, done, existing.id);
+  `).run(title, dueAt, done, category, existing.id);
 
   const item = db.prepare("SELECT * FROM personal_tasks WHERE id = ?").get(existing.id);
   res.json({ success: true, item });

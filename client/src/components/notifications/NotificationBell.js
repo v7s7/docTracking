@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
 import { getNotifications, markAllRead, markOneRead } from '../../services/notificationService';
-import { Bell, ArrowRight, RotateCcw, AlertTriangle, Clock, BellPlus } from 'lucide-react';
+import { Bell, ArrowRight, RotateCcw, AlertTriangle, Clock, BellPlus, BellOff } from 'lucide-react';
 
 const POLL_MS = 30_000;
 
@@ -33,6 +33,9 @@ export default function NotificationBell({ onTaskClick }) {
   const panelRef                = useRef(null);
   const lastIdRef                = useRef(0);
   const firstLoadRef             = useRef(true);
+  const [snoozed, setSnoozed]   = useState(() => {
+    try { return JSON.parse(localStorage.getItem('notifSnoozed') || '{}'); } catch(_) { return {}; }
+  });
 
   const load = useCallback(async () => {
     try {
@@ -97,6 +100,17 @@ export default function NotificationBell({ onTaskClick }) {
     }
     setOpen(false);
     onTaskClick?.(item.task_id);
+  }
+
+  function handleSnooze(e, item) {
+    e.stopPropagation();
+    const until = Date.now() + 2 * 60 * 60 * 1000;
+    const updated = { ...snoozed, [item.id]: until };
+    setSnoozed(updated);
+    try { localStorage.setItem('notifSnoozed', JSON.stringify(updated)); } catch(_) {}
+    markOneRead(item.id).catch(() => {});
+    setItems(p => p.map(i => i.id === item.id ? { ...i, is_read: 1 } : i));
+    setUnread(p => Math.max(0, p - 1));
   }
 
   function handleEnableDesktopAlerts(e) {
@@ -170,14 +184,18 @@ export default function NotificationBell({ onTaskClick }) {
 
           {/* Items */}
           <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-            {!items.length ? (
+            {!items.filter(i => !snoozed[i.id] || Date.now() > snoozed[i.id]).length && items.length > 0 ? (
+              <div className="empty-state" style={{ padding: '1.5rem 1rem' }}>
+                <div className="empty-sub">{t.allSnoozed || 'All caught up — reminders snoozed.'}</div>
+              </div>
+            ) : !items.length ? (
               <div className="empty-state" style={{ padding: '2rem 1rem' }}>
                 <div className="empty-icon" style={{ fontSize: '1.5rem' }}>
                   <Bell size={28} strokeWidth={1.4} style={{ color: 'var(--text-3)' }} />
                 </div>
                 <div className="empty-sub">{t.noNotifications || 'No notifications yet.'}</div>
               </div>
-            ) : items.map(item => (
+            ) : items.filter(i => !snoozed[i.id] || Date.now() > snoozed[i.id]).map(item => (
               <div
                 key={item.id}
                 onClick={() => handleClickItem(item)}
@@ -217,6 +235,15 @@ export default function NotificationBell({ onTaskClick }) {
                     {item.created_at?.slice(0, 16)}
                   </div>
                 </div>
+                {(item.type === 'overdue' || item.type === 'due_soon') && (
+                  <button
+                    onClick={e => handleSnooze(e, item)}
+                    title={t.snooze2h}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', flexShrink: 0, padding: '2px', display: 'flex', alignItems: 'center' }}
+                  >
+                    <BellOff size={13} strokeWidth={1.8} />
+                  </button>
+                )}
                 {!item.is_read && (
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0, marginTop: '0.35rem' }} />
                 )}

@@ -246,6 +246,11 @@ if (!taskCols.includes('last_reminder_at')) {
   db.exec("ALTER TABLE tasks ADD COLUMN last_reminder_at TEXT");
 }
 
+const personalTaskCols = db.prepare("PRAGMA table_info(personal_tasks)").all().map(c => c.name);
+if (!personalTaskCols.includes('category')) {
+  db.exec("ALTER TABLE personal_tasks ADD COLUMN category TEXT");
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS message_mentions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,

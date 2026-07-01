@@ -6,8 +6,34 @@ import { useAuth } from '../../context/AuthContext';
 import { isOverdue } from '../tasks/TaskList';
 import MyTasks from './MyTasks';
 import {
-  FileText, Clock, RotateCcw, CheckCircle, AlertCircle, Users, Inbox, Building2,
+  FileText, Clock, RotateCcw, CheckCircle, AlertCircle, Users, Inbox, Building2, Timer,
 } from 'lucide-react';
+
+function taskIdleDays(updatedAt) {
+  if (!updatedAt) return null;
+  const days = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000);
+  return days >= 1 ? days : null;
+}
+
+function IdlePill({ updatedAt, t }) {
+  const days = taskIdleDays(updatedAt);
+  if (!days) return null;
+  const isStale = days >= 3;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '0.2rem',
+      fontSize: '0.68rem', fontWeight: 700, borderRadius: 99,
+      padding: '1px 7px',
+      background: isStale ? '#FFF5F5' : 'var(--surface-2)',
+      color: isStale ? '#C53030' : 'var(--text-3)',
+      border: `1px solid ${isStale ? '#FEB2B2' : 'var(--border)'}`,
+      whiteSpace: 'nowrap',
+    }}>
+      <Timer size={9} strokeWidth={2.5} />
+      {(t.idleDays || '{n}d idle').replace('{n}', days)}
+    </span>
+  );
+}
 
 const STATUS_COLORS = {
   new:         { bg: '#FFF0F0', color: '#C41E1E' },
@@ -126,8 +152,54 @@ export default function Dashboard({ onTaskClick }) {
         <MyTasks />
       </div>
 
+      {/* Dept staff: full open queue */}
+      {!canFilter && stats?.deptQueue?.length > 0 && (
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+          <div className="card-header">
+            <div className="card-title">{t.deptQueue}</div>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>
+              {stats.deptQueue.length} {t.openTasks}
+            </span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>{t.taskSerial}</th>
+                  <th>{t.taskTitle}</th>
+                  <th>{t.taskStatus}</th>
+                  <th>{t.taskPriority}</th>
+                  <th>{t.idleLabel}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.deptQueue.map(task => (
+                  <tr key={task.id} style={{ cursor: 'pointer' }} onClick={() => onTaskClick?.(task.id)}>
+                    <td><code className="tag">{task.serial}</code></td>
+                    <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <PriorityDot priority={task.priority} />{task.title}
+                      </span>
+                    </td>
+                    <td><StatusPill status={task.status} t={t} /></td>
+                    <td className="text-muted text-sm">{t.priorities?.[task.priority] || task.priority}</td>
+                    <td><IdlePill updatedAt={task.updated_at} t={t} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {!canFilter && !stats?.deptQueue?.length && (
+        <div className="card" style={{ marginTop: '1.5rem', padding: '1.5rem', textAlign: 'center' }}>
+          <div className="empty-sub">{t.deptQueueEmpty}</div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: stats?.byDept?.length ? '1fr 1fr' : '1fr', gap: '1.25rem', marginTop: '1.5rem' }}>
-        {/* Recent tasks */}
+        {/* Recent tasks (CS/admin only — dept staff see the full queue above) */}
+        {canFilter && (
         <div className="card">
           <div className="card-header">
             <div className="card-title">{t.recentTasks}</div>
@@ -147,6 +219,7 @@ export default function Dashboard({ onTaskClick }) {
                     <th>{t.taskTitle}</th>
                     <th>{t.taskStatus}</th>
                     <th>{t.taskPriority}</th>
+                    <th>{t.idleLabel}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -160,6 +233,7 @@ export default function Dashboard({ onTaskClick }) {
                       </td>
                       <td><StatusPill status={task.status} t={t} /></td>
                       <td className="text-muted text-sm">{t.priorities?.[task.priority] || task.priority}</td>
+                      <td><IdlePill updatedAt={task.updated_at} t={t} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -167,6 +241,7 @@ export default function Dashboard({ onTaskClick }) {
             )}
           </div>
         </div>
+        )}
 
         {/* By department */}
         {stats?.byDept?.length > 0 && (

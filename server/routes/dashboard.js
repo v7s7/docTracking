@@ -32,7 +32,19 @@ router.get('/', verifyToken, (req, res) => {
     ? db.prepare("SELECT COUNT(*) as n FROM users WHERE is_active = 1").get().n
     : null;
 
-  res.json({ success: true, stats: { byStatus, byDept, recentTasks, totalUsers } });
+  // Full open-task queue for dept staff (sorted by priority urgency then idle time)
+  let deptQueue = [];
+  if (!canSeeAll(role) && dept_id) {
+    deptQueue = db.prepare(`
+      SELECT * FROM tasks
+      WHERE current_dept_id = ? AND status != 'closed'
+      ORDER BY
+        CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END,
+        updated_at ASC
+    `).all(dept_id);
+  }
+
+  res.json({ success: true, stats: { byStatus, byDept, recentTasks, totalUsers, deptQueue } });
 });
 
 module.exports = router;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
 import { useAuth } from '../../context/AuthContext';
-import { getTask, forwardTask, returnTask, closeTask, addComment, acceptTask } from '../../services/taskService';
+import { getTask, forwardTask, returnTask, closeTask, addComment, acceptTask, updateTask } from '../../services/taskService';
 import { getDepartments } from '../../services/deptService';
 import { StatusBadge, PriorityBadge } from './TaskList';
 import {
@@ -194,7 +194,37 @@ export default function TaskDetail({ taskId, onBack, onUpdate }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
               <code className="tag">{task.serial}</code>
               <StatusBadge status={task.status} t={t} />
-              <PriorityBadge priority={task.priority} t={t} />
+              {isCS && !isClosed ? (
+                <select
+                  value={task.priority}
+                  disabled={busy}
+                  title={t.escalatePriorityHint}
+                  onChange={async e => {
+                    const p = e.target.value;
+                    setBusy(true);
+                    try {
+                      const res = await updateTask(task.id, { priority: p });
+                      setTask(res.task);
+                      flash(t.priorityUpdated);
+                      onUpdate?.();
+                    } catch (err) { flash(`ERR:${err.message}`); }
+                    finally { setBusy(false); }
+                  }}
+                  style={{
+                    fontSize: '0.75rem', fontWeight: 700, borderRadius: 99,
+                    padding: '2px 8px', cursor: 'pointer', border: '1.5px solid',
+                    borderColor: task.priority === 'urgent' ? '#C53030' : task.priority === 'high' ? '#B7791F' : task.priority === 'normal' ? '#276749' : '#718096',
+                    color: task.priority === 'urgent' ? '#C53030' : task.priority === 'high' ? '#B7791F' : task.priority === 'normal' ? '#276749' : '#718096',
+                    background: 'transparent', height: 'auto',
+                  }}
+                >
+                  {['low', 'normal', 'high', 'urgent'].map(p => (
+                    <option key={p} value={p}>{t.priorities?.[p] || p}</option>
+                  ))}
+                </select>
+              ) : (
+                <PriorityBadge priority={task.priority} t={t} />
+              )}
               {cycles > 0 && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.72rem', background: '#fef3c7', border: '1px solid #d97706', color: '#92400e', padding: '1px 8px', borderRadius: 99, fontWeight: 700 }}>
                   <RefreshCw size={10} strokeWidth={2.5} /> {cycles} {t.cycleSuffix}
