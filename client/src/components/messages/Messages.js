@@ -343,12 +343,40 @@ function DirectoryPanel({ onPick, onClose, t }) {
   );
 }
 
-function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply, canPin, isPinned, onTogglePin, onImageLoad }) {
+function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply, canPin, isPinned, onTogglePin, onImageLoad, convId }) {
   const isImage = msg.file_type?.startsWith('image/');
   const [showPicker, setShowPicker] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
-  const hasTranslation = !!msg.translated_content;
-  const displayContent = hasTranslation && !showOriginal ? msg.translated_content : msg.content;
+  const [manualTranslation, setManualTranslation] = useState(null);
+  const [translating, setTranslating] = useState(false);
+  const [translateErr, setTranslateErr] = useState(false);
+
+  const translation = msg.translated_content || manualTranslation;
+  const hasTranslation = !!translation;
+  const displayContent = hasTranslation && !showOriginal ? translation : msg.content;
+
+  // Detected source language of the message; when the server already auto-translated
+  // it we know this for free, otherwise fall back to a quick client-side check.
+  const srcLang = msg.detected_lang || (/[؀-ۿ]/.test(msg.content || '') ? 'ar' : 'en');
+
+  async function handleTranslateClick() {
+    if (hasTranslation) { setShowOriginal(s => !s); return; }
+    setTranslating(true);
+    setTranslateErr(false);
+    try {
+      const toLang = srcLang === 'ar' ? 'en' : 'ar';
+      const { translated_content } = await translateMessage(convId, msg.id, toLang);
+      if (translated_content) {
+        setManualTranslation(translated_content);
+      } else {
+        setTranslateErr(true);
+      }
+    } catch (_) {
+      setTranslateErr(true);
+    } finally {
+      setTranslating(false);
+    }
+  }
 
   return (
     <div id={`msg-${msg.id}`} className={`msg-bubble-row ${mine ? 'mine' : 'theirs'}${highlighted ? ' highlight' : ''}`}>
@@ -379,20 +407,36 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
               {renderContent(displayContent, msg.mentions, currentUserId, searchQuery)}
             </div>
           )}
-          {hasTranslation && (
+          {msg.content && (
             <button
               type="button"
               className="msg-translate-toggle"
-              onClick={() => setShowOriginal(s => !s)}
+              onClick={handleTranslateClick}
+              disabled={translating}
               style={{
-                display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.3rem',
-                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                fontSize: '0.72rem', color: 'var(--text-3)', opacity: 0.85,
+                display: 'inline-flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.4rem',
+                background: mine ? 'rgba(255,255,255,0.16)' : 'var(--surface-2)',
+                border: `1px solid ${mine ? 'rgba(255,255,255,0.3)' : 'var(--border)'}`,
+                borderRadius: 99, cursor: translating ? 'default' : 'pointer',
+                padding: '2px 9px', fontSize: '0.72rem', fontWeight: 600,
+                color: mine ? 'rgba(255,255,255,0.9)' : 'var(--accent)',
+                opacity: translating ? 0.7 : 1,
               }}
             >
-              <Languages size={11} strokeWidth={2} />
-              {showOriginal ? (t.showTranslation || 'Show translation') : (t.showOriginal || 'Show original')}
+              {translating
+                ? <Loader2 size={11} strokeWidth={2.2} className="spin" />
+                : <Languages size={11} strokeWidth={2.2} />}
+              {translating
+                ? (t.translating || 'Translating…')
+                : hasTranslation
+                  ? (showOriginal ? (t.showTranslation || 'Show translation') : (t.showOriginal || 'Show original'))
+                  : (t.translate || 'Translate')}
             </button>
+          )}
+          {translateErr && (
+            <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '0.2rem' }}>
+              {t.translateFailed || 'Translation failed. Try again.'}
+            </div>
           )}
         </div>
         <div className="msg-react-trigger">
@@ -1044,6 +1088,7 @@ function ChatThread({
             isPinned={msg.id === pinnedMessage?.id}
             onTogglePin={handleTogglePin}
             onImageLoad={scrollToBottom}
+            convId={conv.id}
           />
         ))}
       </div>
