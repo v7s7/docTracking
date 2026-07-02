@@ -500,19 +500,20 @@ router.delete('/conversations/:id/avatar', (req, res) => {
 });
 
 // GET /messages/conversations/:id/messages — fetch (optionally only messages after a given id, for polling)
-// ?lang=en|ar — reader's UI language; foreign-language messages come back with
-// a cached translated_content field alongside the original.
-router.get('/conversations/:id/messages', async (req, res) => {
+// No translation happens here — messages come back as written. The client only
+// ever translates a message when the user explicitly clicks Translate (per
+// message, or for a whole open chat), via the /translate endpoint below.
+router.get('/conversations/:id/messages', (req, res) => {
   const conv = getAccessibleConversation(Number(req.params.id), req.user);
   if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
 
   const after = req.query.after ? Number(req.query.after) : 0;
-  const readerLang = req.query.lang === 'ar' ? 'ar' : 'en';
-  const rows = db.prepare(
+  const messages = db.prepare(
     "SELECT * FROM messages WHERE conversation_id=? AND id > ? ORDER BY id ASC"
-  ).all(conv.id, after).map(attachExtras);
-
-  const messages = await Promise.all(rows.map(m => withTranslation(m, readerLang)));
+  ).all(conv.id, after).map(attachExtras).map(m => ({
+    ...m,
+    detected_lang: m.content ? detectLang(m.content) : null,
+  }));
 
   res.json({ success: true, messages });
 });

@@ -505,7 +505,6 @@ function ChatThread({
   const [mentionIndex, setMentionIndex] = useState(0);
   const [replyTo, setReplyTo] = useState(null);
   const [pinnedMessage, setPinnedMessage] = useState(null);
-  const { lang } = useLang();
   const bodyRef       = useRef(null);
   const fileInput     = useRef(null);
   const textareaRef   = useRef(null);
@@ -579,7 +578,7 @@ function ChatThread({
 
   const load = useCallback(async (reset) => {
     try {
-      const data = await getMessages(conv.id, reset ? 0 : lastIdRef.current, lang);
+      const data = await getMessages(conv.id, reset ? 0 : lastIdRef.current);
       if (data.messages?.length) {
         setMessages(prev => {
           if (reset) return data.messages;
@@ -591,7 +590,7 @@ function ChatThread({
         scrollToBottom();
       }
     } catch (_) {}
-  }, [conv.id, lang, scrollToBottom]);
+  }, [conv.id, scrollToBottom]);
 
   useEffect(() => {
     setMessages([]);
@@ -612,7 +611,9 @@ function ChatThread({
     setTimeout(() => setJumpHighlightId(null), 2000);
   }, []);
 
-  // Append messages pushed live over SSE for this conversation
+  // Append messages pushed live over SSE for this conversation. Translation never
+  // happens automatically here — only if "Translate chat" is switched on for this
+  // conversation (see autoTranslate below), which is itself an explicit user action.
   useEffect(() => {
     if (!liveMessage || liveMessage.conversation_id !== conv.id) return;
     const msg = liveMessage.message;
@@ -620,15 +621,27 @@ function ChatThread({
     setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
     lastIdRef.current = Math.max(lastIdRef.current, msg.id);
     scrollToBottom();
+  }, [liveMessage, conv.id, scrollToBottom]);
 
-    // Live-pushed messages skip the GET route's translation step — fetch it separately.
-    if (msg.content) {
-      translateMessage(conv.id, msg.id, lang).then(({ translated_content, detected_lang }) => {
+  // "Translate chat" — an explicit per-conversation toggle (off by default, resets
+  // when switching chats). While on, translates the messages currently in view and
+  // any that arrive afterward; never triggers on its own.
+  const [autoTranslate, setAutoTranslate] = useState(false);
+
+  useEffect(() => { setAutoTranslate(false); }, [conv.id]);
+
+  useEffect(() => {
+    if (!autoTranslate) return;
+    const targets = messages.filter(m => m.content && !m.translated_content);
+    if (!targets.length) return;
+    targets.forEach(m => {
+      const toLang = (m.detected_lang || (/[؀-ۿ]/.test(m.content) ? 'ar' : 'en')) === 'ar' ? 'en' : 'ar';
+      translateMessage(conv.id, m.id, toLang).then(({ translated_content, detected_lang }) => {
         if (!translated_content) return;
-        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, translated_content, detected_lang } : m));
+        setMessages(prev => prev.map(x => x.id === m.id ? { ...x, translated_content, detected_lang } : x));
       }).catch(() => {});
-    }
-  }, [liveMessage, conv.id, lang, scrollToBottom]);
+    });
+  }, [autoTranslate, messages, conv.id]);
 
   // Mark read whenever new messages arrive while the thread is open
   useEffect(() => {
@@ -992,6 +1005,16 @@ function ChatThread({
           <div className="msg-thread-title">{name}</div>
           <div className={`msg-thread-status${typingText ? ' typing' : ''}`}>{typingText || status}</div>
         </div>
+        <button
+          className="btn-ghost btn-sm"
+          onClick={() => setAutoTranslate(s => !s)}
+          title={autoTranslate ? (t.translateChatOn || 'Translating this chat') : (t.translateChat || 'Translate this chat')}
+          aria-label={autoTranslate ? (t.translateChatOn || 'Translating this chat') : (t.translateChat || 'Translate this chat')}
+          aria-pressed={autoTranslate}
+          style={autoTranslate ? { color: 'var(--accent)', background: 'var(--accent-light)', borderRadius: 8 } : undefined}
+        >
+          <Languages size={16} strokeWidth={1.8} />
+        </button>
         <button className="btn-ghost btn-sm" onClick={toggleSearch} title={t.searchInChat} aria-label={t.searchInChat}>
           <Search size={16} strokeWidth={1.8} />
         </button>
