@@ -240,6 +240,12 @@ if (!messageCols.includes('pinned_at')) {
 if (!messageCols.includes('pinned_by')) {
   db.exec("ALTER TABLE messages ADD COLUMN pinned_by TEXT");
 }
+if (!messageCols.includes('translated_en')) {
+  db.exec("ALTER TABLE messages ADD COLUMN translated_en TEXT");
+}
+if (!messageCols.includes('translated_ar')) {
+  db.exec("ALTER TABLE messages ADD COLUMN translated_ar TEXT");
+}
 
 const taskCols = db.prepare("PRAGMA table_info(tasks)").all().map(c => c.name);
 if (!taskCols.includes('last_reminder_at')) {

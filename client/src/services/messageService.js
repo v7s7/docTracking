@@ -30,8 +30,16 @@ export const sendPresence     = (status = 'active') => req('/messages/presence',
   body: JSON.stringify({ status }),
 });
 
-export const getMessages = (convId, after) =>
-  req(`/messages/conversations/${convId}/messages${after ? `?after=${after}` : ''}`);
+export const getMessages = (convId, after, lang) => {
+  const params = new URLSearchParams();
+  if (after) params.set('after', after);
+  if (lang)  params.set('lang', lang);
+  const qs = params.toString();
+  return req(`/messages/conversations/${convId}/messages${qs ? `?${qs}` : ''}`);
+};
+
+export const translateMessage = (convId, msgId, lang) =>
+  req(`/messages/conversations/${convId}/messages/${msgId}/translate?lang=${lang}`);
 
 export const getConversationMembers = (convId) => req(`/messages/conversations/${convId}/members`);
 

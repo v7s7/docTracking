@@ -5,13 +5,13 @@ import {
   getDirectory, getConversations, openDM, getMessages, sendMessage, markRead, fileUrl,
   getConversationMembers, streamUrl, startGroupChat, hideConversation, unhideConversation,
   getReadStatus, sendTyping, toggleReaction, searchMessages,
-  getPinnedMessage, pinMessage, unpinMessage,
+  getPinnedMessage, pinMessage, unpinMessage, translateMessage,
   uploadGroupAvatar, setGroupAvatarColor as setGroupAvatarColorApi, removeGroupAvatar,
 } from '../../services/messageService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
   Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff, Loader2,
-  Settings, Camera, Trash2,
+  Settings, Camera, Trash2, Languages,
 } from 'lucide-react';
 
 const AVATAR_COLORS = ['#4f46e5', '#0891b2', '#16a34a', '#d97706', '#dc2626', '#9333ea', '#475569'];
@@ -346,6 +346,9 @@ function DirectoryPanel({ onPick, onClose, t }) {
 function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply, canPin, isPinned, onTogglePin, onImageLoad }) {
   const isImage = msg.file_type?.startsWith('image/');
   const [showPicker, setShowPicker] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
+  const hasTranslation = !!msg.translated_content;
+  const displayContent = hasTranslation && !showOriginal ? msg.translated_content : msg.content;
 
   return (
     <div id={`msg-${msg.id}`} className={`msg-bubble-row ${mine ? 'mine' : 'theirs'}${highlighted ? ' highlight' : ''}`}>
@@ -373,8 +376,23 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
           )}
           {msg.content && (
             <div style={{ marginTop: msg.file_url ? '0.4rem' : 0 }}>
-              {renderContent(msg.content, msg.mentions, currentUserId, searchQuery)}
+              {renderContent(displayContent, msg.mentions, currentUserId, searchQuery)}
             </div>
+          )}
+          {hasTranslation && (
+            <button
+              type="button"
+              className="msg-translate-toggle"
+              onClick={() => setShowOriginal(s => !s)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.3rem',
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                fontSize: '0.72rem', color: 'var(--text-3)', opacity: 0.85,
+              }}
+            >
+              <Languages size={11} strokeWidth={2} />
+              {showOriginal ? (t.showTranslation || 'Show translation') : (t.showOriginal || 'Show original')}
+            </button>
           )}
         </div>
         <div className="msg-react-trigger">
@@ -443,6 +461,7 @@ function ChatThread({
   const [mentionIndex, setMentionIndex] = useState(0);
   const [replyTo, setReplyTo] = useState(null);
   const [pinnedMessage, setPinnedMessage] = useState(null);
+  const { lang } = useLang();
   const bodyRef       = useRef(null);
   const fileInput     = useRef(null);
   const textareaRef   = useRef(null);
@@ -516,7 +535,7 @@ function ChatThread({
 
   const load = useCallback(async (reset) => {
     try {
-      const data = await getMessages(conv.id, reset ? 0 : lastIdRef.current);
+      const data = await getMessages(conv.id, reset ? 0 : lastIdRef.current, lang);
       if (data.messages?.length) {
         setMessages(prev => {
           if (reset) return data.messages;
@@ -528,7 +547,7 @@ function ChatThread({
         scrollToBottom();
       }
     } catch (_) {}
-  }, [conv.id, scrollToBottom]);
+  }, [conv.id, lang, scrollToBottom]);
 
   useEffect(() => {
     setMessages([]);
@@ -557,7 +576,15 @@ function ChatThread({
     setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
     lastIdRef.current = Math.max(lastIdRef.current, msg.id);
     scrollToBottom();
-  }, [liveMessage, conv.id, scrollToBottom]);
+
+    // Live-pushed messages skip the GET route's translation step — fetch it separately.
+    if (msg.content) {
+      translateMessage(conv.id, msg.id, lang).then(({ translated_content, detected_lang }) => {
+        if (!translated_content) return;
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, translated_content, detected_lang } : m));
+      }).catch(() => {});
+    }
+  }, [liveMessage, conv.id, lang, scrollToBottom]);
 
   // Mark read whenever new messages arrive while the thread is open
   useEffect(() => {

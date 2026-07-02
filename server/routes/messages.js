@@ -5,6 +5,7 @@ const multer  = require('multer');
 const { db }  = require('../db');
 const { verifyToken, ROLE_WEIGHT } = require('../middleware/authMiddleware');
 const { readConfig }  = require('../services/configService');
+const { detectLang, translateText } = require('../services/translateService');
 
 // Managers and above can pin/unpin announcements in a conversation.
 function isManager(role) {
@@ -163,6 +164,32 @@ function attachExtras(message) {
     reactions: getReactions(message.id),
     reply_to: message.reply_to_id ? getReplyPreview(message.reply_to_id) : null,
   };
+}
+
+// Auto-translates a message into the reader's UI language when it's written in
+// the other one, caching the result on the row so it's only ever translated once.
+async function withTranslation(message, readerLang) {
+  if (!message.content || (readerLang !== 'en' && readerLang !== 'ar')) {
+    return { ...message, translated_content: null, detected_lang: null };
+  }
+
+  const srcLang = detectLang(message.content);
+  if (srcLang === readerLang) {
+    return { ...message, translated_content: null, detected_lang: srcLang };
+  }
+
+  const cacheCol = `translated_${readerLang}`;
+  if (message[cacheCol]) {
+    return { ...message, translated_content: message[cacheCol], detected_lang: srcLang };
+  }
+
+  try {
+    const translated = await translateText(message.content, readerLang);
+    db.prepare(`UPDATE messages SET ${cacheCol} = ? WHERE id = ?`).run(translated, message.id);
+    return { ...message, translated_content: translated, detected_lang: srcLang };
+  } catch (_) {
+    return { ...message, translated_content: null, detected_lang: srcLang };
+  }
 }
 
 // Live updates (SSE) — userId -> Set of open response streams
@@ -473,14 +500,19 @@ router.delete('/conversations/:id/avatar', (req, res) => {
 });
 
 // GET /messages/conversations/:id/messages — fetch (optionally only messages after a given id, for polling)
-router.get('/conversations/:id/messages', (req, res) => {
+// ?lang=en|ar — reader's UI language; foreign-language messages come back with
+// a cached translated_content field alongside the original.
+router.get('/conversations/:id/messages', async (req, res) => {
   const conv = getAccessibleConversation(Number(req.params.id), req.user);
   if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
 
   const after = req.query.after ? Number(req.query.after) : 0;
-  const messages = db.prepare(
+  const readerLang = req.query.lang === 'ar' ? 'ar' : 'en';
+  const rows = db.prepare(
     "SELECT * FROM messages WHERE conversation_id=? AND id > ? ORDER BY id ASC"
   ).all(conv.id, after).map(attachExtras);
+
+  const messages = await Promise.all(rows.map(m => withTranslation(m, readerLang)));
 
   res.json({ success: true, messages });
 });
@@ -536,6 +568,22 @@ router.post('/conversations/:id/messages', uploadSingle, (req, res) => {
     }
     broadcastToUsers(mentions.map(m => m.id), 'mention', { conversation_id: conv.id, message });
   }
+});
+
+// GET /messages/conversations/:convId/messages/:msgId/translate?lang=en|ar
+// Used for messages that arrived live over SSE (the /messages GET route above
+// handles translation for the initial/polled fetch).
+router.get('/conversations/:convId/messages/:msgId/translate', async (req, res) => {
+  const conv = getAccessibleConversation(Number(req.params.convId), req.user);
+  if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
+
+  const row = db.prepare("SELECT * FROM messages WHERE id=? AND conversation_id=?")
+    .get(Number(req.params.msgId), conv.id);
+  if (!row) return res.status(404).json({ success: false, message: 'Message not found.' });
+
+  const readerLang = req.query.lang === 'ar' ? 'ar' : 'en';
+  const translated = await withTranslation(attachExtras(row), readerLang);
+  res.json({ success: true, translated_content: translated.translated_content, detected_lang: translated.detected_lang });
 });
 
 // GET /messages/conversations/:id/members — roster with live presence (department staff or group members)
