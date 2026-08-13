@@ -217,7 +217,7 @@ function isUserOnline(userId) {
 // All members of a conversation (used for ad-hoc group chats), with live presence
 function groupMembers(convId) {
   return db.prepare(`
-    SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text, u.avatar_url, u.avatar_color
+    SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text, u.avatar_url, u.avatar_color, u.ext, u.mobile
     FROM conversation_members cm JOIN users u ON u.id = cm.user_id
     WHERE cm.conversation_id = ? ORDER BY u.full_name COLLATE NOCASE
   `).all(convId).map(u => ({ ...u, online: isUserOnline(u.id) }));
@@ -236,7 +236,7 @@ function getAccessibleConversation(conversationId, user) {
 // GET /messages/directory — colleagues available to start a DM with
 router.get('/directory', (req, res) => {
   const users = db.prepare(
-    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
+    "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color, ext, mobile FROM users WHERE is_active=1 AND id != ? ORDER BY full_name COLLATE NOCASE"
   ).all(req.user.id).map(u => ({ ...u, online: isUserOnline(u.id) }));
   res.json({ success: true, users });
 });
@@ -300,7 +300,7 @@ router.get('/conversations', (req, res) => {
       display = { name: others.map(o => o.full_name).join(', '), avatar_url: conv.avatar_url, avatar_color: conv.avatar_color };
     } else {
       const other = db.prepare(`
-        SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text, u.avatar_url, u.avatar_color
+        SELECT u.id, u.full_name, u.role, u.dept_id, u.last_seen_at, u.presence_status, u.status_text, u.avatar_url, u.avatar_color, u.ext, u.mobile
         FROM conversation_members cm JOIN users u ON u.id = cm.user_id
         WHERE cm.conversation_id = ? AND cm.user_id != ?
       `).get(conv.id, req.user.id);
@@ -338,7 +338,7 @@ router.post('/dm/:userId', (req, res) => {
   if (otherId === req.user.id) {
     return res.status(400).json({ success: false, message: 'Cannot message yourself.' });
   }
-  const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE id=? AND is_active=1").get(otherId);
+  const other = db.prepare("SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color, ext, mobile FROM users WHERE id=? AND is_active=1").get(otherId);
   if (!other) return res.status(404).json({ success: false, message: 'User not found.' });
   other.online = isUserOnline(other.id);
 
@@ -370,7 +370,7 @@ router.post('/group', (req, res) => {
 
   const placeholders = otherIds.map(() => '?').join(',');
   const users = db.prepare(
-    `SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE is_active=1 AND id IN (${placeholders})`
+    `SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color, ext, mobile FROM users WHERE is_active=1 AND id IN (${placeholders})`
   ).all(...otherIds);
   if (users.length !== otherIds.length) {
     return res.status(404).json({ success: false, message: 'One or more users not found.' });
@@ -449,11 +449,33 @@ const groupAvatarUpload = multer({
 
 // Any member of an ad-hoc group chat can change its icon — department channels
 // keep their fixed building icon and aren't customizable here.
+// Who may set a conversation's icon.
+//   group      — any member, as before
+//   department — رئيس القسم and نائب رئيس القسم of that department, plus مدير
+//                النظام. Department channels previously had no icon at all;
+//                the picture is shared, so the people responsible for the
+//                department set it and everyone sees it.
+//   dm         — never
 function getOwnGroupConversation(req, res) {
   const conv = getAccessibleConversation(Number(req.params.id), req.user);
   if (!conv) { res.status(404).json({ success: false, message: 'Conversation not found.' }); return null; }
-  if (conv.type !== 'group') { res.status(400).json({ success: false, message: 'Only group chats have a customizable icon.' }); return null; }
-  return conv;
+
+  if (conv.type === 'group') return conv;
+
+  if (conv.type === 'department') {
+    const u = req.user || {};
+    const isSuper = u.role === 'SUPER_ADMIN';
+    const leadsIt = ['MANAGER', 'ADMIN'].includes(u.role) && u.dept_id === conv.dept_id;
+    if (isSuper || leadsIt) return conv;
+    res.status(403).json({
+      success: false,
+      message: 'يمكن لرئيس القسم أو نائبه أو مدير النظام فقط تغيير صورة قناة القسم.',
+    });
+    return null;
+  }
+
+  res.status(400).json({ success: false, message: 'Only group and department chats have a customizable icon.' });
+  return null;
 }
 
 // POST /messages/conversations/:id/avatar — upload/replace the group's icon
@@ -595,7 +617,7 @@ router.get('/conversations/:id/members', (req, res) => {
   let members;
   if (conv.type === 'department') {
     members = db.prepare(
-      "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
+      "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color, ext, mobile FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
     ).all(conv.dept_id).map(m => ({ ...m, online: isUserOnline(m.id) }));
   } else if (conv.type === 'group') {
     members = groupMembers(conv.id);
@@ -856,4 +878,13 @@ router.post('/status-text', (req, res) => {
   res.json({ success: true, statusText: text });
 });
 
+// The correspondence system posts into department channels and opens DMs. It
+// must reuse these rather than re-implement them, or the two will drift on
+// membership and channel-creation rules. Attached to the router (a function
+// object) so `app.use('/messages', require('./routes/messages'))` still works.
 module.exports = router;
+module.exports.ensureDeptConversation   = ensureDeptConversation;
+module.exports.ensureAllDeptConversations = ensureAllDeptConversations;
+module.exports.ensureMembership         = ensureMembership;
+module.exports.isUserOnline             = isUserOnline;
+module.exports.broadcastToUsers         = broadcastToUsers;

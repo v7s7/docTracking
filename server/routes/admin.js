@@ -12,6 +12,28 @@ const SUPER_ONLY = [verifyToken, requireRole('SUPER_ADMIN')];
 
 const VALID_FIELD_TYPES = ['text', 'number', 'textarea', 'select', 'date', 'email', 'checkbox'];
 
+// A service may restrict which departments are allowed to request it, via a
+// `fromDepts` array of department ids. Omitted or empty means "any department".
+// Returns { error } on bad input, or { value } holding the normalised array.
+function parseFromDepts(raw, cfg) {
+  if (raw === undefined) return { value: undefined };
+  if (raw === null || raw === '') return { value: [] };
+  if (!Array.isArray(raw)) return { error: '`fromDepts` must be an array of department ids.' };
+
+  const known = new Set(cfg.departments.map(d => d.id));
+  const seen  = new Set();
+  for (const id of raw) {
+    if (typeof id !== 'string' || !id.trim()) {
+      return { error: '`fromDepts` entries must be non-empty department ids.' };
+    }
+    if (!known.has(id)) {
+      return { error: `Unknown department id in fromDepts: "${id}".` };
+    }
+    seen.add(id);
+  }
+  return { value: [...seen] };
+}
+
 // ── Full config export/import ─────────────────────────────────────────────
 
 router.get('/config', ...SUPER_ONLY, (req, res) => {
@@ -82,18 +104,29 @@ router.get('/departments/:id/services', ...SUPER_ONLY, (req, res) => {
 });
 
 router.post('/departments/:id/services', ...SUPER_ONLY, (req, res) => {
-  const { label, description } = req.body || {};
+  const { label, description, fromDepts } = req.body || {};
   if (!label) return res.status(400).json({ success: false, message: '`label` is required.' });
 
   const cfg  = readConfig();
   const dept = cfg.departments.find(d => d.id === req.params.id);
   if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
 
+  const parsed = parseFromDepts(fromDepts, cfg);
+  if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
+
   if (!dept.services) dept.services = [];
 
-  const id = (req.params.id + '_' + label).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  // Arabic labels transliterate to nothing under [^a-z0-9], which would collapse
+  // every service on a department to the same id — fall back to a numeric suffix.
+  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  let id = slug ? `${req.params.id}_${slug}` : `${req.params.id}_svc`;
   if (dept.services.find(s => s.id === id)) {
-    return res.status(409).json({ success: false, message: `Service id "${id}" already exists.` });
+    if (slug) {
+      return res.status(409).json({ success: false, message: `Service id "${id}" already exists.` });
+    }
+    let n = 2;
+    while (dept.services.find(s => s.id === `${id}_${n}`)) n++;
+    id = `${id}_${n}`;
   }
 
   const service = {
@@ -101,6 +134,7 @@ router.post('/departments/:id/services', ...SUPER_ONLY, (req, res) => {
     label: label.trim(),
     description: (description || '').trim(),
     fields: [],
+    fromDepts: parsed.value || [],
   };
   dept.services.push(service);
   writeConfig(cfg);
@@ -115,9 +149,14 @@ router.put('/departments/:id/services/:svcId', ...SUPER_ONLY, (req, res) => {
   const idx = (dept.services || []).findIndex(s => s.id === req.params.svcId);
   if (idx === -1) return res.status(404).json({ success: false, message: 'Service not found.' });
 
-  const { label, description } = req.body || {};
+  const { label, description, fromDepts } = req.body || {};
+
+  const parsed = parseFromDepts(fromDepts, cfg);
+  if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
+
   if (label       !== undefined) dept.services[idx].label       = label.trim();
   if (description !== undefined) dept.services[idx].description = description.trim();
+  if (parsed.value !== undefined) dept.services[idx].fromDepts  = parsed.value;
   writeConfig(cfg);
   res.json({ success: true, service: dept.services[idx] });
 });

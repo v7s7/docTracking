@@ -188,6 +188,15 @@ if (!userCols.includes('avatar_url')) {
 if (!userCols.includes('avatar_color')) {
   db.exec("ALTER TABLE users ADD COLUMN avatar_color TEXT");
 }
+// Phone directory fields. The 4-digit داخلي is what staff actually look each
+// other up by, and it lived only in config/directory.json where no query could
+// reach it. Populated by scripts/link-directory.js --apply.
+if (!userCols.includes('ext')) {
+  db.exec("ALTER TABLE users ADD COLUMN ext TEXT");
+}
+if (!userCols.includes('mobile')) {
+  db.exec("ALTER TABLE users ADD COLUMN mobile TEXT");
+}
 
 const convCols = db.prepare("PRAGMA table_info(conversations)").all().map(c => c.name);
 if (!convCols.includes('avatar_url')) {
@@ -280,6 +289,74 @@ db.exec(`
     FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_reactions_msg ON message_reactions(message_id);
+`);
+
+// ── نظام المراسلات الداخلية — internal correspondence ─────────
+// Deliberately separate from `tasks` (Customer-Service hub routing) and from
+// `messages` (chat). A correspondence is a formal memo sent department →
+// department that must clear the SENDER's own department head before the
+// receiving department ever sees it.
+//
+//   pending  بانتظار الموافقة  — waiting on the sending department's head
+//   approved موافق عليها       — cleared; now visible to the receiving department
+//   done     تم الإنجاز        — receiving department completed the work
+//   returned مُعادة للمراجعة   — rejected with a reason, back with the author
+//
+// A rejected memo keeps its id and serial through every reject/resubmit cycle;
+// only the timeline grows.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS correspondences (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    serial            TEXT UNIQUE,
+    subject           TEXT NOT NULL,
+    body              TEXT NOT NULL,
+    service_id        TEXT,
+    from_user_id      INTEGER NOT NULL,
+    from_user_name    TEXT NOT NULL,
+    from_dept_id      TEXT NOT NULL,
+    to_dept_id        TEXT NOT NULL,
+    priority          TEXT NOT NULL DEFAULT 'med',
+    status            TEXT NOT NULL DEFAULT 'pending',
+    rejection_reason  TEXT,
+    approved_by_name  TEXT,
+    approved_at       TEXT,
+    completed_by_name TEXT,
+    completed_at      TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    CHECK (status   IN ('pending','approved','done','returned')),
+    CHECK (priority IN ('high','med','low')),
+    CHECK (from_dept_id <> to_dept_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS correspondence_events (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    correspondence_id INTEGER NOT NULL,
+    type              TEXT NOT NULL,
+    actor_id          INTEGER,
+    actor_name        TEXT NOT NULL,
+    note              TEXT,
+    is_reject         INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY(correspondence_id) REFERENCES correspondences(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS correspondence_attachments (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    correspondence_id INTEGER NOT NULL,
+    stored_name       TEXT NOT NULL,
+    file_name         TEXT NOT NULL,
+    file_type         TEXT,
+    file_size         INTEGER,
+    uploaded_at       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY(correspondence_id) REFERENCES correspondences(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_corr_from    ON correspondences(from_dept_id, status);
+  CREATE INDEX IF NOT EXISTS idx_corr_to      ON correspondences(to_dept_id, status);
+  CREATE INDEX IF NOT EXISTS idx_corr_author  ON correspondences(from_user_id, status);
+  CREATE INDEX IF NOT EXISTS idx_corr_events  ON correspondence_events(correspondence_id, id);
+  CREATE INDEX IF NOT EXISTS idx_corr_attach  ON correspondence_attachments(correspondence_id);
 `);
 
 // ── Serial number helper ─────────────────────────────────────

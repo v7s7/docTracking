@@ -3,15 +3,23 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LangProvider, useLang } from './context/LangContext';
 import {
   LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, MessageCircle, Camera, Trash2, Download,
+  Mail, PenSquare, Inbox, CheckCircle2, RotateCcw, Archive, ChevronDown, ChevronLeft, BookUser, BarChart3,
 } from 'lucide-react';
 import { exportTasks } from './services/taskService';
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
-import Dashboard from './components/dashboard/Dashboard';
+import MyTasks from './components/dashboard/MyTasks';
+import { ToastProvider, useToast } from './components/common/Toast';
 import TaskDetail from './components/tasks/TaskDetail';
 import UserManagement from './components/users/UserManagement';
 import NotificationBell from './components/notifications/NotificationBell';
 import Messages from './components/messages/Messages';
+import CorrespondenceDashboard from './components/correspondence/CorrespondenceDashboard';
+import CorrespondenceList from './components/correspondence/CorrespondenceList';
+import NewCorrespondence from './components/correspondence/NewCorrespondence';
+import { getCorrStats } from './services/correspondenceService';
+import StaffDirectory from './components/directory/StaffDirectory';
+import Reports from './components/reports/Reports';
 import { getDepartments } from './services/deptService';
 import { getUnreadCount, getConversations, sendPresence, getStatusText, setStatusText, fileUrl } from './services/messageService';
 import { uploadAvatar, setAvatarColor, removeAvatar } from './services/userService';
@@ -29,26 +37,48 @@ const isElectron = typeof window !== 'undefined' && !!window.electron?.isElectro
 // ── Role helpers ─────────────────────────────────────────────
 function isSuperAdmin(r) { return r === 'SUPER_ADMIN'; }
 
+// The correspondence sub-menu. Ids double as view keys.
+const CORR_VIEWS = ['corr-new', 'corr-inbox', 'corr-approvals', 'corr-returned', 'corr-archive', 'corr-reports'];
+
+function corrChildren(t) {
+  const c = t.corr.nav;
+  return [
+    { id: 'corr-new',       icon: <PenSquare   size={17} strokeWidth={1.8} />, label: c.new },
+    { id: 'corr-inbox',     icon: <Inbox       size={17} strokeWidth={1.8} />, label: c.inbox,     badge: 'inbox' },
+    { id: 'corr-approvals', icon: <CheckCircle2 size={17} strokeWidth={1.8} />, label: c.approvals, badge: 'approvals' },
+    { id: 'corr-returned',  icon: <RotateCcw   size={17} strokeWidth={1.8} />, label: c.returned,  badge: 'returned' },
+    { id: 'corr-archive',   icon: <Archive     size={17} strokeWidth={1.8} />, label: c.archive },
+    { id: 'corr-reports',   icon: <BarChart3   size={17} strokeWidth={1.8} />, label: t.reports.title },
+  ];
+}
+
 // ── Nav items per role ───────────────────────────────────────
 function navItems(role, t, hasMessages, chatOnly) {
   // The desktop app is chat-focused for now: show only Messages.
-  // (Easy to revert — just stop passing chatOnly.)
+  // Correspondence is web-first while the desktop question is open — flip this
+  // single flag to surface it there too.
   if (chatOnly && hasMessages) {
     return [{ id: 'messages', icon: <MessageCircle size={20} strokeWidth={1.8} />, label: t.messages }];
   }
 
   const items = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} strokeWidth={1.8} />, label: t.dashboard },
-    { id: 'tasks',     icon: <ClipboardList   size={20} strokeWidth={1.8} />, label: t.tasks },
+    { id: 'corr',      icon: <Mail size={20} strokeWidth={1.8} />, label: t.corr.nav.correspondence, children: corrChildren(t) },
   ];
+  items.push({ id: 'directory', icon: <BookUser size={20} strokeWidth={1.8} />, label: t.directory.title });
   if (hasMessages) items.push({ id: 'messages', icon: <MessageCircle size={20} strokeWidth={1.8} />, label: t.messages });
   if (isSuperAdmin(role)) items.push({ id: 'users',    icon: <Users    size={20} strokeWidth={1.8} />, label: t.users });
   if (isSuperAdmin(role)) items.push({ id: 'settings', icon: <Settings size={20} strokeWidth={1.8} />, label: t.settings });
   return items;
 }
 
+function NavBadge({ n }) {
+  if (!n) return null;
+  return <span className="sidebar-badge">{n > 99 ? '99+' : n}</span>;
+}
+
 // ── Header ───────────────────────────────────────────────────
-function Header({ user, onTaskClick }) {
+function Header({ user, onTaskClick, onCorrClick }) {
   const { logout, updateUser } = useAuth();
   const { t, lang, toggle } = useLang();
   const [statusText, setStatusTextState] = useState('');
@@ -135,7 +165,7 @@ function Header({ user, onTaskClick }) {
           <button className={`lang-btn${lang === 'en' ? ' active' : ''}`} type="button"
             onClick={() => lang !== 'en' && toggle()}>EN</button>
         </div>
-        <NotificationBell onTaskClick={onTaskClick} />
+        <NotificationBell onTaskClick={onTaskClick} onCorrClick={onCorrClick} />
         <div style={{ position: 'relative' }}>
           <div className="user-chip" onClick={() => setShowStatusPopover(s => !s)} role="button" tabIndex={0} style={{ cursor: 'pointer' }}>
             <div className="user-avatar" style={!user?.avatar_url && user?.avatar_color ? { background: user.avatar_color } : undefined}>
@@ -216,35 +246,75 @@ function Header({ user, onTaskClick }) {
 }
 
 // ── Sidebar ──────────────────────────────────────────────────
-function Sidebar({ activeView, onNav, user, unreadMsgs }) {
+function Sidebar({ activeView, onNav, user, unreadMsgs, corrBadges }) {
   const { t } = useLang();
   const items = navItems(user?.role, t, !!user?.id, isElectron);
+  const inCorr = CORR_VIEWS.includes(activeView);
+  const [openGroup, setOpenGroup] = useState(inCorr);
+
+  // Opening a correspondence screen from anywhere else (a dashboard row, a
+  // "returned" card) should reveal the group rather than leave it collapsed.
+  useEffect(() => { if (inCorr) setOpenGroup(true); }, [inCorr]);
+
+  const totalCorr = (corrBadges?.approvals || 0) + (corrBadges?.returned || 0) + (corrBadges?.inbox || 0);
 
   return (
     <aside className="app-sidebar">
-      {items.map(item => (
-        <div
-          key={item.id}
-          className={`sidebar-item${activeView === item.id ? ' active' : ''}`}
-          style={{ paddingInlineStart: '1.25rem', gap: '0.7rem' }}
-          onClick={() => onNav(item.id)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => e.key === 'Enter' && onNav(item.id)}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{item.icon}</span>
-          <span style={{ flex: 1 }}>{item.label}</span>
-          {item.id === 'messages' && unreadMsgs > 0 && (
-            <span style={{
-              background: 'var(--primary)', color: '#fff', borderRadius: 99,
-              fontSize: '0.68rem', fontWeight: 700, minWidth: 18, height: 18,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
-            }}>
-              {unreadMsgs > 99 ? '99+' : unreadMsgs}
-            </span>
-          )}
-        </div>
-      ))}
+      {items.map(item => {
+        if (item.children) {
+          const expanded = openGroup;
+          const Chevron  = expanded ? ChevronDown : ChevronLeft;
+          return (
+            <div key={item.id}>
+              <div
+                className={`sidebar-item${inCorr && !expanded ? ' active' : ''}`}
+                style={{ paddingInlineStart: '1.25rem', gap: '0.7rem' }}
+                onClick={() => setOpenGroup(v => !v)}
+                role="button"
+                aria-expanded={expanded}
+                tabIndex={0}
+                onKeyDown={e => e.key === 'Enter' && setOpenGroup(v => !v)}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{item.icon}</span>
+                <span style={{ flex: 1 }}>{item.label}</span>
+                {!expanded && <NavBadge n={totalCorr} />}
+                <Chevron size={15} strokeWidth={2} style={{ opacity: 0.6, flexShrink: 0 }} />
+              </div>
+
+              {expanded && item.children.map(ch => (
+                <div
+                  key={ch.id}
+                  className={`sidebar-item sidebar-subitem${activeView === ch.id ? ' active' : ''}`}
+                  onClick={() => onNav(ch.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === 'Enter' && onNav(ch.id)}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{ch.icon}</span>
+                  <span style={{ flex: 1 }}>{ch.label}</span>
+                  <NavBadge n={ch.badge ? corrBadges?.[ch.badge] : 0} />
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        return (
+          <div
+            key={item.id}
+            className={`sidebar-item${activeView === item.id ? ' active' : ''}`}
+            style={{ paddingInlineStart: '1.25rem', gap: '0.7rem' }}
+            onClick={() => onNav(item.id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === 'Enter' && onNav(item.id)}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{item.icon}</span>
+            <span style={{ flex: 1 }}>{item.label}</span>
+            {item.id === 'messages' && <NavBadge n={unreadMsgs} />}
+          </div>
+        );
+      })}
     </aside>
   );
 }
@@ -255,8 +325,22 @@ function AppShell() {
   const { t }             = useLang();
   const [view, setView]   = useState(() => (isElectron && user?.id) ? 'messages' : 'dashboard');
   const [taskId, setTaskId] = useState(null);
-  const [refresh, setRefresh]       = useState(0);
+  // Bumped when a legacy task changes. Nothing re-reads it any more — the
+  // dashboard it used to remount is now the correspondence board — but
+  // TaskDetail (still reachable from the notification bell) expects the
+  // callback, so the setter stays and the value is intentionally unused.
+  const [, setRefresh]              = useState(0);
   const [unreadMsgs, setUnreadMsgs] = useState(0);
+  // Correspondence being edited after rejection — non-null puts the composer
+  // into edit mode. Cleared whenever the user navigates away.
+  const [editingCorr, setEditingCorr] = useState(null);
+  const [corrBadges, setCorrBadges]   = useState({ inbox: 0, approvals: 0, returned: 0 });
+  const [corrApprovable, setCorrApprovable] = useState([]);
+  const [corrRefresh, setCorrRefresh] = useState(0);
+  // Set when another screen asks to open a specific conversation; Messages
+  // reads it on mount and clears it.
+  const [pendingConv, setPendingConv] = useState(null);
+  const toast = useToast();
   const lastSeenMsgRef = useRef({});
   const pendingNotifRef = useRef({});
   const notifBatchTimerRef = useRef(null);
@@ -269,7 +353,36 @@ function AppShell() {
   const handleNavAndClearTask = useCallback((v) => {
     setView(v);
     setTaskId(null);
+    setEditingCorr(null);   // leaving the composer abandons an in-progress edit
   }, []);
+
+  // Sidebar badge counts. Refreshed on nav and after every mutation so the
+  // Approvals count drops the moment something is approved.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    getCorrStats()
+      .then(r => {
+        if (cancelled) return;
+        setCorrBadges(r.badges || { inbox: 0, approvals: 0, returned: 0 });
+        setCorrApprovable(r.canApproveFor || []);
+      })
+      .catch(() => { /* badges are cosmetic — never block the shell */ });
+    return () => { cancelled = true; };
+  }, [user?.id, view, corrRefresh]);
+
+  const openCorrEditor = useCallback(item => {
+    setEditingCorr(item);
+    setView('corr-new');
+    setTaskId(null);
+  }, []);
+
+  const afterCorrSave = useCallback(msg => {
+    setEditingCorr(null);
+    if (msg) toast.success(msg);
+    setCorrRefresh(n => n + 1);
+    setView('dashboard');
+  }, [toast]);
 
   // Track real user activity (mouse/keyboard/touch/focus) so browser tabs can
   // detect "away" the same way the desktop app does via OS idle time.
@@ -389,12 +502,18 @@ function AppShell() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <Header user={user} onTaskClick={id => { setView('tasks'); setTaskId(id); }} />
+      <a className="skip-link" href="#main-content">{t.skipToContent}</a>
+      <Header user={user} onTaskClick={id => { setView('tasks'); setTaskId(id); }} onCorrClick={() => handleNavAndClearTask('corr-approvals')} />
 
       <div style={{ display: 'flex', flex: 1, marginTop: 'var(--header-h)' }}>
-        <Sidebar activeView={taskId ? 'tasks' : view} onNav={handleNavAndClearTask} user={user} unreadMsgs={unreadMsgs} />
+        <Sidebar
+          activeView={taskId ? 'tasks' : view}
+          onNav={handleNavAndClearTask}
+          user={user}
+          unreadMsgs={unreadMsgs}
+          corrBadges={corrBadges} />
 
-        <main className="app-main">
+        <main className="app-main" id="main-content" tabIndex={-1}>
           {taskId ? (
             <TaskDetail
               taskId={taskId}
@@ -402,7 +521,30 @@ function AppShell() {
               onUpdate={() => setRefresh(r => r + 1)}
             />
           ) : view === 'dashboard' ? (
-            <Dashboard onTaskClick={id => { setView('tasks'); setTaskId(id); }} key={refresh} />
+            <>
+              <CorrespondenceDashboard
+                onEdit={openCorrEditor}
+                onDiscuss={id => { setPendingConv({ conversationId: id }); handleNavAndClearTask('messages'); }}
+                refreshKey={corrRefresh} />
+              {/* Personal to-do list — its own table, unaffected by the
+                  correspondence merge, so it stays on the landing page. */}
+              <div style={{ marginTop: '1.25rem' }}><MyTasks /></div>
+            </>
+          ) : view === 'corr-new' ? (
+            <NewCorrespondence
+              key={editingCorr?.id || 'new'}
+              editing={editingCorr}
+              onDone={afterCorrSave}
+              onCancel={editingCorr ? () => handleNavAndClearTask('corr-returned') : undefined} />
+          ) : view === 'corr-reports' ? (
+            <Reports />
+          ) : CORR_VIEWS.includes(view) ? (
+            <CorrespondenceList
+              box={view.replace('corr-', '')}
+              canApproveFor={corrApprovable}
+              onEdit={openCorrEditor}
+              onDiscuss={id => { setPendingConv({ conversationId: id }); handleNavAndClearTask('messages'); }}
+              refreshKey={corrRefresh} />
           ) : view === 'tasks' ? (
             <div className="empty-state">
               <div className="empty-icon"><ClipboardList size={32} strokeWidth={1.5} /></div>
@@ -414,8 +556,12 @@ function AppShell() {
                 <Download size={14} strokeWidth={2} />{t.exportCSV}
               </button>
             </div>
+          ) : view === 'directory' ? (
+            <StaffDirectory
+              onChat={u => { setPendingConv({ userId: u.id }); handleNavAndClearTask('messages'); }}
+              onCompose={() => handleNavAndClearTask('corr-new')} />
           ) : view === 'messages' && user.id ? (
-            <Messages />
+            <Messages openConversation={pendingConv} onOpened={() => setPendingConv(null)} />
           ) : view === 'users' && isSuperAdmin(user.role) ? (
             <UserManagement />
           ) : view === 'settings' && isSuperAdmin(user.role) ? (
@@ -436,7 +582,9 @@ export default function App() {
   return (
     <LangProvider>
       <AuthProvider>
-        <AppShell />
+        <ToastProvider>
+          <AppShell />
+        </ToastProvider>
       </AuthProvider>
     </LangProvider>
   );

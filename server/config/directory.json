@@ -1,0 +1,886 @@
+{
+  "_note": "Staff directory parsed from \"ارقام الهواتف الإدارة المحدثة.xls\". Order is authoritative: index 0 = رئيس القسم, index 1 = النائب. `username` is null until the person has a system account. Corrections applied 2026-08-13 from SWD: see per-person \"note\" fields.",
+  "source": "Hierarchy sheet; الصيانة and الاتصال وخدمة العملاء from sheet 1",
+  "departments": {
+    "hr_dept": [
+      {
+        "name": "علي محمد قمبر",
+        "username": null,
+        "ext": "5022",
+        "mobile": "39224992"
+      },
+      {
+        "name": "الشيخ عطية الله آل خليفة",
+        "username": "Ateyatalla.alkhalifa",
+        "ext": "4044",
+        "mobile": "36711111"
+      },
+      {
+        "name": "أنس عادل زمان",
+        "username": null,
+        "ext": "5017",
+        "mobile": "37771715"
+      },
+      {
+        "name": "ادم أحمد أحمدي",
+        "username": null,
+        "ext": "5077",
+        "mobile": "33211217"
+      },
+      {
+        "name": "عبدالله القارئ",
+        "username": null,
+        "ext": "5072",
+        "mobile": "38323039"
+      },
+      {
+        "name": "عيسى يوسف بوعلاي",
+        "username": null,
+        "ext": "5079",
+        "mobile": "37748858"
+      },
+      {
+        "name": "عبدالرحيم أحمد خالد",
+        "username": null,
+        "ext": "5054",
+        "mobile": "33113456"
+      }
+    ],
+    "accounts_dept": [
+      {
+        "name": "علي عبدالرحمن مطر",
+        "username": null,
+        "ext": "5013",
+        "mobile": "33000349"
+      },
+      {
+        "name": "علاء عبدالله شفيع",
+        "username": null,
+        "ext": "5009",
+        "mobile": "39966607"
+      },
+      {
+        "name": "كمال الدين عثمان",
+        "username": null,
+        "ext": "5048",
+        "mobile": "39139551"
+      },
+      {
+        "name": "علي محمد القصاب",
+        "username": null,
+        "ext": "5061",
+        "mobile": "39998195"
+      },
+      {
+        "name": "اسلام الشعراوي",
+        "username": null,
+        "ext": "5073",
+        "mobile": "37144828"
+      },
+      {
+        "name": "عبدالعزيز وليد الخاجة",
+        "username": null,
+        "ext": "5041",
+        "mobile": "32323902"
+      },
+      {
+        "name": "سالم عيسى حمود",
+        "username": null,
+        "ext": "5020",
+        "mobile": "36637013"
+      },
+      {
+        "name": "محمد عبدالله الدوسري",
+        "username": null,
+        "ext": "4007",
+        "mobile": "39300181"
+      }
+    ],
+    "procurement_dept": [
+      {
+        "name": "فيصل ابراهيم المير",
+        "username": null,
+        "ext": "4030",
+        "mobile": "36699665"
+      },
+      {
+        "name": "جمال علي دراج",
+        "username": null,
+        "ext": "5034",
+        "mobile": "39666921"
+      },
+      {
+        "name": "محمد علي التميمي",
+        "username": null,
+        "ext": "5008",
+        "mobile": "39214146"
+      },
+      {
+        "name": "عبدالباسط هلال حاجي",
+        "username": null,
+        "ext": "5059",
+        "mobile": "33445331"
+      },
+      {
+        "name": "أحمد يوسف البنكي",
+        "username": null,
+        "ext": "4033",
+        "mobile": "33573373"
+      },
+      {
+        "name": "إبراهيم عبدالله الشمري",
+        "username": null,
+        "ext": null,
+        "mobile": "37117155"
+      }
+    ],
+    "it_dept": [
+      {
+        "name": "عبدالله محمد كاندي",
+        "username": null,
+        "ext": "5040",
+        "mobile": "39554452"
+      },
+      {
+        "name": "عبدالله فؤاد خيري",
+        "username": null,
+        "ext": "5010",
+        "mobile": "33036364"
+      },
+      {
+        "name": "ملك عادل خان",
+        "username": null,
+        "ext": "5051",
+        "mobile": "36080905"
+      },
+      {
+        "name": "هشام محمد حياة",
+        "username": null,
+        "ext": "5071",
+        "mobile": "38449994"
+      },
+      {
+        "name": "عبدالعزيز الكبيسي",
+        "username": null,
+        "ext": "4060",
+        "mobile": "32127686"
+      }
+    ],
+    "admin_affairs_dept": [
+      {
+        "name": "علي محمد قمبر",
+        "username": "a.qambar",
+        "ext": "5022",
+        "mobile": "39224992"
+      },
+      {
+        "name": "الشيخ عطية الله آل خليفة",
+        "username": "Ateyatalla.alkhalifa",
+        "ext": "4044",
+        "mobile": "36711111"
+      },
+      {
+        "name": "محمود علي عبدالرحمن",
+        "username": null,
+        "ext": "5025",
+        "mobile": "33242151"
+      },
+      {
+        "name": "محمد يعقوب الماجد",
+        "username": null,
+        "ext": "5015",
+        "mobile": "66765061"
+      },
+      {
+        "name": "يوسف عيسى الحميدي",
+        "username": null,
+        "ext": "5044",
+        "mobile": "37773759"
+      },
+      {
+        "name": "عبدالعزيز وحيد غازي",
+        "username": null,
+        "ext": "5035",
+        "mobile": "36336683"
+      },
+      {
+        "name": "محمد صلاح بوحسن",
+        "username": null,
+        "ext": "5000",
+        "mobile": "33099923",
+        "note": "كان \"0\" في الملف — يُرجى تأكيد 5000."
+      },
+      {
+        "name": "شاكر علي النجدي",
+        "username": null,
+        "ext": "5028",
+        "mobile": "38202828"
+      }
+    ],
+    "mosques_guidance_dept": [
+      {
+        "name": "حبيب غلام النامليتي",
+        "username": null,
+        "ext": "5023",
+        "mobile": "39182782"
+      },
+      {
+        "name": "عمار حسن طيب",
+        "username": null,
+        "ext": "5045",
+        "mobile": "66939909"
+      },
+      {
+        "name": "صالح عبدالكريم",
+        "username": null,
+        "ext": "5038",
+        "mobile": "39993837"
+      },
+      {
+        "name": "حسين محمد المناعي",
+        "username": null,
+        "ext": "5052",
+        "mobile": "36702090"
+      },
+      {
+        "name": "محمد عبداللطيف محمد",
+        "username": null,
+        "ext": "5069",
+        "mobile": "35676906"
+      },
+      {
+        "name": "حمزة معاذ العبدالرزاق",
+        "username": null,
+        "ext": "4051",
+        "mobile": "36959225"
+      },
+      {
+        "name": "معاذ ناصر لوري",
+        "username": null,
+        "ext": "5063",
+        "mobile": "39666017"
+      },
+      {
+        "name": "زين العابدين صالح",
+        "username": null,
+        "ext": "5095",
+        "mobile": "34200207"
+      },
+      {
+        "name": "كامل الروحاني",
+        "username": null,
+        "ext": "5039",
+        "mobile": "34411155"
+      },
+      {
+        "name": "يوسف محمد الجوري",
+        "username": null,
+        "ext": "4050",
+        "mobile": "39338699"
+      },
+      {
+        "name": "عمر علي الحمر",
+        "username": null,
+        "ext": "5085",
+        "mobile": "34462914"
+      },
+      {
+        "name": "راشد ابراهيم الجفن",
+        "username": null,
+        "ext": "4028",
+        "mobile": "32273747"
+      },
+      {
+        "name": "خالد أسامة عبيد",
+        "username": null,
+        "ext": "4029",
+        "mobile": "39029500"
+      },
+      {
+        "name": "عبدالناصر الجزاف",
+        "username": null,
+        "ext": "4040",
+        "mobile": "36807981"
+      },
+      {
+        "name": "أحمد علي المحميد",
+        "username": null,
+        "ext": "4027",
+        "mobile": "66907701"
+      }
+    ],
+    "investments_dept": [
+      {
+        "name": "علي عبدالرحمن مطر",
+        "username": "a.mattar",
+        "ext": "5013",
+        "mobile": "33000349"
+      },
+      {
+        "name": "أمجد جمال خشمان",
+        "username": null,
+        "ext": "5043",
+        "mobile": "33344465"
+      },
+      {
+        "name": "عبدالله أحمد العباسي",
+        "username": null,
+        "ext": "5018",
+        "mobile": "39904363"
+      },
+      {
+        "name": "خليفة فريد كمال",
+        "username": null,
+        "ext": "5050",
+        "mobile": "39452244"
+      },
+      {
+        "name": "نزيه عبد الباسط",
+        "username": null,
+        "ext": "5026",
+        "mobile": "39804646"
+      },
+      {
+        "name": "عيسى جاسم الكوهجي",
+        "username": null,
+        "ext": "4025",
+        "mobile": "33308776"
+      },
+      {
+        "name": "عبد الله سالم محبوب",
+        "username": null,
+        "ext": "5068",
+        "mobile": "39808566"
+      },
+      {
+        "name": "فيصل خالد العوضي",
+        "username": null,
+        "ext": "4035",
+        "mobile": "36271534"
+      },
+      {
+        "name": "طلال يعقوب بوخماس",
+        "username": null,
+        "ext": "4046",
+        "mobile": "66636369"
+      },
+      {
+        "name": "محمد مازن الفروخ",
+        "username": null,
+        "ext": "5087",
+        "mobile": "39964968"
+      }
+    ],
+    "revenue_collection_dept": [
+      {
+        "name": "خالد نصرالله البستكي",
+        "username": null,
+        "ext": "4023",
+        "mobile": "36680091"
+      },
+      {
+        "name": "مرسال الانصاري",
+        "username": null,
+        "ext": "5081",
+        "mobile": "36860800"
+      },
+      {
+        "name": "حمد علي الخاجه",
+        "username": null,
+        "ext": "5058",
+        "mobile": "34010053"
+      },
+      {
+        "name": "هاني الغزال",
+        "username": null,
+        "ext": "5078",
+        "mobile": "33262686"
+      },
+      {
+        "name": "خالد جمال الذوادي",
+        "username": null,
+        "ext": "5086",
+        "mobile": "33423338"
+      },
+      {
+        "name": "يوسف راشد ياقوت",
+        "username": null,
+        "ext": "4026",
+        "mobile": "35336920"
+      },
+      {
+        "name": "محمد سلمان المالكي",
+        "username": null,
+        "ext": "5067",
+        "mobile": "33441908"
+      }
+    ],
+    "endowment_disbursement_dept": [
+      {
+        "name": "عبد الرزاق سلطان",
+        "username": null,
+        "ext": "5016",
+        "mobile": "36864484"
+      },
+      {
+        "name": "خليفة شوقي المطوع",
+        "username": null,
+        "ext": "5007",
+        "mobile": "32288979"
+      },
+      {
+        "name": "أحمد عادل المحرقي",
+        "username": null,
+        "ext": "4039",
+        "mobile": "36943421"
+      },
+      {
+        "name": "فيصل سعود جمعه",
+        "username": null,
+        "ext": "4041",
+        "mobile": "66333409"
+      },
+      {
+        "name": "أسامة علي قمبر",
+        "username": null,
+        "ext": "4012",
+        "mobile": "33308219"
+      },
+      {
+        "name": "يوسف عبدالله حسين",
+        "username": null,
+        "ext": null,
+        "mobile": "33665512"
+      }
+    ],
+    "sharia_studies_dept": [
+      {
+        "name": "الشيخ صباح آل خليفة",
+        "username": null,
+        "ext": "5027",
+        "mobile": "39309008"
+      },
+      {
+        "name": "يوسف حمد المبارك",
+        "username": null,
+        "ext": "5093",
+        "mobile": "39363338"
+      },
+      {
+        "name": "محمد ابراهيم عبدالقادر",
+        "username": null,
+        "ext": "5082",
+        "mobile": "38015844"
+      },
+      {
+        "name": "عبدالله خالد نجيبي",
+        "username": null,
+        "ext": "4004",
+        "mobile": "39612211"
+      },
+      {
+        "name": "حسين أحمد السادة",
+        "username": null,
+        "ext": "5070",
+        "mobile": "33195919"
+      },
+      {
+        "name": "عبدالمنعم آل محمود",
+        "username": null,
+        "ext": "4043",
+        "mobile": "33893385"
+      }
+    ],
+    "legal_affairs_dept": [
+      {
+        "name": "ماجد حسين البلوشي",
+        "username": null,
+        "ext": "5012",
+        "mobile": "39414988"
+      },
+      {
+        "name": "عبدالله الدوسري",
+        "username": null,
+        "ext": "5088",
+        "mobile": "39691165"
+      },
+      {
+        "name": "عاصم حمزة",
+        "username": null,
+        "ext": "5019",
+        "mobile": "33777009"
+      },
+      {
+        "name": "عمر راشد ياسين",
+        "username": null,
+        "ext": "5056",
+        "mobile": "32124224"
+      },
+      {
+        "name": "أحمد يوسف خنجي",
+        "username": null,
+        "ext": "4005",
+        "mobile": "37771006"
+      },
+      {
+        "name": "سعود القحطاني",
+        "username": null,
+        "ext": "5057",
+        "mobile": "33361776"
+      },
+      {
+        "name": "خليفة ياسين",
+        "username": null,
+        "ext": "4057",
+        "mobile": "39464525"
+      },
+      {
+        "name": "عبدالله أحمد الأثري",
+        "username": null,
+        "ext": "4054",
+        "mobile": "33338352"
+      },
+      {
+        "name": "علي محمد الدوسري",
+        "username": null,
+        "ext": "4055",
+        "mobile": "37737441"
+      }
+    ],
+    "engineering_services_dept": [
+      {
+        "name": "عبد الله راشد المعيلي",
+        "username": null,
+        "ext": "5003",
+        "mobile": "36055552"
+      },
+      {
+        "name": "خالد محمد الكواري",
+        "username": null,
+        "ext": "5084",
+        "mobile": "33558869"
+      },
+      {
+        "name": "شوقي حمد الدوسري",
+        "username": null,
+        "ext": "5090",
+        "mobile": "39215512"
+      },
+      {
+        "name": "عامر بالاماداتيل",
+        "username": null,
+        "ext": "5094",
+        "mobile": "33505883"
+      },
+      {
+        "name": "رائد سعيد الرياشي",
+        "username": null,
+        "ext": "5047",
+        "mobile": "33020505"
+      },
+      {
+        "name": "يوسف أحمد عيد أدم",
+        "username": null,
+        "ext": "5064",
+        "mobile": "33433633"
+      },
+      {
+        "name": "محمد نسيم موزني",
+        "username": null,
+        "ext": "5099",
+        "mobile": "39405102"
+      },
+      {
+        "name": "ابراهيم مسعود الهرمي",
+        "username": null,
+        "ext": "5096",
+        "mobile": "35195656"
+      },
+      {
+        "name": "عبدالله الجناحي",
+        "username": null,
+        "ext": "4022",
+        "mobile": "39901991"
+      },
+      {
+        "name": "محمد طلحه وحيد",
+        "username": null,
+        "ext": "4006",
+        "mobile": "33104704"
+      },
+      {
+        "name": "أحمد حامد الزيود",
+        "username": null,
+        "ext": "4021",
+        "mobile": "36259353"
+      },
+      {
+        "name": "حسين أكبر صابري",
+        "username": null,
+        "ext": "5032",
+        "mobile": "66677755"
+      },
+      {
+        "name": "عبدالرحمن البكري",
+        "username": null,
+        "ext": "4034",
+        "mobile": "32287661"
+      },
+      {
+        "name": "محمد جمال الصقر",
+        "username": null,
+        "ext": "4049",
+        "mobile": "33163277"
+      },
+      {
+        "name": "عبدالعزيز السويدي",
+        "username": null,
+        "ext": "4053",
+        "mobile": "36110211"
+      }
+    ],
+    "strategic_planning_dept": [
+      {
+        "name": "عماد عيسى العباسي",
+        "username": null,
+        "ext": "5006",
+        "mobile": "36566628"
+      },
+      {
+        "name": "عمر خليل ابراهيم",
+        "username": null,
+        "ext": "5021",
+        "mobile": "39899001"
+      },
+      {
+        "name": "محمد حسن محمود",
+        "username": null,
+        "ext": "5083",
+        "mobile": "33276776"
+      },
+      {
+        "name": "معاذ عائد الخطيب",
+        "username": null,
+        "ext": "4032",
+        "mobile": "66363330"
+      }
+    ],
+    "board_office": [
+      {
+        "name": "صلاح محمد بوحسن",
+        "username": null,
+        "ext": "5002",
+        "mobile": "33337679"
+      },
+      {
+        "name": "شمس الدين",
+        "username": null,
+        "ext": "5033",
+        "mobile": "33998086"
+      },
+      {
+        "name": "راشد يحيى علي",
+        "username": null,
+        "ext": "4036",
+        "mobile": "66650057"
+      },
+      {
+        "name": "عمر راشد الزايد",
+        "username": null,
+        "ext": null,
+        "mobile": "33347355",
+        "note": "لا يوجد رقم داخلي — مؤكَّد. الرقم 4036 يخص راشد يحيى علي."
+      },
+      {
+        "name": "حسن عادل البنعلي",
+        "username": null,
+        "ext": null,
+        "mobile": "6674 6967"
+      }
+    ],
+    "director_general_office": [
+      {
+        "name": "أحمد خيري",
+        "username": "khairi",
+        "ext": "5005",
+        "mobile": "17205005"
+      },
+      {
+        "name": "بدر يوسف ياسين",
+        "username": null,
+        "ext": "5004",
+        "mobile": "36737776"
+      },
+      {
+        "name": "عبدالعزيز مجاور",
+        "username": null,
+        "ext": "5080",
+        "mobile": "33264747"
+      }
+    ],
+    "advisors_office": [
+      {
+        "name": "وليد عبدالرحمن شريف",
+        "username": null,
+        "ext": "5011",
+        "mobile": "33039339"
+      },
+      {
+        "name": "فتحي عبدالله الموصلي",
+        "username": null,
+        "ext": "5030",
+        "mobile": "38314329"
+      },
+      {
+        "name": "يعقوب بوخماس",
+        "username": null,
+        "ext": "5055",
+        "mobile": "33800088"
+      }
+    ],
+    "legal_counsel_office": [
+      {
+        "name": "محمد عبدالله موسى",
+        "username": null,
+        "ext": "5029",
+        "mobile": "39453911"
+      }
+    ],
+    "community_relations_dept": [
+      {
+        "name": "فيصل طلال الفهيد",
+        "username": null,
+        "ext": "4052",
+        "mobile": "33338327"
+      },
+      {
+        "name": "عبدالله عيسى غيث",
+        "username": null,
+        "ext": "5036",
+        "mobile": "39881002"
+      },
+      {
+        "name": "عبدالله محمد أبوالفتح",
+        "username": null,
+        "ext": "5037",
+        "mobile": "33096362"
+      },
+      {
+        "name": "ماجد خالد ماجد",
+        "username": null,
+        "ext": "5098",
+        "mobile": "37373696"
+      },
+      {
+        "name": "عبدالرحمن سعود قائدي",
+        "username": null,
+        "ext": "5097",
+        "mobile": "38811286"
+      },
+      {
+        "name": "عمر جمعان الرويعي",
+        "username": null,
+        "ext": null,
+        "mobile": "33080121"
+      },
+      {
+        "name": "علي راشد الهاجري",
+        "username": null,
+        "ext": "5101",
+        "mobile": "38200029"
+      }
+    ],
+    "maintenance_dept": [
+      {
+        "name": "سعود سمير التتان",
+        "username": null,
+        "ext": "5091",
+        "mobile": "39962626"
+      },
+      {
+        "name": "فيصل أحمد الكعبي",
+        "username": null,
+        "ext": "4020",
+        "mobile": "33131923"
+      },
+      {
+        "name": "علي راجي الحماد",
+        "username": null,
+        "ext": "4042",
+        "mobile": "35599774"
+      },
+      {
+        "name": "عبدالرحمن النجار",
+        "username": null,
+        "ext": null,
+        "mobile": "66995600"
+      },
+      {
+        "name": "أمين عبدالقادر أمين",
+        "username": null,
+        "ext": null,
+        "mobile": "36320224"
+      },
+      {
+        "name": "سهيل مياه",
+        "username": null,
+        "ext": null,
+        "mobile": "36210883"
+      },
+      {
+        "name": "فراس بنعمر",
+        "username": null,
+        "ext": null,
+        "mobile": "35404405"
+      },
+      {
+        "name": "قمر الدين",
+        "username": null,
+        "ext": null,
+        "mobile": "33317625"
+      },
+      {
+        "name": "بلال أحمد",
+        "username": null,
+        "ext": null,
+        "mobile": "33762221"
+      },
+      {
+        "name": "إياد علي العبيدلي",
+        "username": null,
+        "ext": null,
+        "mobile": "33353669"
+      },
+      {
+        "name": "محمد نديم فاعور",
+        "username": null,
+        "ext": null,
+        "mobile": "66333554"
+      },
+      {
+        "name": "محمود مبارك",
+        "username": null,
+        "ext": null,
+        "mobile": "38759286"
+      },
+      {
+        "name": "عبدالحنان سيد",
+        "username": null,
+        "ext": null,
+        "mobile": "66912306"
+      },
+      {
+        "name": "دعيج خليفه بوجندل",
+        "username": null,
+        "ext": null,
+        "mobile": "33190155"
+      },
+      {
+        "name": "حمزة وليد السيد",
+        "username": null,
+        "ext": null,
+        "mobile": "39558768"
+      }
+    ]
+  }
+}

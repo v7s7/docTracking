@@ -21,6 +21,8 @@ const templatesRoutes = require('./routes/templates');
 const auditRoutes     = require('./routes/audit');
 const messagesRoutes  = require('./routes/messages');
 const personalTasksRoutes = require('./routes/personalTasks');
+const correspondenceRoutes = require('./routes/correspondence');
+const directoryRoutes      = require('./routes/directory');
 const scheduler        = require('./services/scheduler');
 
 const app  = express();
@@ -69,6 +71,8 @@ app.use('/dashboard',      dashboardRoutes);     // role-filtered inside
 app.use('/notifications',  notificationsRoutes); // per-dept unread count
 app.use('/messages',   messagesRoutes);    // chat: DMs + department conversations
 app.use('/personal-tasks', personalTasksRoutes); // a user's own to-do list
+app.use('/correspondence',  correspondenceRoutes);   // نظام المراسلات الداخلية
+app.use('/directory',       directoryRoutes);         // staff phone directory
 app.use('/sessions',  sessionsRoutes);
 app.use('/templates', templatesRoutes);
 app.use('/audit',     auditRoutes);

@@ -89,11 +89,13 @@ function FieldFormRow({ initial, onSave, onCancel, t }) {
 }
 
 // ── Service row (nested inside DeptRow) ───────────────────────
-function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
+function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] }) {
   const [open,      setOpen]     = useState(false);
   const [editing,   setEditing]  = useState(false);
   const [label,     setLabel]    = useState(service.label);
   const [desc,      setDesc]     = useState(service.description || '');
+  // Which departments may request this service. Empty = every department.
+  const [fromDepts, setFromDepts] = useState(service.fromDepts || []);
   const [addingF,   setAddingF]  = useState(false);
   const [editingF,  setEditingF] = useState(null);
   const [err,       setErr]      = useState('');
@@ -104,7 +106,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
   async function saveLabel() {
     setBusy(true);
     try {
-      const { service: updated } = await api.updateService(deptId, service.id, { label, description: desc });
+      const { service: updated } = await api.updateService(deptId, service.id, { label, description: desc, fromDepts });
       onUpdated(updated); setEditing(false); setErr('');
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
@@ -172,10 +174,38 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
                 value={label} onChange={e => setLabel(e.target.value)} placeholder={t.serviceNamePH} />
               <input className="form-control" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
                 value={desc} onChange={e => setDesc(e.target.value)} placeholder={t.serviceDescPH} />
+
+              <div style={{ marginTop: '0.5rem' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginBottom: '0.3rem' }}>
+                  {t.fromDeptsLabel}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                  <button
+                    type="button"
+                    className={`corr-filter${fromDepts.length === 0 ? ' active' : ''}`}
+                    style={{ fontSize: '0.72rem', padding: '0.15rem 0.6rem' }}
+                    onClick={() => setFromDepts([])}>
+                    {t.fromDeptsAll}
+                  </button>
+                  {allDepts.filter(d => d.id !== deptId).map(d => {
+                    const on = fromDepts.includes(d.id);
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        className={`corr-filter${on ? ' active' : ''}`}
+                        style={{ fontSize: '0.72rem', padding: '0.15rem 0.6rem' }}
+                        onClick={() => setFromDepts(p => on ? p.filter(x => x !== d.id) : [...p, d.id])}>
+                        {d.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '0.35rem', alignSelf: 'flex-start', paddingTop: '0.1rem' }}>
               <button className="btn btn-primary btn-sm" onClick={saveLabel} disabled={busy}>{busy ? '…' : t.save}</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(service.label); setDesc(service.description || ''); }} disabled={busy}>{t.cancel}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(service.label); setDesc(service.description || ''); setFromDepts(service.fromDepts || []); }} disabled={busy}>{t.cancel}</button>
             </div>
           </div>
         ) : (
@@ -186,6 +216,11 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
             )}
             <span style={{ marginInlineStart: '0.5rem', fontSize: '0.72rem', color: 'var(--text-3)' }}>
               · {(service.fields || []).length} {t.fieldsSuffix}
+            </span>
+            <span style={{ marginInlineStart: '0.5rem', fontSize: '0.72rem', color: (service.fromDepts || []).length ? 'var(--accent)' : 'var(--text-3)' }}>
+              · {(service.fromDepts || []).length
+                   ? t.fromDeptsSome.replace('{n}', service.fromDepts.length)
+                   : t.fromDeptsAll}
             </span>
           </div>
         )}
@@ -266,7 +301,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t }) {
 }
 
 // ── Department row ─────────────────────────────────────────────
-function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
+function DeptRow({ dept, userCount, onUpdated, onDeleted, t, allDepts = [] }) {
   const [open,      setOpen]      = useState(false);
   const [editing,   setEditing]   = useState(false);
   const [showAdv,   setShowAdv]   = useState(false);
@@ -431,6 +466,7 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t }) {
                 deptId={dept.id}
                 service={svc}
                 t={t}
+                allDepts={allDepts}
                 onUpdated={handleSvcUpdated}
                 onDeleted={handleSvcDeleted}
               />
@@ -533,7 +569,7 @@ function DepartmentsTab({ t }) {
         </div>
       ) : (
         depts.map(d => (
-          <DeptRow key={d.id} dept={d} userCount={userMap[d.id] || 0} t={t}
+          <DeptRow key={d.id} dept={d} userCount={userMap[d.id] || 0} t={t} allDepts={depts}
             onUpdated={u => setDepts(p => p.map(x => x.id === u.id ? u : x))}
             onDeleted={id => setDepts(p => p.filter(x => x.id !== id))}
           />

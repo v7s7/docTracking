@@ -9,9 +9,14 @@ import {
   RefreshCw, CheckCircle, XCircle, Edit2, Trash2, ShieldCheck,
 } from 'lucide-react';
 import { useConfirm } from '../common/ConfirmDialog';
+import DepartmentSelect from '../common/DepartmentSelect';
 
 // Dropdown order: most-common role first so STAFF is visible at the top
-const VALID_ROLES = ['STAFF', 'CUSTOMER_SERVICE', 'MANAGER', 'ADMIN', 'SUPER_ADMIN', 'READONLY'];
+// SWD's model is four levels: مدير النظام (IT) · رئيس القسم · النائب · موظف.
+// CUSTOMER_SERVICE and READONLY belong to the retired task feature — the
+// backend still accepts them so existing holders keep working, but offering
+// them here only invites mis-assignment.
+const VALID_ROLES = ['STAFF', 'ADMIN', 'MANAGER', 'SUPER_ADMIN'];
 
 const ROLE_COLORS = {
   SUPER_ADMIN:      '#7B1414',
@@ -55,17 +60,22 @@ function SearchBox({ value, onChange, placeholder }) {
 }
 
 function deptOptions(depts, t) {
-  return Object.entries(
-    depts.reduce((acc, d) => {
-      const key = d.ldapGroup || d.id;
-      acc[key] = acc[key] || (t.groupLabels?.[d.ldapGroup] || d.ldapGroup || d.id);
-      return acc;
-    }, {})
-  );
+  const seen = new Set();
+  const out  = [];
+  for (const d of depts) {
+    const key = d.ldapGroup || d.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // groupLabels carries the English translations; departments.json is the
+    // live source and covers anything added through the admin panel.
+    out.push({ id: key, label: t.groupLabels?.[key] || d.label || key });
+  }
+  return out;
 }
 
 // Roles that use dept-specific task forms and need a dept assigned
-const DEPT_ROLES = ['STAFF', 'MANAGER', 'READONLY'];
+// Everyone except the IT super admin acts within one department.
+const DEPT_ROLES = ['STAFF', 'MANAGER', 'ADMIN', 'READONLY'];
 
 // ── Role assignment modal (for LDAP users) ───────────────────
 function LdapRoleModal({ user, depts, t, onSave, onClose }) {
@@ -119,11 +129,12 @@ function LdapRoleModal({ user, depts, t, onSave, onClose }) {
                 {t.deptAssign}
                 {DEPT_ROLES.includes(role) && <span className="req"> *</span>}
               </label>
-              <select className="form-control" value={dept_id} onChange={e => setDeptId(e.target.value)}
-                required={DEPT_ROLES.includes(role)}>
-                <option value="">—</option>
-                {deptOptions(depts, t).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
+              <DepartmentSelect
+                departments={deptOptions(depts, t)}
+                value={dept_id}
+                onChange={setDeptId}
+                t={t}
+                emptyLabel={t.noDept || '—'} />
               <div style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.3rem' }}>
                 {DEPT_ROLES.includes(role) ? t.deptHint : t.deptOptionalHint}
               </div>
@@ -215,11 +226,12 @@ function UserModal({ initial, depts, t, onSave, onClose }) {
                   {t.deptAssign}
                   {DEPT_ROLES.includes(form.role) && <span className="req"> *</span>}
                 </label>
-                <select className="form-control" value={form.dept_id}
-                  onChange={e => set('dept_id', e.target.value)} required={DEPT_ROLES.includes(form.role)}>
-                  <option value="">—</option>
-                  {deptOptions(depts, t).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <DepartmentSelect
+                  departments={deptOptions(depts, t)}
+                  value={form.dept_id}
+                  onChange={v => set('dept_id', v)}
+                  t={t}
+                  emptyLabel={t.noDept || '—'} />
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.3rem' }}>
                   {DEPT_ROLES.includes(form.role) ? t.deptHint : t.deptOptionalHint}
                 </div>

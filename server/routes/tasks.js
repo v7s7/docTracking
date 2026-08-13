@@ -1,6 +1,7 @@
 const express           = require('express');
 const { db, nextSerial } = require('../db');
-const { verifyToken, requireCS, requireStaff } = require('../middleware/authMiddleware');
+const { readConfig } = require('../services/configService');
+const { verifyToken, requireCS, requireStaff, ROLE_WEIGHT } = require('../middleware/authMiddleware');
 const { logAudit } = require('../utils/audit');
 
 const router = express.Router();
@@ -401,6 +402,35 @@ router.post('/:id/comment', AUTH, (req, res) => {
   const user     = req.user;
   const fromDept = user.dept_id || 'reception_dept';
   const isConsultation = !!tagged_dept_id;
+
+  // SECURITY: this endpoint used to run on `AUTH` alone. A `consultation`
+  // event is read back by the visibility filter in GET /tasks as a grant, so
+  // any authenticated user — READONLY included — could comment on any task id,
+  // tag any department, and hand that department permanent read access to it.
+  // Looped over the id range it exposed the whole registry.
+  //
+  // Two checks close it: you must already be able to see the task, and only
+  // CS/management may open a consultation against another department.
+  if (!canSeeAll(user.role)) {
+    const visible = db.prepare(`
+      SELECT 1 FROM tasks
+       WHERE id = ?
+         AND (current_dept_id = ?
+              OR id IN (SELECT task_id FROM task_events WHERE type = 'consultation' AND to_dept = ?))
+    `).get(task.id, user.dept_id || '', user.dept_id || '');
+    if (!visible) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+  }
+  if (isConsultation) {
+    const w = ROLE_WEIGHT[user.role] || 0;
+    if (w < ROLE_WEIGHT.CUSTOMER_SERVICE) {
+      return res.status(403).json({ success: false, message: 'Customer Service access required to open a consultation.' });
+    }
+    if (!readConfig().departments.some(d => d.id === tagged_dept_id)) {
+      return res.status(400).json({ success: false, message: 'Unknown department.' });
+    }
+  }
 
   db.prepare(`
     INSERT INTO task_events (task_id, type, from_dept, to_dept, actor_id, actor_name, note)

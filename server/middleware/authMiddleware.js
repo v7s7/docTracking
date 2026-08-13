@@ -23,13 +23,38 @@ function verifyToken(req, res, next) {
   }
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
+    const { db } = require('../db');
+
     if (req.user.jti) {
-      const { db } = require('../db');
       const sess = db.prepare('SELECT jti FROM sessions WHERE jti = ?').get(req.user.jti);
       if (!sess) {
         return res.status(401).json({ success: false, message: 'Session expired. Please sign in again.' });
       }
     }
+
+    // Role and department are signed into the token at login, so a Super Admin
+    // changing either used to take up to JWT_EXPIRES_IN (8h) to apply — and a
+    // demotion left the old privileges live for that whole window. Re-read them
+    // per request; it is one primary-key lookup, next to the session check that
+    // already happens here.
+    if (req.user.id) {
+      const row = db.prepare('SELECT role, dept_id, is_active FROM users WHERE id = ?').get(req.user.id);
+      if (row) {
+        if (!row.is_active) {
+          return res.status(401).json({ success: false, message: 'This account has been disabled.' });
+        }
+        // The SUPER_ADMIN_USERS override is applied at login and is not stored
+        // on the row — re-reading the role must not silently strip it.
+        const overrides = (process.env.SUPER_ADMIN_USERS || '')
+          .split(',').map(u => u.trim().toLowerCase()).filter(Boolean);
+        const isOverride = overrides.includes(String(req.user.username || '').toLowerCase())
+          || overrides.includes(String(req.user.email || '').toLowerCase());
+
+        req.user.role    = isOverride ? 'SUPER_ADMIN' : row.role;
+        req.user.dept_id = row.dept_id || '';
+      }
+    }
+
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

@@ -1204,7 +1204,11 @@ function ChatThread({
   );
 }
 
-export default function Messages() {
+// `openConversation` lets another screen hand off: {conversationId} jumps
+// straight to a chat, {userId} opens (or creates) the DM with that person.
+// Consumed once, then cleared via onOpened so a back-and-forth doesn't
+// re-trigger it.
+export default function Messages({ openConversation = null, onOpened }) {
   const { t }    = useLang();
   const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
@@ -1227,6 +1231,23 @@ export default function Messages() {
   const [searchFrom, setSearchFrom] = useState('');
   const [searchTo, setSearchTo] = useState('');
   const [scrollToMessageId, setScrollToMessageId] = useState(null);
+
+  useEffect(() => {
+    if (!openConversation) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (openConversation.conversationId) {
+          if (!cancelled) setActiveId(openConversation.conversationId);
+        } else if (openConversation.userId) {
+          const r = await openDM(openConversation.userId);
+          if (!cancelled && r?.conversation?.id) setActiveId(r.conversation.id);
+        }
+      } catch (_) { /* fall back to the normal list */ }
+      finally { if (!cancelled) onOpened?.(); }
+    })();
+    return () => { cancelled = true; };
+  }, [openConversation, onOpened]);
 
   const [notifPermission, setNotifPermission] = useState(
     typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
