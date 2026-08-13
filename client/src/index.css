@@ -3055,3 +3055,132 @@ code.tag {
   color: var(--accent-hover);
   line-height: 1.55;
 }
+
+/* ── لوحة المتابعة ──────────────────────────────────────────────
+   An action list, not a scoreboard. Each row is one thing this person can
+   unblock, and the row's own button is how they unblock it. */
+.day-card { margin-bottom: 1.25rem; }
+.day-badge {
+  background: var(--primary); color: #FFFFFF;
+  border-radius: 99px; padding: 0.1rem 0.6rem;
+  font-size: var(--fs-sm); font-weight: 700;
+}
+
+.day-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.day-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  transition: var(--transition);
+}
+.day-row:hover { border-color: var(--border-2); box-shadow: var(--shadow-sm); }
+/* The kind is carried by an icon and a written label; the tint is a third,
+   redundant cue rather than the only one. */
+.day-row.day-danger  { border-inline-start: 3px solid var(--danger); }
+.day-row.day-warning { border-inline-start: 3px solid var(--warning); }
+.day-row.day-accent  { border-inline-start: 3px solid var(--accent); }
+
+.day-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  inline-size: 30px; block-size: 30px; flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--surface-2); color: var(--text-2);
+}
+.day-danger  .day-icon { background: var(--danger-bg);  color: var(--danger); }
+.day-warning .day-icon { background: var(--warning-bg); color: var(--warning); }
+.day-accent  .day-icon { background: var(--accent-light); color: var(--accent); }
+
+.day-main {
+  display: flex; flex-direction: column; gap: 0.15rem;
+  background: none; border: none; padding: 0; cursor: pointer;
+  text-align: start; min-inline-size: 0; color: inherit;
+}
+.day-kind    { font-size: var(--fs-xs); font-weight: 700; color: var(--text-3); }
+.day-subject {
+  font-weight: 600; font-size: var(--fs-sm); color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.day-meta {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+  font-size: var(--fs-xs); color: var(--text-3);
+}
+.day-arrow { opacity: 0.6; }
+/* The arrow has to point the way the script runs, so the direction is chosen
+   here rather than baked into a character in the markup. */
+[dir="ltr"] .day-arrow::before { content: "\2192"; }
+[dir="rtl"] .day-arrow::before { content: "\2190"; }
+
+.day-age {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  font-size: var(--fs-xs); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3); white-space: nowrap;
+}
+.day-age.late { color: var(--danger); }
+.day-act { white-space: nowrap; }
+.day-more { align-self: center; margin-top: 0.25rem; }
+
+/* An empty queue is a result worth stating, not a blank panel. */
+.day-clear { display: flex; align-items: center; gap: 0.85rem; padding: 0.5rem 0; }
+.day-clear-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  inline-size: 46px; block-size: 46px; flex-shrink: 0;
+  border-radius: 50%; background: var(--success-bg); color: var(--success);
+}
+.day-clear-title { font-weight: 700; font-size: var(--fs-md); }
+.day-clear-sub   { font-size: var(--fs-sm); color: var(--text-2); }
+
+/* Counts sit below the work, sized as context rather than as the headline. */
+.day-counts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.75rem; margin-bottom: 1.25rem;
+}
+.day-count {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.8rem 0.95rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  text-align: start; color: inherit;
+}
+.day-count.clickable { cursor: pointer; transition: var(--transition); }
+.day-count.clickable:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); }
+.day-count-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  inline-size: 34px; block-size: 34px; flex-shrink: 0;
+  border-radius: var(--radius); background: var(--primary-light); color: var(--primary);
+}
+.day-count-value { display: block; font-size: var(--fs-lg); font-weight: 800; line-height: 1.15; }
+.day-count-label { display: block; font-size: var(--fs-xs); color: var(--text-2); }
+.day-count-hint  { display: block; font-size: var(--fs-xs); color: var(--text-3); }
+
+.day-deptgrid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem;
+}
+.day-deptgrid > div { display: flex; flex-direction: column; gap: 0.1rem; }
+.day-stat { font-size: var(--fs-xl); font-weight: 800; color: var(--primary); line-height: 1.1; }
+.day-deptgrid > div > span:last-child { font-size: var(--fs-xs); color: var(--text-2); }
+
+/* System problems are rows you click to go and fix, not statistics. */
+.day-issues { display: flex; flex-direction: column; gap: 0.5rem; }
+.day-issue {
+  display: flex; align-items: center; gap: 0.7rem;
+  inline-size: 100%; padding: 0.7rem 0.85rem;
+  background: var(--warning-bg); border: 1px solid var(--warning);
+  border-radius: var(--radius-lg);
+  color: var(--text); text-align: start; cursor: pointer;
+  transition: var(--transition);
+}
+.day-issue:hover { box-shadow: var(--shadow-sm); }
+.day-issue > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; min-inline-size: 0; }
+.day-issue strong { font-size: var(--fs-sm); }
+.day-issue-sub {
+  font-size: var(--fs-xs); color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.day-issue svg:first-child { color: var(--warning); flex-shrink: 0; }

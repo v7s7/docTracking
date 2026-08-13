@@ -9,12 +9,12 @@ import { exportTasks } from './services/taskService';
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
 import MyTasks from './components/dashboard/MyTasks';
+import HomeDashboard from './components/dashboard/HomeDashboard';
 import { ToastProvider, useToast } from './components/common/Toast';
 import TaskDetail from './components/tasks/TaskDetail';
 import UserManagement from './components/users/UserManagement';
 import NotificationBell from './components/notifications/NotificationBell';
 import Messages from './components/messages/Messages';
-import CorrespondenceDashboard from './components/correspondence/CorrespondenceDashboard';
 import CorrespondenceList from './components/correspondence/CorrespondenceList';
 import NewCorrespondence from './components/correspondence/NewCorrespondence';
 import { getCorrStats } from './services/correspondenceService';
@@ -528,9 +528,10 @@ function AppShell() {
             />
           ) : view === 'dashboard' ? (
             <>
-              <CorrespondenceDashboard
+              <HomeDashboard
                 onEdit={openCorrEditor}
                 onDiscuss={id => { setPendingConv({ conversationId: id }); handleNavAndClearTask('messages'); }}
+                onNavigate={handleNavAndClearTask}
                 refreshKey={corrRefresh} />
               {/* Personal to-do list — its own table, unaffected by the
                   correspondence merge, so it stays on the landing page. */}

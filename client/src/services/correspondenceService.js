@@ -35,6 +35,9 @@ export const listCorrespondence = (params = {}) =>
 
 export const getCorrespondence = id => req(`/correspondence/${id}`);
 export const getCorrStats      = ()  => req('/correspondence/stats');
+// Everything لوحة المتابعة needs for this one person, in a single call —
+// the actions waiting on them, their counts, and whichever panel their role gets.
+export const getMyDay          = ()  => req('/correspondence/my-day');
 
 export const createCorrespondence = payload =>
   req('/correspondence', { method: 'POST', body: toForm(payload) });

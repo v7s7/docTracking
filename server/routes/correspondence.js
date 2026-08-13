@@ -225,6 +225,131 @@ router.get('/stats', AUTH, (req, res) => {
   });
 });
 
+// ── GET /my-day — everything لوحة المتابعة needs, for THIS person ─────────
+//
+// The old dashboard showed five counts and the seven most recent records, the
+// same for everyone. A موظف and a رئيس قسم have different jobs, and neither of
+// them opens this page asking "how many are there" — they open it asking "what
+// is waiting on me". So this returns a list of things only this user can
+// unblock, oldest first, and the counts become secondary.
+//
+// Three kinds of action, each with its own clock:
+//   returned  — sent back to me to fix       (waiting since it was returned)
+//   approve   — pending my approval          (waiting since it was sent)
+//   complete  — approved, addressed to my    (waiting since it was approved)
+//               department, not yet done
+router.get('/my-day', AUTH, (req, res) => {
+  const user = req.user;
+  const uid  = user?.id ?? -1;
+  const mine = myDepartments(user);
+  const approvable = (readConfig().departments || []).map(d => d.id).filter(id => canApproveFor(user, id));
+
+  // Days waiting, from whichever timestamp is the one that matters for the kind.
+  const AGE = col => `CAST(julianday('now') - julianday(COALESCE(c.${col}, c.created_at)) AS INTEGER)`;
+  const pick = (kind, ageCol) =>
+    `SELECT c.id, c.serial, c.subject, c.priority, c.from_user_name, c.from_dept_id, c.to_dept_id,
+            '${kind}' kind, ${AGE(ageCol)} days`;
+
+  const actions = [];
+
+  // 1. Returned to me. Nobody else can move this on.
+  actions.push(...db.prepare(
+    `${pick('returned', 'updated_at')} FROM correspondences c
+      WHERE c.status = 'returned' AND c.from_user_id = ?`
+  ).all(uid));
+
+  // 2. Pending my approval — this one is blocking a colleague.
+  if (approvable.length) {
+    actions.push(...db.prepare(
+      `${pick('approve', 'created_at')} FROM correspondences c
+        WHERE c.status = 'pending' AND c.from_dept_id IN (${approvable.map(() => '?').join(',')})`
+    ).all(...approvable));
+  }
+
+  // 3. Approved and addressed to my department, still not completed.
+  if (mine.length) {
+    actions.push(...db.prepare(
+      `${pick('complete', 'approved_at')} FROM correspondences c
+        WHERE c.status = 'approved' AND c.to_dept_id IN (${mine.map(() => '?').join(',')})`
+    ).all(...mine));
+  }
+
+  // Oldest first, because age is what makes something urgent. Kind only breaks
+  // ties, in the order above: mine to fix, then blocking someone else.
+  const KIND_ORDER = { returned: 0, approve: 1, complete: 2 };
+  actions.sort((a, b) => b.days - a.days || KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
+
+  const decorated = actions.slice(0, 12).map(r => ({
+    ...r,
+    from_dept_label: deptLabel(r.from_dept_id),
+    to_dept_label:   deptLabel(r.to_dept_id),
+  }));
+
+  // Counts, framed by the user's own relationship to the record rather than as
+  // abstract totals: what I sent, what my department owes, what I owe.
+  const one = (sql, ...p) => db.prepare(sql).get(...p).n;
+  const counts = {
+    actions:   actions.length,
+    iSentOpen: one(`SELECT COUNT(*) n FROM correspondences WHERE from_user_id = ? AND status IN ('pending','approved')`, uid),
+    iSentDone: one(`SELECT COUNT(*) n FROM correspondences WHERE from_user_id = ? AND status = 'done'`, uid),
+    deptIncoming: mine.length
+      ? one(`SELECT COUNT(*) n FROM correspondences WHERE to_dept_id IN (${mine.map(() => '?').join(',')}) AND status = 'approved'`, ...mine)
+      : 0,
+    tasksOpen:    one('SELECT COUNT(*) n FROM personal_tasks WHERE user_id = ? AND done = 0', uid),
+    tasksOverdue: one(
+      `SELECT COUNT(*) n FROM personal_tasks
+        WHERE user_id = ? AND done = 0 AND due_at IS NOT NULL AND julianday(due_at) < julianday('now')`, uid),
+  };
+
+  // A رئيس قسم also carries the department: what it has sent that is still
+  // stuck somewhere, and how long the oldest thing has been waiting on them.
+  let dept = null;
+  if (approvable.length) {
+    const ph = approvable.map(() => '?').join(',');
+    const oldest = db.prepare(
+      `SELECT ${AGE('created_at')} days FROM correspondences c
+        WHERE c.status = 'pending' AND c.from_dept_id IN (${ph})
+        ORDER BY c.created_at ASC LIMIT 1`
+    ).get(...approvable);
+    dept = {
+      labels:      approvable.map(deptLabel),
+      awaitingMe:  one(`SELECT COUNT(*) n FROM correspondences WHERE status = 'pending' AND from_dept_id IN (${ph})`, ...approvable),
+      oldestDays:  oldest ? oldest.days : 0,
+      sentOpen:    one(`SELECT COUNT(*) n FROM correspondences WHERE from_dept_id IN (${ph}) AND status IN ('pending','approved')`, ...approvable),
+      doneTotal:   one(`SELECT COUNT(*) n FROM correspondences WHERE from_dept_id IN (${ph}) AND status = 'done'`, ...approvable),
+    };
+  }
+
+  // مدير النظام gets the thing only they can fix: departments that cannot
+  // approve anything, and people who cannot send anything.
+  let system = null;
+  if (isAdmin(user)) {
+    const departments = readConfig().departments || [];
+    const active = db.prepare('SELECT username FROM users WHERE is_active = 1').all()
+      .map(u => String(u.username).toLowerCase());
+    const stuck = departments.filter(d =>
+      !approversOf(d.id).some(u => active.includes(String(u).toLowerCase()))
+    );
+    system = {
+      departmentsWithoutApprover: stuck.map(d => d.label),
+      usersWithoutDept: one(`SELECT COUNT(*) n FROM users WHERE is_active = 1 AND (dept_id IS NULL OR dept_id = '')`),
+      pendingAll:       one(`SELECT COUNT(*) n FROM correspondences WHERE status = 'pending'`),
+      oldestPendingDays: (db.prepare(
+        `SELECT ${AGE('created_at')} days FROM correspondences c WHERE c.status = 'pending'
+          ORDER BY c.created_at ASC LIMIT 1`).get() || { days: 0 }).days,
+    };
+  }
+
+  res.json({
+    success: true,
+    scope: isAdmin(user) ? 'admin' : approvable.length ? 'approver' : 'staff',
+    actions: decorated,
+    counts,
+    dept,
+    system,
+  });
+});
+
 // ── GET /notifications — for the header bell ──────────────────────────────
 router.get('/notifications', AUTH, (req, res) => {
   const uid = req.user?.id;
