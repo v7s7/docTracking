@@ -95,6 +95,17 @@ const csvCell = v => {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
+// Which person in directory.json a CSV row refers to. By name, because the CSV
+// is the thing that gets hand-edited; by position for head/deputy, so a row whose
+// name was corrected still finds its slot.
+function personFor(dir, row) {
+  const people = dir.departments?.[row.dept_id];
+  if (!people) return null;
+  return people.find(p => p.name === row.arabic_name)
+    || (row.rank === 'head' ? people[0] : row.rank === 'deputy' ? people[1] : null)
+    || null;
+}
+
 // Opening r+ is the only reliable way to see a Windows lock — fs.accessSync
 // reports the file writable even while Excel holds it open.
 function lockedBy(file) {
@@ -236,11 +247,34 @@ function main() {
     }
   }
 
+  // 4. Links not yet saved into directory.json.
+  // This is a sync, not a repair: it runs even when there is nothing to
+  // reconcile. server/data/ is gitignored, so directory.json is the only file
+  // that carries the link to the server — if it is behind, the deploy pass there
+  // rebuilds only part of the user list.
+  let dirDoc = null, pendingLinks = 0;
+  try {
+    dirDoc = JSON.parse(fs.readFileSync(DIR_PATH, 'utf8'));
+    for (const r of rows) {
+      const person = personFor(dirDoc, r);
+      if (person && (person.username || null) !== (r.username || null)) pendingLinks++;
+    }
+  } catch (e) {
+    console.warn(`  warning — could not read directory.json: ${e.message}\n`);
+  }
+  if (pendingLinks) {
+    console.log(`  ${pendingLinks} links are not yet saved into config/directory.json`);
+    console.log('  — that file is what carries the link to the server, since server/data/ is gitignored.\n');
+  }
+
   if (!APPLY) {
     console.log('[fix] dry run — nothing written. Re-run with --apply to make these changes.\n');
     return;
   }
-  if (!changes.length && !deletable.length) return;
+  if (!changes.length && !deletable.length && !pendingLinks) {
+    console.log('[fix] nothing to do — database, departments.json and directory.json all agree.\n');
+    return;
+  }
 
   // ── Preflight: refuse to start if a target is locked ─────────────────────
   const locks = [CSV_PATH, CFG_PATH, DIR_PATH].map(f => [f, lockedBy(f)]).filter(([, c]) => c);
@@ -295,12 +329,9 @@ function main() {
   // rebuilds everything from it without touching Active Directory.
   let saved = 0;
   try {
-    const dir = JSON.parse(fs.readFileSync(DIR_PATH, 'utf8'));
+    const dir = dirDoc || JSON.parse(fs.readFileSync(DIR_PATH, 'utf8'));
     for (const r of rows) {
-      const people = dir.departments?.[r.dept_id];
-      if (!people) continue;
-      const person = people.find(p => p.name === r.arabic_name)
-        || (r.rank === 'head' ? people[0] : r.rank === 'deputy' ? people[1] : null);
+      const person = personFor(dir, r);
       if (!person) continue;
       person.name     = r.arabic_name;
       person.username = r.username || null;

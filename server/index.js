@@ -24,6 +24,7 @@ const personalTasksRoutes = require('./routes/personalTasks');
 const correspondenceRoutes = require('./routes/correspondence');
 const directoryRoutes      = require('./routes/directory');
 const scheduler        = require('./services/scheduler');
+const { startBackupScheduler } = require('./services/backupService');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -98,4 +99,5 @@ if (fs.existsSync(clientIndexPath)) {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[Server] docTracking API running on http://0.0.0.0:${PORT}`);
   scheduler.start();
+  startBackupScheduler();
 });

@@ -34,3 +34,8 @@ export async function uploadAvatar(file) {
 
 export const setAvatarColor = (color) => req('/users/me/avatar-color', { method: 'PUT', body: JSON.stringify({ color }) });
 export const removeAvatar   = ()      => req('/users/me/avatar', { method: 'DELETE' });
+
+// Set role, department or active status on many users at once. The server
+// refuses if the caller is in the selection, so a bulk action cannot lock the
+// only super admin out of the screen that would undo it.
+export const bulkUpdateUsers = (body) => req('/users/bulk', { method: 'PATCH', body: JSON.stringify(body) });

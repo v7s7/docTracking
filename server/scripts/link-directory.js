@@ -11,6 +11,10 @@
  *       config/directory.json alone — no Active Directory, no CSV, no review.
  *       This is what you run on the server after `git pull`.
  *
+ *   node scripts/link-directory.js --check
+ *       Read-only health report: who can approve for each department, and
+ *       whether any named head/deputy is missing their user row.
+ *
  * WHY TWO PASSES
  * The directory holds Arabic names (حبيب غلام النامليتي); Active Directory
  * holds Latin ones (Habib Ghulam Alnamliti). Nothing can match those two with
@@ -36,6 +40,7 @@ const { readConfig, writeConfig } = require('../services/configService');
 
 const APPLY    = process.argv.includes('--apply');
 const FROM_DIR = process.argv.includes('--from-directory');
+const CHECK    = process.argv.includes('--check');
 const CSV_PATH = path.join(__dirname, '..', 'data', 'directory-link.csv');
 
 // ── Arabic → Latin, phonetic and deliberately loose ────────────────────────
@@ -401,9 +406,55 @@ function applyFromDirectory() {
 `);
 }
 
+// ── Check — read-only health report ───────────────────────────────────────
+// Run this after a deploy. It answers the only question that matters: can every
+// department actually get its correspondence approved?
+function check() {
+  const { canApproveFor, approversOf } = require('../utils/approvals');
+  const cfg   = readConfig();
+  const users = db.prepare('SELECT id, username, full_name, role, dept_id, ext FROM users WHERE is_active = 1').all();
+  const roster = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'directory.json'), 'utf8')).departments;
+  const people = Object.values(roster).flat();
+
+  console.log(`
+[check] ${users.length} active users, ${users.filter(u => u.ext).length} with an extension
+[check] ${people.filter(p => p.username).length}/${people.length} people in the roster are linked to an account
+`);
+
+  const none = [], one = [];
+  const w = Math.max(...cfg.departments.map(d => d.label.length)) + 2;
+  for (const d of cfg.departments) {
+    const who = users.filter(u => canApproveFor(u, d.id)).map(u => u.username);
+    if (!who.length) none.push(d.label); else if (who.length === 1) one.push(d.label);
+    console.log(`  ${String(who.length).padStart(2)}  ${d.label.padEnd(w)}${who.join(', ') || '** NO APPROVER **'}`);
+  }
+
+  // A head/deputy named in departments.json but with no matching user row can
+  // never approve — the commonest way a deploy looks fine and is not.
+  const ghosts = [];
+  for (const d of cfg.departments) {
+    for (const u of approversOf(d.id)) {
+      if (!users.some(x => String(x.username).toLowerCase() === String(u).toLowerCase())) ghosts.push(`${d.label}: ${u}`);
+    }
+  }
+
+  console.log(`
+[check] ${cfg.departments.length - none.length - one.length} departments with two approvers, ${one.length} with one, ${none.length} with none`);
+  if (none.length)   console.log(`        no approver: ${none.join(', ')}`);
+  if (ghosts.length) {
+    console.log(`\n        ${ghosts.length} head/deputy named in departments.json with NO user row —`);
+    console.log('        they cannot approve until the account exists:');
+    for (const g of ghosts) console.log(`          ${g}`);
+    console.log('        Run: node scripts/link-directory.js --from-directory');
+  } else {
+    console.log('        every named head/deputy has a user row\n');
+  }
+}
+
 (async () => {
   try {
-    if (FROM_DIR) applyFromDirectory();
+    if (CHECK) check();
+    else if (FROM_DIR) applyFromDirectory();
     else if (APPLY) apply();
     else await review();
     process.exit(0);

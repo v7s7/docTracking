@@ -36,6 +36,11 @@ const isElectron = typeof window !== 'undefined' && !!window.electron?.isElectro
 
 // ── Role helpers ─────────────────────────────────────────────
 function isSuperAdmin(r) { return r === 'SUPER_ADMIN'; }
+// الموارد البشرية administers people too — roles, departments, joiners and
+// leavers — so the users screen is theirs as well. What they may change once
+// they are in it is decided server-side, in utils/permissions.js.
+const HR_DEPT_ID = 'hr_dept';
+function canManageUsers(u) { return isSuperAdmin(u?.role) || String(u?.dept_id || '') === HR_DEPT_ID; }
 
 // The correspondence sub-menu. Ids double as view keys.
 const CORR_VIEWS = ['corr-new', 'corr-inbox', 'corr-approvals', 'corr-returned', 'corr-archive', 'corr-reports'];
@@ -53,7 +58,8 @@ function corrChildren(t) {
 }
 
 // ── Nav items per role ───────────────────────────────────────
-function navItems(role, t, hasMessages, chatOnly) {
+function navItems(user, t, hasMessages, chatOnly) {
+  const role = user?.role;
   // The desktop app is chat-focused for now: show only Messages.
   // Correspondence is web-first while the desktop question is open — flip this
   // single flag to surface it there too.
@@ -67,7 +73,7 @@ function navItems(role, t, hasMessages, chatOnly) {
   ];
   items.push({ id: 'directory', icon: <BookUser size={20} strokeWidth={1.8} />, label: t.directory.title });
   if (hasMessages) items.push({ id: 'messages', icon: <MessageCircle size={20} strokeWidth={1.8} />, label: t.messages });
-  if (isSuperAdmin(role)) items.push({ id: 'users',    icon: <Users    size={20} strokeWidth={1.8} />, label: t.users });
+  if (canManageUsers(user)) items.push({ id: 'users',    icon: <Users    size={20} strokeWidth={1.8} />, label: t.users });
   if (isSuperAdmin(role)) items.push({ id: 'settings', icon: <Settings size={20} strokeWidth={1.8} />, label: t.settings });
   return items;
 }
@@ -172,7 +178,7 @@ function Header({ user, onTaskClick, onCorrClick }) {
               {user?.avatar_url ? <img src={fileUrl(user.avatar_url)} alt="" /> : initials}
             </div>
             <div style={{ lineHeight: 1.3 }}>
-              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{user?.name || user?.username}</div>
+              <div style={{ fontWeight: 600, fontSize: 'var(--fs-sm)' }}>{user?.name || user?.username}</div>
               <span className="user-role-badge">{t.roles?.[user?.role] || user?.role}</span>
               {statusText && <span className="user-status-text">{statusText}</span>}
             </div>
@@ -231,7 +237,7 @@ function Header({ user, onTaskClick, onCorrClick }) {
                       />
                     ))}
                   </div>
-                  {avatarErr && <div className="alert alert-error" style={{ marginTop: '0.4rem', fontSize: '0.78rem' }}>{avatarErr}</div>}
+                  {avatarErr && <div className="alert alert-error" style={{ marginTop: '0.4rem', fontSize: 'var(--fs-xs)' }}>{avatarErr}</div>}
                 </div>
               </div>
             </>
@@ -248,7 +254,7 @@ function Header({ user, onTaskClick, onCorrClick }) {
 // ── Sidebar ──────────────────────────────────────────────────
 function Sidebar({ activeView, onNav, user, unreadMsgs, corrBadges }) {
   const { t } = useLang();
-  const items = navItems(user?.role, t, !!user?.id, isElectron);
+  const items = navItems(user, t, !!user?.id, isElectron);
   const inCorr = CORR_VIEWS.includes(activeView);
   const [openGroup, setOpenGroup] = useState(inCorr);
 
@@ -562,7 +568,7 @@ function AppShell() {
               onCompose={() => handleNavAndClearTask('corr-new')} />
           ) : view === 'messages' && user.id ? (
             <Messages openConversation={pendingConv} onOpened={() => setPendingConv(null)} />
-          ) : view === 'users' && isSuperAdmin(user.role) ? (
+          ) : view === 'users' && canManageUsers(user) ? (
             <UserManagement />
           ) : view === 'settings' && isSuperAdmin(user.role) ? (
             <SuperAdminPanel />
