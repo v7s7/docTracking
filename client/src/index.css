@@ -1805,6 +1805,47 @@ code.tag {
   transition: opacity 0.09s ease;
 }
 
+.msg-reaction-row { display: flex; gap: 0.15rem; align-items: center; }
+
+/* The "…" that opens the full set. Separated by a hairline so it reads as a
+   different kind of thing from the six reactions beside it. */
+.msg-reaction-more {
+  display: inline-flex; align-items: center; justify-content: center;
+  inline-size: 30px; block-size: 30px;
+  margin-inline-start: 0.15rem;
+  border: none; background: none; cursor: pointer;
+  color: var(--text-3);
+  border-radius: var(--radius);
+  border-inline-start: 1px solid var(--border);
+}
+.msg-reaction-more:hover { background: var(--surface-2); color: var(--text-1); }
+
+/* Expanded: a scrollable panel of everything, grouped. Sized so it never
+   outgrows a short window — place() in Messages.js clamps its position, and
+   this clamps its height. */
+.msg-reaction-picker.expanded {
+  flex-direction: column;
+  inline-size: 288px;
+  max-block-size: min(320px, 60vh);
+  padding: 0.4rem;
+}
+.msg-reaction-all { overflow-y: auto; overscroll-behavior: contain; }
+.msg-reaction-group + .msg-reaction-group { margin-block-start: 0.5rem; }
+.msg-reaction-group-label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-3);
+  padding: 0.15rem 0.25rem 0.3rem;
+  position: sticky;
+  inset-block-start: 0;
+  background: var(--surface);
+}
+.msg-reaction-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.1rem;
+}
+
 
 .msg-reaction-picker-item {
   border: none;

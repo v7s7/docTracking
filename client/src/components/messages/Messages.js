@@ -11,7 +11,7 @@ import {
 } from '../../services/messageService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
-  Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff, Loader2,
+  Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff, Loader2, MoreHorizontal,
   Settings, Camera, Trash2, Languages,
 } from 'lucide-react';
 
@@ -22,6 +22,19 @@ const LIST_POLL_MS   = 15000;
 const ONLINE_MS      = 2 * 60 * 1000;
 const TYPING_IDLE_MS = 4000;
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+// The full set, behind the "…" button. Grouped rather than search-driven: a
+// reaction is chosen by eye in a second or two, and a search box in two
+// languages would cost more than it saves. Ordered so the rows people actually
+// reach for — approval, then faces — come first.
+const EMOJI_GROUPS = [
+  { key: 'common',  emoji: ['👍','👎','❤️','🙏','👏','💯','✅','❌','🔥','⭐','🎉','💪'] },
+  { key: 'faces',   emoji: ['😀','😄','😊','🙂','😉','😍','🤩','😎','🤔','🙄','😐','😑',
+                            '😅','😂','🤣','😢','😭','😡','😱','😴','🤝','🤲'] },
+  { key: 'work',    emoji: ['📌','📎','📁','📄','📊','📈','📉','🗓️','⏰','⏳','✍️','🖊️',
+                            '📞','📧','💼','🏢','🔑','🔒','⚙️','🔍','📢','🚀'] },
+  { key: 'signals', emoji: ['⚠️','❗','❓','ℹ️','🆗','🔴','🟠','🟡','🟢','🔵','⚪','⚫'] },
+];
 // Don't fire more than one desktop notification per conversation within this window —
 // a fast back-and-forth in a busy channel shouldn't trigger a notification per message.
 const NOTIF_THROTTLE_MS = 8000;
@@ -353,9 +366,12 @@ function DirectoryPanel({ onPick, onClose, t }) {
 // first message in the thread. Out here nothing can clip it; it only has to
 // stay inside the viewport, which is what place() below guarantees, in either
 // writing direction.
-function ReactionPicker({ anchorRef, isRTL, onPick, onClose }) {
+function ReactionPicker({ anchorRef, isRTL, t, onPick, onClose }) {
   const boxRef = useRef(null);
   const [pos, setPos] = useState(null);
+  // The quick row is six; everything else lives behind "…" so the common case
+  // stays a single glance and the full set is one click away.
+  const [expanded, setExpanded] = useState(false);
 
   const place = useCallback(() => {
     const anchor = anchorRef.current;
@@ -380,7 +396,9 @@ function ReactionPicker({ anchorRef, isRTL, onPick, onClose }) {
     setPos({ top, left });
   }, [anchorRef, isRTL]);
 
-  useLayoutEffect(place, [place]);
+  // Re-measure when the panel opens: it changes size, and a position computed
+  // for the small row would put the tall panel off the bottom of the screen.
+  useLayoutEffect(place, [place, expanded]);
 
   useEffect(() => {
     // `true` captures scrolls on the thread itself, not just the window, so the
@@ -402,7 +420,7 @@ function ReactionPicker({ anchorRef, isRTL, onPick, onClose }) {
       <div className="msg-reaction-backdrop" onClick={onClose} />
       <div
         ref={boxRef}
-        className="msg-reaction-picker"
+        className={`msg-reaction-picker${expanded ? ' expanded' : ''}`}
         role="menu"
         style={pos
           ? { top: pos.top, insetInlineStart: 'auto', left: pos.left, opacity: 1 }
@@ -410,12 +428,39 @@ function ReactionPicker({ anchorRef, isRTL, onPick, onClose }) {
           // box has a size to measure in the same frame.
           : { top: 0, left: 0, opacity: 0, pointerEvents: 'none' }}
       >
-        {REACTION_EMOJIS.map(emoji => (
-          <button key={emoji} className="msg-reaction-picker-item" role="menuitem"
-            onClick={() => onPick(emoji)}>
-            {emoji}
-          </button>
-        ))}
+        {!expanded ? (
+          <div className="msg-reaction-row">
+            {REACTION_EMOJIS.map(emoji => (
+              <button key={emoji} className="msg-reaction-picker-item" role="menuitem"
+                onClick={() => onPick(emoji)}>
+                {emoji}
+              </button>
+            ))}
+            <button
+              className="msg-reaction-more"
+              onClick={() => setExpanded(true)}
+              title={t.moreReactions}
+              aria-label={t.moreReactions}>
+              <MoreHorizontal size={16} strokeWidth={2.4} />
+            </button>
+          </div>
+        ) : (
+          <div className="msg-reaction-all">
+            {EMOJI_GROUPS.map(g => (
+              <div className="msg-reaction-group" key={g.key}>
+                <div className="msg-reaction-group-label">{t.emojiGroups[g.key]}</div>
+                <div className="msg-reaction-grid">
+                  {g.emoji.map(emoji => (
+                    <button key={emoji} className="msg-reaction-picker-item" role="menuitem"
+                      onClick={() => onPick(emoji)}>
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </>,
     document.body
@@ -541,6 +586,7 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
             <ReactionPicker
               anchorRef={pickerBtnRef}
               isRTL={isRTL}
+              t={t}
               onPick={emoji => { onReact?.(msg.id, emoji); setShowPicker(false); }}
               onClose={() => setShowPicker(false)} />
           )}
