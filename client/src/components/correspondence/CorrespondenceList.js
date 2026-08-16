@@ -19,7 +19,7 @@ const BOXES = {
 };
 
 export default function CorrespondenceList({ box, canApproveFor = [], onEdit, onDiscuss, refreshKey }) {
-  const { t } = useLang();
+  const { t, deptName } = useLang();
   const toast = useToast();
   const c = t.corr;
   const conf = BOXES[box] || BOXES.archive;
@@ -122,8 +122,8 @@ export default function CorrespondenceList({ box, canApproveFor = [], onEdit, on
                       <td><code className="tag">{it.serial}</code></td>
                       <td style={{ fontWeight: 600 }}>{it.subject}</td>
                       <td>{it.from_user_name}</td>
-                      <td>{it.from_dept_label}</td>
-                      <td>{it.to_dept_label}</td>
+                      <td>{deptName(it.from_dept_id, it.from_dept_label)}</td>
+                      <td>{deptName(it.to_dept_id, it.to_dept_label)}</td>
                       <td>{fmtDate(it.created_at)}</td>
                       <td><StatusBadge status={it.status} t={t} /></td>
                       <td onClick={e => e.stopPropagation()}>
@@ -150,7 +150,7 @@ export default function CorrespondenceList({ box, canApproveFor = [], onEdit, on
                       <div className="corr-card-subject">{it.subject}</div>
                       <div className="text-sm text-muted">
                         <code className="tag">{it.serial}</code> · {it.from_user_name} ·{' '}
-                        {it.from_dept_label} ← {it.to_dept_label} · {fmtDate(it.created_at)}
+                        {deptName(it.from_dept_id, it.from_dept_label)} ← {deptName(it.to_dept_id, it.to_dept_label)} · {fmtDate(it.created_at)}
                       </div>
                     </div>
                     <div className="flex gap-2">

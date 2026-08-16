@@ -27,7 +27,7 @@ const KIND = {
   complete: { icon: Check,        tone: 'accent'  },
 };
 
-function ActionRow({ a, t, onOpen, onEdit, onComplete, busy }) {
+function ActionRow({ a, t, deptName, onOpen, onEdit, onComplete, busy }) {
   const c = t.corr;
   const k = KIND[a.kind] || KIND.complete;
   const Icon = k.icon;
@@ -42,9 +42,9 @@ function ActionRow({ a, t, onOpen, onEdit, onComplete, busy }) {
         <span className="day-subject">{a.subject}</span>
         <span className="day-meta">
           <code className="tag">{a.serial}</code>
-          <span>{a.from_dept_label}</span>
+          <span>{deptName(a.from_dept_id, a.from_dept_label)}</span>
           <span className="day-arrow" aria-hidden="true" />
-          <span>{a.to_dept_label}</span>
+          <span>{deptName(a.to_dept_id, a.to_dept_label)}</span>
         </span>
       </button>
 
@@ -86,7 +86,7 @@ function Count({ icon, value, label, hint, onClick }) {
 }
 
 export default function HomeDashboard({ onEdit, onDiscuss, onNavigate, refreshKey }) {
-  const { t, isRTL } = useLang();
+  const { t, isRTL, deptName } = useLang();
   const toast = useToast();
   const h = t.home;
 
@@ -149,7 +149,7 @@ export default function HomeDashboard({ onEdit, onDiscuss, onNavigate, refreshKe
             <div className="day-list">
               {actions.map(a => (
                 <ActionRow
-                  key={`${a.kind}-${a.id}`} a={a} t={t} busy={busy}
+                  key={`${a.kind}-${a.id}`} a={a} t={t} deptName={deptName} busy={busy}
                   onOpen={openOne} onEdit={onEdit} onComplete={markDone} />
               ))}
               {counts.actions > actions.length && (

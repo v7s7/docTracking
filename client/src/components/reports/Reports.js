@@ -68,7 +68,7 @@ function Tile({ icon, label, value, hint, tone }) {
 }
 
 export default function Reports() {
-  const { t } = useLang();
+  const { t, deptName } = useLang();
   const toast = useToast();
   const r = t.reports;
 
@@ -93,7 +93,10 @@ export default function Reports() {
 
   useEffect(() => { load(); }, [load]);
 
-  const topDepts = useMemo(() => (data?.byDepartment || []).slice(0, 8), [data]);
+  const topDepts = useMemo(
+    () => (data?.byDepartment || []).slice(0, 8).map(d => ({ ...d, label: deptName(d.id, d.label) })),
+    [data, deptName]
+  );
   const services = useMemo(
     () => (data?.byService || []).map(s => ({ ...s, label: s.label || r.otherType })).slice(0, 8),
     [data, r]
@@ -180,7 +183,7 @@ export default function Reports() {
               <tbody>
                 {(data?.byDepartment || []).map(d => (
                   <tr key={d.id}>
-                    <td style={{ fontWeight: 600 }}>{d.label}</td>
+                    <td style={{ fontWeight: 600 }}>{deptName(d.id, d.label)}</td>
                     <td className="rep-num">{d.sent}</td>
                     <td className="rep-num">{d.received}</td>
                     <td className="rep-num" style={{ fontWeight: 700 }}>{d.total}</td>
@@ -211,7 +214,7 @@ export default function Reports() {
                     <tr key={b.id}>
                       <td><code className="tag">{b.serial}</code></td>
                       <td style={{ fontWeight: 600 }}>{b.subject}</td>
-                      <td>{b.from_dept_label}</td>
+                      <td>{deptName(b.from_dept_id, b.from_dept_label)}</td>
                       <td>{b.from_user_name}</td>
                       <td className="rep-num">
                         {/* Status colour always ships with an icon, never colour alone. */}

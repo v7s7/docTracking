@@ -21,7 +21,7 @@ const { logAudit }    = require('../utils/audit');
 const { readConfig }  = require('../services/configService');
 const { resolveSubject, OTHER_SERVICE_ID } = require('../utils/serviceScope');
 const {
-  isAdmin, canApproveFor, myDepartments, visibilityClause, approversOf,
+  isAdmin, canApproveFor, myDepartments, visibilityClause, approversOf, approvalQueueFor,
 } = require('../utils/approvals');
 const notify = require('../services/correspondenceNotify');
 const chat   = require('../services/chatBridge');
@@ -147,9 +147,9 @@ router.get('/', AUTH, (req, res) => {
     where.push(`c.to_dept_id IN (${inMine})`, `c.status IN ('approved','done')`);
     params.push(...mine);
   } else if (box === 'approvals') {
-    const approvable = isAdmin(user)
-      ? (readConfig().departments || []).map(d => d.id)
-      : (readConfig().departments || []).map(d => d.id).filter(id => canApproveFor(user, id));
+    // What belongs in this person's queue — not everything they *could* approve.
+    // For مدير النظام those differ: authority is org-wide, the queue is not.
+    const approvable = approvalQueueFor(user);
     if (!approvable.length) return res.json({ success: true, items: [], total: 0 });
     where.push(`c.status = 'pending'`, `c.from_dept_id IN (${approvable.map(() => '?').join(',')})`);
     params.push(...approvable);
@@ -199,13 +199,17 @@ router.get('/stats', AUTH, (req, res) => {
   const mine   = myDepartments(user);
   const inMine = mine.length ? mine.map(() => '?').join(',') : null;
 
+  // Two different lists on purpose: `queue` is what the الموافقات box shows and
+  // what the badge counts; `approvable` is the full authority, which the client
+  // uses to decide whether to offer the approve button on a record it opens.
+  const queue      = approvalQueueFor(user);
   const approvable = (readConfig().departments || []).map(d => d.id).filter(id => canApproveFor(user, id));
 
   const inboxBadge = inMine
     ? db.prepare(`SELECT COUNT(*) n FROM correspondences WHERE to_dept_id IN (${inMine}) AND status = 'approved'`).get(...mine).n
     : 0;
-  const approvalsBadge = approvable.length
-    ? db.prepare(`SELECT COUNT(*) n FROM correspondences WHERE status = 'pending' AND from_dept_id IN (${approvable.map(() => '?').join(',')})`).get(...approvable).n
+  const approvalsBadge = queue.length
+    ? db.prepare(`SELECT COUNT(*) n FROM correspondences WHERE status = 'pending' AND from_dept_id IN (${queue.map(() => '?').join(',')})`).get(...queue).n
     : 0;
   const returnedBadge = db.prepare(
     `SELECT COUNT(*) n FROM correspondences WHERE status = 'returned' AND from_user_id = ?`
@@ -242,7 +246,9 @@ router.get('/my-day', AUTH, (req, res) => {
   const user = req.user;
   const uid  = user?.id ?? -1;
   const mine = myDepartments(user);
-  const approvable = (readConfig().departments || []).map(d => d.id).filter(id => canApproveFor(user, id));
+  // The queue, not the authority — لوحة المتابعة asks "what is waiting on ME",
+  // and for an admin that is not the whole organisation.
+  const approvable = approvalQueueFor(user);
 
   // Days waiting, from whichever timestamp is the one that matters for the kind.
   const AGE = col => `CAST(julianday('now') - julianday(COALESCE(c.${col}, c.created_at)) AS INTEGER)`;

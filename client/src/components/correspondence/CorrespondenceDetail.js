@@ -11,7 +11,7 @@ import { StatusBadge, PriorityBadge, EVENT_ICONS, EVENT_COLORS, fmtDate, fmtDate
 import PrintLetter from './PrintLetter';
 
 export default function CorrespondenceDetail({ item, canApprove, onClose, onChanged, onEdit, onDiscuss }) {
-  const { t } = useLang();
+  const { t, deptName } = useLang();
   const { user } = useAuth();
   const toast = useToast();
   const c = t.corr;
@@ -66,8 +66,8 @@ export default function CorrespondenceDetail({ item, canApprove, onClose, onChan
 
             <div className="corr-meta">
               <div><span>{c.sender}</span><strong>{item.from_user_name}</strong></div>
-              <div><span>{c.fromDept}</span><strong>{item.from_dept_label}</strong></div>
-              <div><span>{c.toDept}</span><strong>{item.to_dept_label}</strong></div>
+              <div><span>{c.fromDept}</span><strong>{deptName(item.from_dept_id, item.from_dept_label)}</strong></div>
+              <div><span>{c.toDept}</span><strong>{deptName(item.to_dept_id, item.to_dept_label)}</strong></div>
               <div><span>{c.date}</span><strong>{fmtDate(item.created_at)}</strong></div>
               <div><span>{c.priority}</span><PriorityBadge priority={item.priority} t={t} /></div>
               <div><span>{c.status}</span><StatusBadge status={item.status} t={t} /></div>

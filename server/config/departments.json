@@ -705,6 +705,26 @@
           ]
         },
         {
+          "id": "hr_training",
+          "label": "التدريب",
+          "description": "طلبات الدورات والبرامج التدريبية",
+          "fields": []
+        },
+        {
+          "id": "hr_evaluation",
+          "label": "التقييم",
+          "description": "طلبات تقييم الأداء الوظيفي",
+          "fields": [
+            {
+              "key": "employee_name",
+              "label": "اسم الموظف",
+              "type": "text",
+              "required": true,
+              "placeholder": "الاسم الكامل"
+            }
+          ]
+        },
+        {
           "id": "hr_transfers",
           "label": "نقولات",
           "description": "طلبات نقل الموظفين بين المساجد",
@@ -759,10 +779,18 @@
           ]
         },
         {
-          "id": "hr_training",
-          "label": "تدريب",
-          "description": "طلبات الدورات والبرامج التدريبية",
-          "fields": [],
+          "id": "hr_good_conduct",
+          "label": "حسن السيرة والسلوك",
+          "description": "طلب شهادة حسن السيرة والسلوك",
+          "fields": [
+            {
+              "key": "employee_name",
+              "label": "اسم الموظف",
+              "type": "text",
+              "required": true,
+              "placeholder": "الاسم الكامل"
+            }
+          ],
           "fromDepts": [
             "mosques_guidance_dept"
           ]

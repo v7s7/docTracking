@@ -14,6 +14,7 @@
 // approve, at any time, with no absence tracking. When an absence/delegation
 // rule is decided later, `approversOf()` is the only function that changes.
 const { readConfig } = require('../services/configService');
+const { db } = require('../db');
 
 // Only مدير النظام (IT) sees across every department. ADMIN used to be in
 // this list, but SWD's role model is four levels — مدير النظام, رئيس القسم,
@@ -90,6 +91,43 @@ function isApprover(user) {
 }
 
 /**
+ * A department nobody can act on — no head or deputy whose username matches an
+ * active account. Without somewhere to fall, its correspondence would sit
+ * pending forever, so these land in مدير النظام's queue.
+ */
+function departmentsWithoutApprover() {
+  const { departments = [] } = readConfig();
+  const active = new Set(
+    db.prepare('SELECT username FROM users WHERE is_active = 1').all()
+      .map(u => String(u.username).toLowerCase())
+  );
+  return departments
+    .filter(d => !approversOf(d.id).some(u => active.has(String(u).toLowerCase())))
+    .map(d => d.id);
+}
+
+/**
+ * Which departments' pending correspondence belongs in this user's الموافقات.
+ *
+ * Deliberately NOT the same question as canApproveFor(). مدير النظام *may*
+ * approve for any department — that is the fallback that stops anything getting
+ * permanently stuck — but that is authority, not work. Putting all 22
+ * departments in the queue meant every IT account inherited the whole
+ * organisation's approvals, including their badge count, for correspondence
+ * between two departments they have nothing to do with.
+ *
+ * So an admin's queue is what they actually lead, plus any department that
+ * nobody else can act on. Everything else stays approvable by opening it.
+ */
+function approvalQueueFor(user) {
+  const { departments = [] } = readConfig();
+  if (!isAdmin(user)) {
+    return departments.map(d => d.id).filter(id => canApproveFor(user, id));
+  }
+  return [...new Set([...ledDepartments(user), ...departmentsWithoutApprover()])];
+}
+
+/**
  * SQL fragment scoping a correspondence query to what this user may read.
  * Returns { clause, params } — clause is null when the user sees everything.
  *
@@ -126,6 +164,8 @@ function visibilityClause(user, table = 'c') {
 
 module.exports = {
   isAdmin,
+  departmentsWithoutApprover,
+  approvalQueueFor,
   DEPT_APPROVER_ROLES,
   sameUser,
   approversOf,

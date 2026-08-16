@@ -12,7 +12,7 @@ import { getStaffDirectory } from '../../services/directoryService';
 // Search matches name, department, username, email AND extension, so typing
 // "5022" finds the person as readily as typing their name.
 export default function StaffDirectory({ onChat }) {
-  const { t } = useLang();
+  const { t, lang, deptName } = useLang();
   const d = t.directory;
 
   const [users, setUsers]     = useState([]);
@@ -31,9 +31,11 @@ export default function StaffDirectory({ onChat }) {
 
   const departments = useMemo(() => {
     const seen = new Map();
-    users.forEach(u => { if (u.dept_id && !seen.has(u.dept_id)) seen.set(u.dept_id, u.dept_label); });
-    return [...seen.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), 'ar'));
-  }, [users]);
+    users.forEach(u => {
+      if (u.dept_id && !seen.has(u.dept_id)) seen.set(u.dept_id, deptName(u.dept_id, u.dept_label));
+    });
+    return [...seen.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), lang));
+  }, [users, deptName, lang]);
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -41,15 +43,15 @@ export default function StaffDirectory({ onChat }) {
       .filter(u => {
         if (dept && u.dept_id !== dept) return false;
         if (!needle) return true;
-        return [u.full_name, u.dept_label, u.username, u.ext, u.mobile, u.email, u.alt_email]
+        return [u.full_name, deptName(u.dept_id, u.dept_label), u.username, u.ext, u.mobile, u.email, u.alt_email]
           .some(v => String(v || '').toLowerCase().includes(needle));
       })
       // Grouped by department, then alphabetical inside it — the order people
       // already have in their heads when they go looking for someone.
       .sort((a, b) =>
-        String(a.dept_label || '').localeCompare(String(b.dept_label || ''), 'ar')
-        || String(a.full_name || '').localeCompare(String(b.full_name || ''), 'ar'));
-  }, [users, q, dept]);
+        deptName(a.dept_id, a.dept_label).localeCompare(deptName(b.dept_id, b.dept_label), lang)
+        || String(a.full_name || '').localeCompare(String(b.full_name || ''), lang));
+  }, [users, q, dept, deptName, lang]);
 
   // A department's own lines are not a person, but they are still something you
   // come here to look up — so they belong in the table, filed under their
@@ -60,8 +62,8 @@ export default function StaffDirectory({ onChat }) {
       .filter(dl => !dept || dl.id === dept)
       .filter(dl => !needle
         || dl.phones.some(x => String(x.number).includes(needle))
-        || String(dl.label).toLowerCase().includes(needle));
-  }, [deptLines, dept, q]);
+        || deptName(dl.id, dl.label).toLowerCase().includes(needle));
+  }, [deptLines, dept, q, deptName]);
 
   // Interleaved so a department's lines sit with its people, not in a block of
   // their own at one end of the table.
@@ -70,14 +72,15 @@ export default function StaffDirectory({ onChat }) {
     let i = 0;
     for (const p of shown) {
       while (i < lines.length
-        && String(lines[i].label).localeCompare(String(p.dept_label || ''), 'ar') < 0) {
+        && deptName(lines[i].id, lines[i].label)
+             .localeCompare(deptName(p.dept_id, p.dept_label), lang) < 0) {
         out.push({ line: lines[i++] });
       }
       out.push({ person: p });
     }
     while (i < lines.length) out.push({ line: lines[i++] });
     return out;
-  }, [shown, lines]);
+  }, [shown, lines, deptName, lang]);
 
   if (loading) return <div className="page-loading"><div className="spinner" /></div>;
 
@@ -150,7 +153,7 @@ export default function StaffDirectory({ onChat }) {
                         <span className="dir-name">{d.deptLine}</span>
                       </div>
                     </td>
-                    <td className="text-muted">{r.line.label}</td>
+                    <td className="text-muted">{deptName(r.line.id, r.line.label)}</td>
                     <td colSpan={4}>
                       <span className="dir-lines">
                         {r.line.phones.map(x => (
@@ -181,7 +184,7 @@ export default function StaffDirectory({ onChat }) {
                         </span>
                       </div>
                     </td>
-                    <td className="text-muted">{u.dept_label || '—'}</td>
+                    <td className="text-muted">{deptName(u.dept_id, u.dept_label) || '—'}</td>
                     <td>
                       {/* The reason this page exists — one column, always the
                           same place, tabular figures so the digits line up. */}

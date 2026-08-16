@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const LANG_KEY = 'doctracking_lang';
 
@@ -1307,8 +1307,18 @@ export function LangProvider({ children }) {
   const isRTL  = lang === 'ar';
   const t      = T[lang];
 
+  // Department names come back from the API in Arabic only — they live in
+  // departments.json, which has one label per department. groupLabels carries
+  // both languages, so this is what turns "الموارد البشرية" into "Human
+  // Resources" when EN is selected. Falls back to whatever the server sent, so
+  // a department added through the admin panel still shows a name.
+  const deptName = useCallback(
+    (id, fallback) => (id && t.groupLabels?.[id]) || fallback || id || '',
+    [t]
+  );
+
   return (
-    <LangContext.Provider value={{ lang, t, toggle, isRTL }}>
+    <LangContext.Provider value={{ lang, t, toggle, isRTL, deptName }}>
       {children}
     </LangContext.Provider>
   );
