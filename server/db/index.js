@@ -197,6 +197,12 @@ if (!userCols.includes('ext')) {
 if (!userCols.includes('mobile')) {
   db.exec("ALTER TABLE users ADD COLUMN mobile TEXT");
 }
+// A second work address. Several people conduct work correspondence from a
+// personal @gmail.com as well as their @swd.bh mailbox, and the directory has
+// to show both — one column cannot hold two addresses without hiding one.
+if (!userCols.includes('alt_email')) {
+  db.exec("ALTER TABLE users ADD COLUMN alt_email TEXT");
+}
 
 const convCols = db.prepare("PRAGMA table_info(conversations)").all().map(c => c.name);
 if (!convCols.includes('avatar_url')) {

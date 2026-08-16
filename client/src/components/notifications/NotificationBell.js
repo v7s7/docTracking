@@ -158,7 +158,7 @@ export default function NotificationBell({ onTaskClick, onCorrClick }) {
             position: 'absolute', top: -4, insetInlineEnd: -4,
             background: '#C53030', color: '#fff',
             borderRadius: '50%', width: 18, height: 18,
-            fontSize: '0.62rem', fontWeight: 800,
+            fontSize: 'var(--fs-xs)', fontWeight: 800,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid var(--primary)',
           }}>
@@ -197,7 +197,7 @@ export default function NotificationBell({ onTaskClick, onCorrClick }) {
               )}
               {unread > 0 && (
                 <button
-                  style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 'var(--fs-xs)', fontWeight: 600 }}
                   onClick={handleMarkAll}
                 >
                   {t.markAllRead || 'Mark all read'}
@@ -244,7 +244,7 @@ export default function NotificationBell({ onTaskClick, onCorrClick }) {
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span style={{ flex: '1 1 auto', minWidth: 0, fontSize: '0.82rem', fontWeight: item.is_read ? 400 : 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ flex: '1 1 auto', minWidth: 0, fontSize: 'var(--fs-sm)', fontWeight: item.is_read ? 400 : 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {item.task_title}
                     </span>
                     {TYPE_COLOR[item.type] && (
@@ -253,7 +253,7 @@ export default function NotificationBell({ onTaskClick, onCorrClick }) {
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: '0.15rem' }}>
+                  <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-3)', marginTop: '0.15rem' }}>
                     <code className="tag" style={{ fontSize: '0.7em' }}>{item.task_serial}</code>
                     {' · '}
                     {item.created_at?.slice(0, 16)}

@@ -11,6 +11,7 @@ const { readConfig } = require('../services/configService');
 const { logAudit }   = require('../utils/audit');
 const {
   requireUserAdmin, requireSystemAdmin, refuseEdit, assignableRoles, capabilities, isSystemAdmin,
+  isProtectedAccount,
 } = require('../utils/permissions');
 
 const router    = express.Router();
@@ -111,7 +112,7 @@ router.post('/ldap-assign', ...SA_ONLY, (req, res) => {
 router.get('/', ...USER_ADMIN, (req, res) => {
   const users = db.prepare(
     'SELECT * FROM users ORDER BY created_at DESC'
-  ).all().map(safeUser);
+  ).all().map(u => ({ ...safeUser(u), is_protected: isProtectedAccount(u) }));
   res.json({ success: true, users, can: capabilities(req.user) });
 });
 
@@ -237,7 +238,7 @@ router.put('/:id', ...USER_ADMIN, (req, res) => {
     return res.status(403).json({ success: false, message: 'Only IT can set a password.' });
   }
 
-  const { full_name, email, role, dept_id, is_active, password, ext, mobile } = req.body || {};
+  const { full_name, email, role, dept_id, is_active, password, ext, mobile, alt_email } = req.body || {};
 
   if (role && !VALID_ROLES.includes(role)) {
     return res.status(400).json({ success: false, message: `Invalid role.` });
@@ -251,6 +252,12 @@ router.put('/:id', ...USER_ADMIN, (req, res) => {
       && !/^[\d\s+()-]{6,20}$/.test(String(mobile).trim())) {
     return res.status(400).json({ success: false, message: 'Mobile number is not valid.' });
   }
+  // Loose on purpose — any address shape is fine, it just has to be an address,
+  // so a stray phone number in this field is caught before it reaches the directory.
+  if (alt_email !== undefined && alt_email !== null && String(alt_email).trim() !== ''
+      && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(alt_email).trim())) {
+    return res.status(400).json({ success: false, message: 'The additional email is not a valid address.' });
+  }
 
   const clean = v => { const s = String(v ?? '').trim(); return s === '' ? null : s; };
   const updates = {
@@ -261,6 +268,7 @@ router.put('/:id', ...USER_ADMIN, (req, res) => {
     is_active:  is_active  !== undefined ? (is_active ? 1 : 0) : user.is_active,
     ext:        ext        !== undefined ? clean(ext)         : user.ext,
     mobile:     mobile     !== undefined ? clean(mobile)      : user.mobile,
+    alt_email:  alt_email  !== undefined ? clean(alt_email)   : user.alt_email,
     password_hash: user.password_hash,
   };
 
@@ -272,15 +280,15 @@ router.put('/:id', ...USER_ADMIN, (req, res) => {
   }
 
   db.prepare(`
-    UPDATE users SET full_name=?, email=?, role=?, dept_id=?, is_active=?, ext=?, mobile=?, password_hash=?
+    UPDATE users SET full_name=?, email=?, role=?, dept_id=?, is_active=?, ext=?, mobile=?, alt_email=?, password_hash=?
     WHERE id=?
   `).run(updates.full_name, updates.email, updates.role, updates.dept_id, updates.is_active,
-         updates.ext, updates.mobile, updates.password_hash, user.id);
+         updates.ext, updates.mobile, updates.alt_email, updates.password_hash, user.id);
 
   // Record only what actually moved, so the log reads as a list of changes
   // rather than a wall of unchanged fields.
   const diff = {};
-  for (const k of ['full_name', 'email', 'role', 'dept_id', 'is_active', 'ext', 'mobile']) {
+  for (const k of ['full_name', 'email', 'role', 'dept_id', 'is_active', 'ext', 'mobile', 'alt_email']) {
     if (String(user[k] ?? '') !== String(updates[k] ?? '')) diff[k] = { from: user[k], to: updates[k] };
   }
   if (password) diff.password = 'reset';

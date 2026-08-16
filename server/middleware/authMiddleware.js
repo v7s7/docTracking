@@ -43,14 +43,13 @@ function verifyToken(req, res, next) {
         if (!row.is_active) {
           return res.status(401).json({ success: false, message: 'This account has been disabled.' });
         }
-        // The SUPER_ADMIN_USERS override is applied at login and is not stored
-        // on the row — re-reading the role must not silently strip it.
-        const overrides = (process.env.SUPER_ADMIN_USERS || '')
-          .split(',').map(u => u.trim().toLowerCase()).filter(Boolean);
-        const isOverride = overrides.includes(String(req.user.username || '').toLowerCase())
-          || overrides.includes(String(req.user.email || '').toLowerCase());
-
-        req.user.role    = isOverride ? 'SUPER_ADMIN' : row.role;
+        // Role, department and active status come from the row, not the token,
+        // so a change takes effect on the very next request. effectiveRole() is
+        // the single definition shared with both login paths — it re-applies the
+        // SUPER_ADMIN_USERS override (which is not stored on the row, and must
+        // not be silently stripped here) and grants مدير النظام to تقنية المعلومات.
+        const { effectiveRole } = require('../utils/permissions');
+        req.user.role    = effectiveRole({ ...row, username: req.user.username, email: req.user.email });
         req.user.dept_id = row.dept_id || '';
       }
     }

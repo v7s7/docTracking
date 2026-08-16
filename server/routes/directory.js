@@ -23,7 +23,7 @@ router.get('/', verifyToken, (req, res) => {
     .map(d => ({ id: d.id, label: d.label, phones: d.phones }));
 
   const rows = db.prepare(`
-    SELECT id, username, full_name, role, dept_id, ext, mobile, email,
+    SELECT id, username, full_name, role, dept_id, ext, mobile, email, alt_email,
            avatar_url, avatar_color, presence_status, status_text, last_seen_at
       FROM users
      WHERE is_active = 1

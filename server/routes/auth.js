@@ -23,6 +23,10 @@ function getSuperAdminOverrides() {
     .split(',').map(u => u.trim().toLowerCase()).filter(Boolean);
 }
 
+// One definition of who is مدير النظام, shared with authMiddleware, so the role
+// in a freshly issued token always matches the one the next request computes.
+const { effectiveRole } = require('../utils/permissions');
+
 // ── POST /auth/login ─────────────────────────────────────────
 router.post('/login', async (req, res) => {
   const { username, password } = req.body || {};
@@ -41,10 +45,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid username or password.' });
     }
 
-    const overrides = getSuperAdminOverrides();
-    const role = overrides.includes(localUser.username.toLowerCase())
-      ? 'SUPER_ADMIN'
-      : localUser.role;
+    const role = effectiveRole(localUser);
 
     const payload = {
       id:       localUser.id,
@@ -90,8 +91,12 @@ router.post('/login', async (req, res) => {
         .run(ldapUser.name, ldapUser.email, stored.id);
     }
 
-    const role    = isSA ? 'SUPER_ADMIN' : (stored ? stored.role : mapGroupsToRole(ldapUser.memberOf));
     const dept_id = stored ? (stored.dept_id || '') : '';
+    const role    = isSA
+      ? 'SUPER_ADMIN'
+      : effectiveRole(stored
+          ? stored
+          : { role: mapGroupsToRole(ldapUser.memberOf), dept_id, username: ldapUser.username, email: ldapUser.email });
 
     const payload = {
       id:       stored ? stored.id : null,

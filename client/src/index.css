@@ -468,9 +468,12 @@ a { color: inherit; text-decoration: none; }
 /* ── Main content ───────────────────────────────────────────── */
 .app-main {
   flex: 1;
-  margin-top: var(--header-h);
   padding: 1.75rem;
   overflow-y: auto;
+  /* No margin-top here: the flex row in App.js already offsets the whole body
+     by the fixed header's height. Applying it twice left a header-tall empty
+     band above every screen AND made the page scroll by exactly that much —
+     which is why the chat never fit and always had a scrollbar it did not need. */
   min-height: calc(100vh - var(--header-h));
 }
 
@@ -1781,24 +1784,27 @@ code.tag {
 .msg-reaction-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 19;
+  z-index: 59;          /* just under the picker, which is 60 */
 }
 
 .msg-reaction-picker {
-  position: absolute;
-  bottom: calc(100% + 0.3rem);
-  inset-inline-end: 0;
-  z-index: 20;
+  /* Fixed, and rendered into <body>, so no scrolling ancestor can clip it.
+     Its coordinates are computed against the viewport in Messages.js and are
+     clamped to stay on screen — so it shows in full for any message, at any
+     length, at either margin, in Arabic or English. */
+  position: fixed;
+  z-index: 60;
   display: flex;
+  flex-wrap: nowrap;
   gap: 0.15rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 0.3rem;
+  transition: opacity 0.09s ease;
 }
 
-.msg-bubble-row.mine .msg-reaction-picker { inset-inline-end: auto; inset-inline-start: 0; }
 
 .msg-reaction-picker-item {
   border: none;
@@ -2079,7 +2085,7 @@ code.tag {
   .msg-search-bar { flex-wrap: wrap; }
   .msg-search-bar input { flex-basis: 100%; order: -1; }
 
-  .msg-reaction-picker { max-width: calc(100vw - 2.5rem); flex-wrap: wrap; }
+  .msg-reaction-picker { max-inline-size: calc(100vw - 1rem); }
 
   .msg-mention-dropdown { inset-inline-start: 0.5rem; inset-inline-end: 0.5rem; }
 }

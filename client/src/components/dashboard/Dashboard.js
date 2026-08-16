@@ -22,7 +22,7 @@ function IdlePill({ updatedAt, t }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: '0.2rem',
-      fontSize: '0.68rem', fontWeight: 700, borderRadius: 99,
+      fontSize: 'var(--fs-xs)', fontWeight: 700, borderRadius: 99,
       padding: '1px 7px',
       background: isStale ? '#FFF5F5' : 'var(--surface-2)',
       color: isStale ? '#C53030' : 'var(--text-3)',
@@ -56,7 +56,7 @@ function StatCard({ icon, label, value, color = 'var(--primary)', bg = 'var(--pr
 function StatusPill({ status, t }) {
   const c = STATUS_COLORS[status] || { bg: '#f0f0f0', color: '#666' };
   return (
-    <span style={{ background: c.bg, color: c.color, padding: '2px 10px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 700 }}>
+    <span style={{ background: c.bg, color: c.color, padding: '2px 10px', borderRadius: 99, fontSize: 'var(--fs-xs)', fontWeight: 700 }}>
       {t.statuses?.[status] || status}
     </span>
   );
@@ -116,10 +116,10 @@ export default function Dashboard({ onTaskClick }) {
       {canFilter && depts.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
           <Building2 size={15} strokeWidth={1.8} style={{ color: 'var(--text-3)' }} />
-          <span style={{ fontSize: '0.82rem', color: 'var(--text-2)', fontWeight: 600 }}>{t.viewingDept}</span>
+          <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-2)', fontWeight: 600 }}>{t.viewingDept}</span>
           <select
             className="form-control"
-            style={{ width: 'auto', padding: '0.35rem 0.7rem', fontSize: '0.85rem' }}
+            style={{ width: 'auto', padding: '0.35rem 0.7rem', fontSize: 'var(--fs-sm)' }}
             value={dept}
             onChange={e => setDept(e.target.value)}
           >
@@ -127,7 +127,7 @@ export default function Dashboard({ onTaskClick }) {
             {depts.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
           </select>
           {dept && (
-            <span style={{ fontSize: '0.78rem', background: 'var(--accent-light)', color: 'var(--accent-hover)', borderRadius: 20, padding: '0.15rem 0.65rem', fontWeight: 600 }}>
+            <span style={{ fontSize: 'var(--fs-xs)', background: 'var(--accent-light)', color: 'var(--accent-hover)', borderRadius: 20, padding: '0.15rem 0.65rem', fontWeight: 600 }}>
               {deptLabel}
             </span>
           )}
@@ -157,7 +157,7 @@ export default function Dashboard({ onTaskClick }) {
         <div className="card" style={{ marginTop: '1.5rem' }}>
           <div className="card-header">
             <div className="card-title">{t.deptQueue}</div>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>
+            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-3)' }}>
               {stats.deptQueue.length} {t.openTasks}
             </span>
           </div>
@@ -254,14 +254,14 @@ export default function Dashboard({ onTaskClick }) {
                 const max = Math.max(...stats.byDept.map(r => r.n), 1);
                 return (
                   <div key={row.dept_id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.7rem' }}>
-                    <div style={{ flex: 1, fontSize: '0.85rem', color: 'var(--text-2)' }}>
+                    <div style={{ flex: 1, fontSize: 'var(--fs-sm)', color: 'var(--text-2)' }}>
                       {depts.find(d => d.id === row.dept_id)?.label || t.groupLabels?.[row.dept_id] || row.dept_id}
                     </div>
                     <div style={{ flex: 2, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <div style={{ flex: 1, height: 8, borderRadius: 99, background: 'var(--border)', overflow: 'hidden' }}>
                         <div style={{ height: '100%', borderRadius: 99, background: 'var(--accent)', width: `${(row.n / max) * 100}%`, transition: 'width 0.4s ease' }} />
                       </div>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent)', minWidth: 22 }}>{row.n}</span>
+                      <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--accent)', minWidth: 22 }}>{row.n}</span>
                     </div>
                   </div>
                 );

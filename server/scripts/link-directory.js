@@ -354,6 +354,10 @@ function applyFromDirectory() {
       posts.push({
         deptId, username: p.username, name: p.name,
         ext: p.ext || null, mobile: p.mobile || null,
+        // Optional second work address (a personal Gmail, typically). Filling it
+        // in directory.json means the whole set can be pasted in one edit and
+        // carried to the server by git, rather than typed 140 times in the UI.
+        altEmail: p.alt_email || p.altEmail || null,
         rank: i === 0 ? 'head' : i === 1 ? 'deputy' : 'staff',
         role: i <= 1 ? 'MANAGER' : 'STAFF',
       });
@@ -375,13 +379,20 @@ function applyFromDirectory() {
       const existing = db.prepare('SELECT id, password_hash FROM users WHERE username = ?').get(p.username);
       if (existing) {
         if (existing.password_hash) { console.warn(`  skip — "${p.username}" is a local account, not AD`); skipped++; continue; }
-        db.prepare('UPDATE users SET full_name=?, role=?, dept_id=?, ext=?, mobile=?, is_active=1 WHERE id=?')
-          .run(p.name, p.role, p.deptId, p.ext, p.mobile, existing.id);
+        // alt_email is only written when the roster actually carries one, so a
+        // roster without the column never blanks an address entered by hand.
+        if (p.altEmail) {
+          db.prepare('UPDATE users SET full_name=?, role=?, dept_id=?, ext=?, mobile=?, alt_email=?, is_active=1 WHERE id=?')
+            .run(p.name, p.role, p.deptId, p.ext, p.mobile, p.altEmail, existing.id);
+        } else {
+          db.prepare('UPDATE users SET full_name=?, role=?, dept_id=?, ext=?, mobile=?, is_active=1 WHERE id=?')
+            .run(p.name, p.role, p.deptId, p.ext, p.mobile, existing.id);
+        }
         updated++;
       } else {
-        db.prepare(`INSERT INTO users (username, password_hash, full_name, email, role, dept_id, ext, mobile, created_by)
-                    VALUES (?, NULL, ?, '', ?, ?, ?, ?, 'link-directory')`)
-          .run(p.username, p.name, p.role, p.deptId, p.ext, p.mobile);
+        db.prepare(`INSERT INTO users (username, password_hash, full_name, email, role, dept_id, ext, mobile, alt_email, created_by)
+                    VALUES (?, NULL, ?, '', ?, ?, ?, ?, ?, 'link-directory')`)
+          .run(p.username, p.name, p.role, p.deptId, p.ext, p.mobile, p.altEmail);
         created++;
       }
     }

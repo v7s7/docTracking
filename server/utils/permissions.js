@@ -24,6 +24,10 @@
 // Everything here is checked server-side. The UI hides what a user cannot do,
 // but hiding is a courtesy; this file is the rule.
 const HR_DEPT_ID = process.env.HR_DEPT_ID || 'hr_dept';
+// تقنية المعلومات. Everyone in it is مدير النظام — SWD runs IT as a team, and a
+// permission that only one person holds is a permission that stops working the
+// week he is on leave.
+const IT_DEPT_ID = process.env.IT_DEPT_ID || 'it_dept';
 
 const ALL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF', 'READONLY'];
 
@@ -33,6 +37,54 @@ const HR_ASSIGNABLE_ROLES = ALL_ROLES.filter(r => r !== 'SUPER_ADMIN');
 
 function isSystemAdmin(user) {
   return user?.role === 'SUPER_ADMIN';
+}
+
+// Usernames forced to مدير النظام by SUPER_ADMIN_USERS in .env, whatever their
+// stored role says. This is the lockout failsafe, so it has to be read here too.
+function overrideAdmins() {
+  return (process.env.SUPER_ADMIN_USERS || '')
+    .split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+}
+
+function isOverrideAdmin(row) {
+  const u = String(row?.username || '').toLowerCase();
+  const e = String(row?.email || '').toLowerCase();
+  return overrideAdmins().some(x => x === u || (e && x === e));
+}
+
+function isItDepartment(row) {
+  return String(row?.dept_id || '') === IT_DEPT_ID;
+}
+
+/**
+ * The role a stored row actually carries at runtime. THE single definition —
+ * both login paths and the per-request refresh call this, so a person cannot
+ * end up with one role in their token and another in the middleware.
+ *
+ * Three ways to be مدير النظام:
+ *   1. the stored role says so
+ *   2. SUPER_ADMIN_USERS names them — the lockout failsafe, which no UI can remove
+ *   3. they are in تقنية المعلومات — IT is a team, not one person
+ */
+function effectiveRole(row) {
+  if (!row) return 'STAFF';
+  if (row.role === 'SUPER_ADMIN' || isOverrideAdmin(row) || isItDepartment(row)) return 'SUPER_ADMIN';
+  return row.role || 'STAFF';
+}
+
+/**
+ * Is this *stored row* an IT account that HR must not touch?
+ *
+ * Checking `role === 'SUPER_ADMIN'` alone is not enough, and the gap is not
+ * hypothetical: at SWD nobody holds SUPER_ADMIN in the users table at all —
+ * a.alkubaesy is مدير النظام purely through SUPER_ADMIN_USERS, and his row
+ * still reads STAFF. Without this, HR could demote him, move him out of
+ * تقنية المعلومات, or deactivate him — and a deactivated account is refused at
+ * the door regardless of the override, so that last one locks IT out of the
+ * only screen that could undo it.
+ */
+function isProtectedAccount(row) {
+  return effectiveRole(row) === 'SUPER_ADMIN';
 }
 
 // Anyone in الموارد البشرية. The department is read from the live user row on
@@ -59,7 +111,7 @@ function refuseEdit(actor, target, patch = {}) {
   if (isSystemAdmin(actor)) return null;
   if (!isHrAdmin(actor)) return 'You do not have permission to change user accounts.';
 
-  if (target?.role === 'SUPER_ADMIN') {
+  if (isProtectedAccount(target)) {
     return 'This is a system administrator account. Only IT can change it.';
   }
   if (patch.role !== undefined && !HR_ASSIGNABLE_ROLES.includes(patch.role)) {
@@ -109,7 +161,8 @@ function capabilities(user) {
 }
 
 module.exports = {
-  HR_DEPT_ID, ALL_ROLES, HR_ASSIGNABLE_ROLES,
-  isSystemAdmin, isHrAdmin, canManageUsers, assignableRoles,
+  HR_DEPT_ID, IT_DEPT_ID, ALL_ROLES, HR_ASSIGNABLE_ROLES,
+  isSystemAdmin, isHrAdmin, isItDepartment, isOverrideAdmin, effectiveRole,
+  isProtectedAccount, canManageUsers, assignableRoles,
   refuseEdit, requireUserAdmin, requireSystemAdmin, capabilities,
 };

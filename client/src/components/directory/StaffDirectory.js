@@ -41,7 +41,7 @@ export default function StaffDirectory({ onChat }) {
       .filter(u => {
         if (dept && u.dept_id !== dept) return false;
         if (!needle) return true;
-        return [u.full_name, u.dept_label, u.username, u.ext, u.mobile, u.email]
+        return [u.full_name, u.dept_label, u.username, u.ext, u.mobile, u.email, u.alt_email]
           .some(v => String(v || '').toLowerCase().includes(needle));
       })
       // Grouped by department, then alphabetical inside it — the order people
@@ -135,6 +135,7 @@ export default function StaffDirectory({ onChat }) {
                   <th className="dir-th-ext">{d.ext}</th>
                   <th>{d.mobile}</th>
                   <th>{t.email}</th>
+                  <th>{d.altEmail}</th>
                   <th className="dir-td-action" />
                 </tr>
               </thead>
@@ -150,7 +151,7 @@ export default function StaffDirectory({ onChat }) {
                       </div>
                     </td>
                     <td className="text-muted">{r.line.label}</td>
-                    <td colSpan={3}>
+                    <td colSpan={4}>
                       <span className="dir-lines">
                         {r.line.phones.map(x => (
                           <a key={x.number} className="dir-ext" href={`tel:${x.number}`}>
@@ -198,6 +199,13 @@ export default function StaffDirectory({ onChat }) {
                     <td>
                       {u.email
                         ? <a className="dir-plain dir-email" href={`mailto:${u.email}`} dir="ltr" title={u.email}>{u.email}</a>
+                        : <span className="text-muted">—</span>}
+                    </td>
+                    <td>
+                      {/* A second work address — several people correspond from a
+                          personal mailbox as well as their @swd.bh one. */}
+                      {u.alt_email
+                        ? <a className="dir-plain dir-email" href={`mailto:${u.alt_email}`} dir="ltr" title={u.alt_email}>{u.alt_email}</a>
                         : <span className="text-muted">—</span>}
                     </td>
                     <td className="dir-td-action">

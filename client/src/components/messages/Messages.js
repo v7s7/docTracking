@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useLang } from '../../context/LangContext';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -321,7 +322,7 @@ function DirectoryPanel({ onPick, onClose, t }) {
             <Search size={14} strokeWidth={2} style={{ position: 'absolute', top: '50%', insetInlineStart: '0.6rem', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }} />
             <input
               className="form-control"
-              style={{ padding: '0.45rem 0.7rem', paddingInlineStart: '2rem', fontSize: '0.85rem' }}
+              style={{ padding: '0.45rem 0.7rem', paddingInlineStart: '2rem', fontSize: 'var(--fs-sm)' }}
               placeholder={t.searchPeople}
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -343,9 +344,91 @@ function DirectoryPanel({ onPick, onClose, t }) {
   );
 }
 
+
+// ── Reaction picker ─────────────────────────────────────────────────────────
+// Rendered into document.body, not into the message row. The thread scrolls,
+// and any scroll container clips absolutely-positioned descendants on both axes
+// — `overflow-y: auto` quietly makes `overflow-x` compute to `auto` as well —
+// so a picker anchored inside it gets cut off near any edge, and above the
+// first message in the thread. Out here nothing can clip it; it only has to
+// stay inside the viewport, which is what place() below guarantees, in either
+// writing direction.
+function ReactionPicker({ anchorRef, isRTL, onPick, onClose }) {
+  const boxRef = useRef(null);
+  const [pos, setPos] = useState(null);
+
+  const place = useCallback(() => {
+    const anchor = anchorRef.current;
+    const box    = boxRef.current;
+    if (!anchor || !box) return;
+    const a = anchor.getBoundingClientRect();
+    const w = box.offsetWidth;
+    const h = box.offsetHeight;
+    const M = 8;                            // keep clear of the viewport edge
+
+    // Above the button by preference; below it when there is no room above —
+    // which is the case for the first message in a thread.
+    let top = a.top - h - 6;
+    if (top < M) top = Math.min(a.bottom + 6, window.innerHeight - h - M);
+
+    // Grow away from the message: towards the start of the line in RTL, towards
+    // the end in LTR. Then clamp, so a message at either margin still shows the
+    // whole row of emoji.
+    let left = isRTL ? a.left : a.right - w;
+    left = Math.max(M, Math.min(left, window.innerWidth - w - M));
+
+    setPos({ top, left });
+  }, [anchorRef, isRTL]);
+
+  useLayoutEffect(place, [place]);
+
+  useEffect(() => {
+    // `true` captures scrolls on the thread itself, not just the window, so the
+    // picker follows its message instead of drifting away from it.
+    const onMove = () => place();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    const onKey = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [place, onClose]);
+
+  return createPortal(
+    <>
+      <div className="msg-reaction-backdrop" onClick={onClose} />
+      <div
+        ref={boxRef}
+        className="msg-reaction-picker"
+        role="menu"
+        style={pos
+          ? { top: pos.top, insetInlineStart: 'auto', left: pos.left, opacity: 1 }
+          // First paint is used to measure. Hidden rather than absent, so the
+          // box has a size to measure in the same frame.
+          : { top: 0, left: 0, opacity: 0, pointerEvents: 'none' }}
+      >
+        {REACTION_EMOJIS.map(emoji => (
+          <button key={emoji} className="msg-reaction-picker-item" role="menuitem"
+            onClick={() => onPick(emoji)}>
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </>,
+    document.body
+  );
+}
+
 function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, highlighted, seenLabel, onReact, onReply, onJumpToReply, canPin, isPinned, onTogglePin, onImageLoad, convId }) {
   const isImage = msg.file_type?.startsWith('image/');
   const [showPicker, setShowPicker] = useState(false);
+  // The picker positions itself against this button's rectangle, from outside
+  // the scrolling thread — see ReactionPicker above.
+  const pickerBtnRef = useRef(null);
+  const { isRTL } = useLang();
   const [showOriginal, setShowOriginal] = useState(false);
   const [manualTranslation, setManualTranslation] = useState(null);
   const [translating, setTranslating] = useState(false);
@@ -418,7 +501,7 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
                 background: mine ? 'rgba(255,255,255,0.16)' : 'var(--surface-2)',
                 border: `1px solid ${mine ? 'rgba(255,255,255,0.3)' : 'var(--border)'}`,
                 borderRadius: 99, cursor: translating ? 'default' : 'pointer',
-                padding: '2px 9px', fontSize: '0.72rem', fontWeight: 600,
+                padding: '2px 9px', fontSize: 'var(--fs-xs)', fontWeight: 600,
                 color: mine ? 'rgba(255,255,255,0.9)' : 'var(--accent)',
                 opacity: translating ? 0.7 : 1,
               }}
@@ -434,7 +517,7 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
             </button>
           )}
           {translateErr && (
-            <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '0.2rem' }}>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--danger)', marginTop: '0.2rem' }}>
               {t.translateFailed || 'Translation failed. Try again.'}
             </div>
           )}
@@ -448,20 +531,18 @@ function MessageBubble({ msg, mine, showSender, t, currentUserId, searchQuery, h
           <button className="msg-react-btn btn-ghost btn-sm" onClick={() => onReply?.(msg)} title={t.reply} aria-label={t.reply}>
             <Reply size={13} strokeWidth={2} />
           </button>
-          <button className="msg-react-btn btn-ghost btn-sm" onClick={() => setShowPicker(s => !s)} title={t.addReaction} aria-label={t.addReaction}>
+          <button ref={pickerBtnRef} className="msg-react-btn btn-ghost btn-sm"
+            onClick={() => setShowPicker(s => !s)}
+            aria-haspopup="menu" aria-expanded={showPicker}
+            title={t.addReaction} aria-label={t.addReaction}>
             <Smile size={13} strokeWidth={2} />
           </button>
           {showPicker && (
-            <>
-              <div className="msg-reaction-backdrop" onClick={() => setShowPicker(false)} />
-              <div className="msg-reaction-picker">
-                {REACTION_EMOJIS.map(emoji => (
-                  <button key={emoji} className="msg-reaction-picker-item" onClick={() => { onReact?.(msg.id, emoji); setShowPicker(false); }}>
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </>
+            <ReactionPicker
+              anchorRef={pickerBtnRef}
+              isRTL={isRTL}
+              onPick={emoji => { onReact?.(msg.id, emoji); setShowPicker(false); }}
+              onClose={() => setShowPicker(false)} />
           )}
         </div>
       </div>
@@ -996,7 +1077,7 @@ function ChatThread({
                     />
                   ))}
                 </div>
-                {avatarErr && <div className="alert alert-error" style={{ marginTop: '0.4rem', fontSize: '0.78rem' }}>{avatarErr}</div>}
+                {avatarErr && <div className="alert alert-error" style={{ marginTop: '0.4rem', fontSize: 'var(--fs-xs)' }}>{avatarErr}</div>}
               </div>
             </>
           )}
@@ -1022,7 +1103,7 @@ function ChatThread({
           <div style={{ position: 'relative' }}>
             <button className="btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }} onClick={() => setShowMembers(s => !s)} title={t.members}>
               <Users size={16} strokeWidth={1.8} />
-              <span style={{ fontSize: '0.8rem' }}>{members.length}</span>
+              <span style={{ fontSize: 'var(--fs-sm)' }}>{members.length}</span>
             </button>
             {showMembers && (
               <>
@@ -1560,7 +1641,7 @@ export default function Messages({ openConversation = null, onOpened }) {
               <Search size={14} strokeWidth={2} style={{ position: 'absolute', top: '50%', insetInlineStart: '0.6rem', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }} />
               <input
                 className="form-control"
-                style={{ padding: '0.45rem 0.7rem', paddingInlineStart: '2rem', fontSize: '0.85rem' }}
+                style={{ padding: '0.45rem 0.7rem', paddingInlineStart: '2rem', fontSize: 'var(--fs-sm)' }}
                 placeholder={t.searchChats}
                 value={search}
                 onChange={e => setSearch(e.target.value)}

@@ -27,7 +27,7 @@ const ROLE_COLORS  = {
 
 function RoleBadge({ role, t }) {
   return (
-    <span className="badge" style={{ background: ROLE_COLORS[role] || '#888', color: '#fff', fontSize: '0.72rem' }}>
+    <span className="badge" style={{ background: ROLE_COLORS[role] || '#888', color: '#fff', fontSize: 'var(--fs-xs)' }}>
       {t.roles?.[role] || role}
     </span>
   );
@@ -54,16 +54,16 @@ function FieldFormRow({ initial, onSave, onCancel, t }) {
   return (
     <tr style={{ background: 'var(--primary-light)' }}>
       <td style={{ padding: '0.4rem 0.6rem' }}>
-        <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
+        <input className="form-control" style={{ fontSize: 'var(--fs-sm)', padding: '0.3rem 0.5rem' }}
           value={f.key} onChange={e => set('key', e.target.value)}
           placeholder={t.fieldKey} disabled={!!initial} dir="ltr" />
       </td>
       <td style={{ padding: '0.4rem 0.6rem' }}>
-        <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
+        <input className="form-control" style={{ fontSize: 'var(--fs-sm)', padding: '0.3rem 0.5rem' }}
           value={f.label} onChange={e => set('label', e.target.value)} placeholder={t.fieldLabel} />
       </td>
       <td style={{ padding: '0.4rem 0.6rem' }}>
-        <select className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
+        <select className="form-control" style={{ fontSize: 'var(--fs-sm)', padding: '0.3rem 0.5rem' }}
           value={f.type} onChange={e => set('type', e.target.value)}>
           {FIELD_TYPES.map(tp => <option key={tp} value={tp}>{tp}</option>)}
         </select>
@@ -74,9 +74,9 @@ function FieldFormRow({ initial, onSave, onCancel, t }) {
       </td>
       <td style={{ padding: '0.4rem 0.6rem' }}>
         {f.type === 'select'
-          ? <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
+          ? <input className="form-control" style={{ fontSize: 'var(--fs-sm)', padding: '0.3rem 0.5rem' }}
               value={f.options} onChange={e => set('options', e.target.value)} placeholder={t.optionsPH} />
-          : <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
+          : <input className="form-control" style={{ fontSize: 'var(--fs-sm)', padding: '0.3rem 0.5rem' }}
               value={f.placeholder} onChange={e => set('placeholder', e.target.value)} placeholder="Placeholder…" />
         }
       </td>
@@ -170,20 +170,20 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
         {editing ? (
           <div style={{ display: 'flex', gap: '0.5rem', flex: 1, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <div style={{ flex: 1, minWidth: 160 }}>
-              <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.6rem', marginBottom: '0.3rem' }}
+              <input className="form-control" style={{ fontSize: 'var(--fs-sm)', padding: '0.3rem 0.6rem', marginBottom: '0.3rem' }}
                 value={label} onChange={e => setLabel(e.target.value)} placeholder={t.serviceNamePH} />
-              <input className="form-control" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+              <input className="form-control" style={{ fontSize: 'var(--fs-xs)', padding: '0.25rem 0.6rem' }}
                 value={desc} onChange={e => setDesc(e.target.value)} placeholder={t.serviceDescPH} />
 
               <div style={{ marginTop: '0.5rem' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginBottom: '0.3rem' }}>
+                <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-3)', marginBottom: '0.3rem' }}>
                   {t.fromDeptsLabel}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
                   <button
                     type="button"
                     className={`corr-filter${fromDepts.length === 0 ? ' active' : ''}`}
-                    style={{ fontSize: '0.72rem', padding: '0.15rem 0.6rem' }}
+                    style={{ fontSize: 'var(--fs-xs)', padding: '0.15rem 0.6rem' }}
                     onClick={() => setFromDepts([])}>
                     {t.fromDeptsAll}
                   </button>
@@ -194,7 +194,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
                         key={d.id}
                         type="button"
                         className={`corr-filter${on ? ' active' : ''}`}
-                        style={{ fontSize: '0.72rem', padding: '0.15rem 0.6rem' }}
+                        style={{ fontSize: 'var(--fs-xs)', padding: '0.15rem 0.6rem' }}
                         onClick={() => setFromDepts(p => on ? p.filter(x => x !== d.id) : [...p, d.id])}>
                         {d.label}
                       </button>
@@ -212,12 +212,12 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
           <div style={{ flex: 1 }}>
             <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{service.label}</span>
             {service.description && (
-              <span style={{ marginInlineStart: '0.5rem', fontSize: '0.75rem', color: 'var(--text-3)' }}>{service.description}</span>
+              <span style={{ marginInlineStart: '0.5rem', fontSize: 'var(--fs-xs)', color: 'var(--text-3)' }}>{service.description}</span>
             )}
-            <span style={{ marginInlineStart: '0.5rem', fontSize: '0.72rem', color: 'var(--text-3)' }}>
+            <span style={{ marginInlineStart: '0.5rem', fontSize: 'var(--fs-xs)', color: 'var(--text-3)' }}>
               · {(service.fields || []).length} {t.fieldsSuffix}
             </span>
-            <span style={{ marginInlineStart: '0.5rem', fontSize: '0.72rem', color: (service.fromDepts || []).length ? 'var(--accent)' : 'var(--text-3)' }}>
+            <span style={{ marginInlineStart: '0.5rem', fontSize: 'var(--fs-xs)', color: (service.fromDepts || []).length ? 'var(--accent)' : 'var(--text-3)' }}>
               · {(service.fromDepts || []).length
                    ? t.fromDeptsSome.replace('{n}', service.fromDepts.length)
                    : t.fromDeptsAll}
@@ -227,11 +227,11 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
 
         {!editing && (
           <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
-            <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
+            <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: 'var(--fs-xs)' }}
               onClick={() => setEditing(true)} disabled={busy}>
               <Edit2 size={11} strokeWidth={2} />{t.edit}
             </button>
-            <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
+            <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: 'var(--fs-xs)' }}
               onClick={handleDelete} disabled={busy}>
               <Trash2 size={11} strokeWidth={2} />{busy ? '…' : t.del}
             </button>
@@ -249,7 +249,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
               <thead>
                 <tr>
                   {[t.fieldKey, t.fieldLabel, t.fieldType, t.fieldReq, t.optPH, t.actions].map(h => (
-                    <th key={h} style={{ fontSize: '0.76rem' }}>{h}</th>
+                    <th key={h} style={{ fontSize: 'var(--fs-xs)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -260,21 +260,21 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
                     : (
                       <tr key={f.key}>
                         <td><code className="tag">{f.key}</code></td>
-                        <td style={{ fontSize: '0.82rem' }}>{f.label}</td>
+                        <td style={{ fontSize: 'var(--fs-sm)' }}>{f.label}</td>
                         <td>
-                          <span style={{ background: 'var(--accent-light)', color: 'var(--accent-hover)', padding: '1px 8px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 600 }}>
+                          <span style={{ background: 'var(--accent-light)', color: 'var(--accent-hover)', padding: '1px 8px', borderRadius: 99, fontSize: 'var(--fs-xs)', fontWeight: 600 }}>
                             {f.type}
                           </span>
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           {f.required ? <CheckCircle size={12} strokeWidth={2.5} style={{ color: 'var(--success)' }} /> : '—'}
                         </td>
-                        <td style={{ color: 'var(--text-2)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                        <td style={{ color: 'var(--text-2)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--fs-xs)' }}>
                           {Array.isArray(f.options) ? f.options.join(', ') : (f.placeholder || '—')}
                         </td>
                         <td>
-                          <button className="btn btn-sm btn-ghost" style={{ marginInlineEnd: '0.25rem', fontSize: '0.78rem' }} onClick={() => setEditingF(f.key)} disabled={busyField === f.key}>{t.edit}</button>
-                          <button className="btn btn-sm btn-danger" style={{ fontSize: '0.78rem' }} onClick={() => handleDeleteField(f.key)} disabled={busyField === f.key}>{busyField === f.key ? '…' : t.del}</button>
+                          <button className="btn btn-sm btn-ghost" style={{ marginInlineEnd: '0.25rem', fontSize: 'var(--fs-xs)' }} onClick={() => setEditingF(f.key)} disabled={busyField === f.key}>{t.edit}</button>
+                          <button className="btn btn-sm btn-danger" style={{ fontSize: 'var(--fs-xs)' }} onClick={() => handleDeleteField(f.key)} disabled={busyField === f.key}>{busyField === f.key ? '…' : t.del}</button>
                         </td>
                       </tr>
                     )
@@ -284,7 +284,7 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
                   : (
                     <tr>
                       <td colSpan={6} style={{ padding: '0.4rem 0.5rem' }}>
-                        <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem' }}
+                        <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: 'var(--fs-xs)' }}
                           onClick={() => setAddingF(true)}>
                           <Plus size={11} strokeWidth={2.5} />{t.addField}
                         </button>
@@ -368,17 +368,17 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t, allDepts = [] }) {
                 value={label} onChange={e => setLabel(e.target.value)} placeholder={t.deptLabel} />
             </div>
             <div>
-              <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem' }}
+              <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: 'var(--fs-xs)' }}
                 onClick={() => setShowAdv(p => !p)}>
                 <Settings2 size={12} strokeWidth={2} />{t.advancedOptions}
               </button>
             </div>
             {showAdv && (
               <div style={{ width: '100%' }}>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-2)', marginBottom: '0.25rem', display: 'block' }}>{t.adGroup}</label>
+                <label style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-2)', marginBottom: '0.25rem', display: 'block' }}>{t.adGroup}</label>
                 <input className="form-control" style={{ maxWidth: 260, fontSize: '0.875rem', padding: '0.4rem 0.65rem' }}
                   value={group} onChange={e => setGroup(e.target.value)} placeholder="group_cn" dir="ltr" />
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: '0.3rem 0 0' }}>{t.adGroupHint}</p>
+                <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-3)', margin: '0.3rem 0 0' }}>{t.adGroupHint}</p>
               </div>
             )}
             <div style={{ display: 'flex', gap: '0.4rem' }}>
@@ -389,13 +389,13 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t, allDepts = [] }) {
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
             <strong style={{ fontSize: '0.95rem' }}>{dept.label}</strong>
-            {dept.ldapGroup && <code className="tag" style={{ fontSize: '0.75rem' }}>{dept.ldapGroup}</code>}
+            {dept.ldapGroup && <code className="tag" style={{ fontSize: 'var(--fs-xs)' }}>{dept.ldapGroup}</code>}
             {userCount > 0 && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', color: 'var(--accent-hover)', background: 'var(--accent-light)', borderRadius: 20, padding: '0.1rem 0.55rem', fontWeight: 600 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: 'var(--fs-xs)', color: 'var(--accent-hover)', background: 'var(--accent-light)', borderRadius: 20, padding: '0.1rem 0.55rem', fontWeight: 600 }}>
                 <Users size={11} strokeWidth={2} />{userCount} {t.usersInDept}
               </span>
             )}
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
+            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-3)' }}>
               {t.servicesCount.replace('{n}', services.length)}
             </span>
           </div>
@@ -421,11 +421,11 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t, allDepts = [] }) {
       {open && (
         <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)', padding: '0.75rem 1rem 0.85rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-2)' }}>
+            <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text-2)' }}>
               {t.servicesSectionTitle}
             </span>
             {!addingSvc && (
-              <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}
+              <button className="btn btn-sm btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: 'var(--fs-sm)' }}
                 onClick={() => setAddingSvc(true)}>
                 <Plus size={12} strokeWidth={2.5} /> {t.addService}
               </button>
@@ -437,13 +437,13 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t, allDepts = [] }) {
             <div style={{ border: '1px solid var(--primary)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.65rem', background: 'var(--primary-light)' }}>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>{t.serviceNameLabel}</label>
+                  <label className="form-label" style={{ fontSize: 'var(--fs-xs)' }}>{t.serviceNameLabel}</label>
                   <input className="form-control" value={newSvcLabel} onChange={e => setNewSvcLabel(e.target.value)}
                     placeholder={t.serviceNameExample} autoFocus
                     onKeyDown={e => e.key === 'Enter' && handleAddService()} />
                 </div>
                 <div style={{ flex: 1, minWidth: 160 }}>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>{t.serviceDescLabel}</label>
+                  <label className="form-label" style={{ fontSize: 'var(--fs-xs)' }}>{t.serviceDescLabel}</label>
                   <input className="form-control" value={newSvcDesc} onChange={e => setNewSvcDesc(e.target.value)}
                     placeholder={t.serviceDescExample} />
                 </div>
@@ -456,7 +456,7 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t, allDepts = [] }) {
           )}
 
           {services.length === 0 && !addingSvc ? (
-            <div style={{ textAlign: 'center', padding: '1.25rem', color: 'var(--text-3)', fontSize: '0.82rem', border: '1px dashed var(--border)', borderRadius: 8 }}>
+            <div style={{ textAlign: 'center', padding: '1.25rem', color: 'var(--text-3)', fontSize: 'var(--fs-sm)', border: '1px dashed var(--border)', borderRadius: 8 }}>
               {t.noServicesEmpty}
             </div>
           ) : (
@@ -535,12 +535,12 @@ function DepartmentsTab({ t }) {
         <div style={{ border: '1px solid var(--primary)', borderRadius: 10, padding: '1rem', marginBottom: '0.75rem', background: 'var(--primary-light)' }}>
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div style={{ flex: 1, minWidth: 200 }}>
-              <label className="form-label" style={{ fontSize: '0.82rem' }}>{t.deptLabel} *</label>
+              <label className="form-label" style={{ fontSize: 'var(--fs-sm)' }}>{t.deptLabel} *</label>
               <input className="form-control" value={newLabel} onChange={e => setNewLabel(e.target.value)}
                 placeholder={t.deptNameExample} autoFocus
                 onKeyDown={e => e.key === 'Enter' && handleAdd()} />
             </div>
-            <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', marginBottom: '0.1rem' }}
+            <button className="btn btn-sm btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: 'var(--fs-xs)', marginBottom: '0.1rem' }}
               onClick={() => setShowAdv(p => !p)}>
               <Settings2 size={12} strokeWidth={2} />{t.advancedOptions}
             </button>
@@ -548,10 +548,10 @@ function DepartmentsTab({ t }) {
 
           {showAdv && (
             <div style={{ marginTop: '0.75rem' }}>
-              <label className="form-label" style={{ fontSize: '0.82rem' }}>{t.adGroup}</label>
+              <label className="form-label" style={{ fontSize: 'var(--fs-sm)' }}>{t.adGroup}</label>
               <input className="form-control" style={{ maxWidth: 280 }} value={newGroup}
                 onChange={e => setNewGroup(e.target.value)} placeholder="group_cn" dir="ltr" />
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: '0.3rem 0 0' }}>{t.adGroupHint}</p>
+              <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-3)', margin: '0.3rem 0 0' }}>{t.adGroupHint}</p>
             </div>
           )}
 
@@ -624,7 +624,7 @@ function AutoRolesTab({ t }) {
       {confirmDialog}
       <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 700 }}>{t.roleMaps}</h3>
       <p className="text-sm text-muted" style={{ marginBottom: '0.5rem' }}>{t.ldapNote}</p>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '0.6rem 0.85rem', marginBottom: '1.25rem', fontSize: '0.8rem', color: 'var(--accent-hover)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '0.6rem 0.85rem', marginBottom: '1.25rem', fontSize: 'var(--fs-sm)', color: 'var(--accent-hover)' }}>
         <Info size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
         {t.adAutoRolesNote}
       </div>
@@ -642,14 +642,14 @@ function AutoRolesTab({ t }) {
           </thead>
           <tbody>
             {entries.length === 0 && (
-              <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-3)', padding: '1.5rem', fontSize: '0.85rem' }}>—</td></tr>
+              <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-3)', padding: '1.5rem', fontSize: 'var(--fs-sm)' }}>—</td></tr>
             )}
             {entries.map(([group, role]) => (
               <tr key={group}>
                 <td><code className="tag">{group}</code></td>
                 <td>
                   {editingG === group
-                    ? <select className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem', width: 'auto' }}
+                    ? <select className="form-control" style={{ fontSize: 'var(--fs-sm)', padding: '0.3rem 0.5rem', width: 'auto' }}
                         value={editRole} onChange={e => setER(e.target.value)}>
                         {VALID_ROLES.map(r => <option key={r} value={r}>{t.roles?.[r] || r}</option>)}
                       </select>
@@ -678,13 +678,13 @@ function AutoRolesTab({ t }) {
             ))}
             <tr style={{ background: 'var(--surface-2)' }}>
               <td style={{ padding: '0.5rem 0.75rem' }}>
-                <input className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem' }}
+                <input className="form-control" style={{ fontSize: 'var(--fs-sm)', padding: '0.3rem 0.5rem' }}
                   value={newGroup} onChange={e => setNG(e.target.value)}
                   placeholder={t.newGroup} dir="ltr"
                   onKeyDown={e => e.key === 'Enter' && handleAdd()} />
               </td>
               <td style={{ padding: '0.5rem 0.75rem' }}>
-                <select className="form-control" style={{ fontSize: '0.82rem', padding: '0.3rem 0.5rem', width: 'auto' }}
+                <select className="form-control" style={{ fontSize: 'var(--fs-sm)', padding: '0.3rem 0.5rem', width: 'auto' }}
                   value={newRole} onChange={e => setNR(e.target.value)}>
                   {VALID_ROLES.map(r => <option key={r} value={r}>{t.roles?.[r] || r}</option>)}
                 </select>
@@ -749,7 +749,7 @@ function BackupTab({ t }) {
         <label className="form-label" style={{ display: 'block', marginBottom: '0.4rem' }}>{t.importNote}</label>
         <textarea
           className="form-control"
-          style={{ height: 220, fontFamily: 'monospace', fontSize: '0.82rem', resize: 'vertical' }}
+          style={{ height: 220, fontFamily: 'monospace', fontSize: 'var(--fs-sm)', resize: 'vertical' }}
           value={raw}
           onChange={e => { setRaw(e.target.value); setMsg({ text: '', type: 'error' }); }}
           placeholder={t.importPH}
@@ -927,13 +927,13 @@ function TemplatesTab({ t }) {
                 <tr key={tpl.id}>
                   <td style={{ fontWeight: 600 }}>{tpl.name}</td>
                   <td>
-                    <span style={{ background: 'var(--accent-light)', color: 'var(--accent-hover)', padding: '1px 8px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 600 }}>
+                    <span style={{ background: 'var(--accent-light)', color: 'var(--accent-hover)', padding: '1px 8px', borderRadius: 99, fontSize: 'var(--fs-xs)', fontWeight: 600 }}>
                       {t.types?.[tpl.type] || tpl.type}
                     </span>
                   </td>
-                  <td style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>{t.priorities?.[tpl.priority] || tpl.priority}</td>
-                  <td style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>{tpl.expected_days ? `${tpl.expected_days}d` : '—'}</td>
-                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.82rem', color: 'var(--text-3)' }}>
+                  <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-2)' }}>{t.priorities?.[tpl.priority] || tpl.priority}</td>
+                  <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-2)' }}>{tpl.expected_days ? `${tpl.expected_days}d` : '—'}</td>
+                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--fs-sm)', color: 'var(--text-3)' }}>
                     {tpl.note || '—'}
                   </td>
                   <td>
@@ -1030,16 +1030,16 @@ function SessionsTab({ t }) {
                     <td style={{ fontWeight: 500 }}>
                       {s.full_name || s.username}
                       {isYou && (
-                        <span style={{ marginInlineStart: '0.4rem', background: 'var(--primary)', color: '#fff', borderRadius: 99, fontSize: '0.68rem', padding: '1px 7px', fontWeight: 700 }}>
+                        <span style={{ marginInlineStart: '0.4rem', background: 'var(--primary)', color: '#fff', borderRadius: 99, fontSize: 'var(--fs-xs)', padding: '1px 7px', fontWeight: 700 }}>
                           {t.yourSession}
                         </span>
                       )}
                     </td>
                     <td><code className="tag">{s.username}</code></td>
                     <td><RoleBadge role={s.role} t={t} /></td>
-                    <td style={{ fontSize: '0.82rem', color: 'var(--text-2)', fontFamily: 'monospace' }}>{s.ip || '—'}</td>
-                    <td style={{ fontSize: '0.82rem', color: 'var(--text-2)' }}>{fmt(s.created_at)}</td>
-                    <td style={{ fontSize: '0.82rem', color: 'var(--text-2)' }}>{fmt(s.expires_at)}</td>
+                    <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-2)', fontFamily: 'monospace' }}>{s.ip || '—'}</td>
+                    <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-2)' }}>{fmt(s.created_at)}</td>
+                    <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-2)' }}>{fmt(s.expires_at)}</td>
                     <td>
                       {!isYou && (
                         <button className="btn btn-sm btn-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
@@ -1104,9 +1104,9 @@ function AuditLogTab({ t }) {
       </div>
       <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <Filter size={14} strokeWidth={1.8} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
-        <input className="form-control" style={{ minWidth: 180, padding: '0.38rem 0.7rem', fontSize: '0.85rem' }}
+        <input className="form-control" style={{ minWidth: 180, padding: '0.38rem 0.7rem', fontSize: 'var(--fs-sm)' }}
           placeholder={t.auditFilter} value={actor} onChange={e => setActor(e.target.value)} />
-        <select className="form-control" style={{ width: 'auto', padding: '0.38rem 0.7rem', fontSize: '0.85rem' }}
+        <select className="form-control" style={{ width: 'auto', padding: '0.38rem 0.7rem', fontSize: 'var(--fs-sm)' }}
           value={action} onChange={e => setAction(e.target.value)}>
           <option value="">— {t.auditAction} —</option>
           {AUDIT_ACTIONS.map(a => <option key={a} value={a}>{t.auditActions?.[a] || a}</option>)}
@@ -1138,14 +1138,14 @@ function AuditLogTab({ t }) {
                     <td><span style={{ fontWeight: 600 }}>{row.actor_username}</span></td>
                     <td>{row.actor_role ? <RoleBadge role={row.actor_role} t={t} /> : <span className="text-muted">—</span>}</td>
                     <td>
-                      <span style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '1px 8px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      <span style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '1px 8px', borderRadius: 99, fontSize: 'var(--fs-xs)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                         {t.auditActions?.[row.action] || row.action}
                       </span>
                     </td>
-                    <td style={{ fontSize: '0.82rem', color: 'var(--text-2)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-2)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {row.target_id || '—'}
                     </td>
-                    <td style={{ fontSize: '0.82rem', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
+                    <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
                       {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
                     </td>
                   </tr>
@@ -1159,7 +1159,7 @@ function AuditLogTab({ t }) {
                 onClick={() => setPage(p => p - 1)} disabled={page === 0}>
                 <ChevronLeft size={14} strokeWidth={2} />
               </button>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>{page + 1} / {totalPages}</span>
+              <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-2)' }}>{page + 1} / {totalPages}</span>
               <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
                 onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1}>
                 <ChevronRight size={14} strokeWidth={2} />

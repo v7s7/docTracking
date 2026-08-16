@@ -9,10 +9,14 @@ export function AuthProvider({ children }) {
   const [user, setUser]       = useState(getStoredUser);
   const [loading, setLoading] = useState(true);
 
-  // Re-validate the stored token against the server on mount
+  // Re-validate the stored token against the server on mount. /auth/me returns
+  // the identity as the server currently sees it — role and department are
+  // re-read from the users table on every request — so this is also how a role
+  // or department change reaches the sidebar. Persisting it means the next load
+  // starts from the corrected value rather than briefly showing the old one.
   useEffect(() => {
     fetchMe()
-      .then(setUser)
+      .then(fresh => { if (fresh) { persistUser(fresh); setUser(fresh); } else setUser(null); })
       .finally(() => setLoading(false));
   }, []);
 

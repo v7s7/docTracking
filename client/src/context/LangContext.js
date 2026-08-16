@@ -417,6 +417,7 @@ const T = {
       deptLines: '{dept} — direct lines',
       you: 'you', none: 'Nobody matches that search.',
       ext: 'Extension', mobile: 'Mobile', deptLine: 'Department line',
+      altEmail: 'Additional email',
     },
     home: {
       needsYou: 'Needs you',
@@ -469,6 +470,7 @@ const T = {
       unassignedCount: '{n} accounts not yet in the system',
       allAssigned: 'Every Active Directory account already has a role.',
       extHint: '3 to 5 digits — this is what appears in the staff directory.',
+      altEmailHint: 'A second address used for work, such as a personal Gmail. Shown in the directory beside the @swd.bh one.',
       itOnly: 'System administrator account — only IT can change this.',
       hrNote: 'You can set roles, departments, extensions and who is active. Creating and deleting accounts, and system administrator accounts, stay with IT.',
       auditTitle: 'Change history',
@@ -1057,6 +1059,7 @@ const T = {
       deptLines: '{dept} — خطوط مباشرة',
       you: 'أنت', none: 'لا يوجد من يطابق البحث.',
       ext: 'الرقم الداخلي', mobile: 'الجوال', deptLine: 'خط القسم',
+      altEmail: 'بريد إضافي',
     },
     home: {
       needsYou: 'يحتاج إجراءً منك',
@@ -1109,6 +1112,7 @@ const T = {
       unassignedHint: 'افتح لتحميلها من الشبكة',
       allAssigned: 'جميع حسابات الشبكة لها صلاحية.',
       extHint: 'من ٣ إلى ٥ أرقام — هذا ما يظهر في دليل الهاتف.',
+      altEmailHint: 'عنوان ثانٍ يُستخدم للعمل، مثل بريد Gmail شخصي. يظهر في دليل الهاتف بجانب بريد @swd.bh.',
       itOnly: 'حساب مدير نظام — لا يعدّله إلا قسم تقنية المعلومات.',
       hrNote: 'يمكنك تعيين الصلاحيات والأقسام والأرقام الداخلية وتفعيل الحسابات أو إيقافها. أما إنشاء الحسابات وحذفها وحسابات مدير النظام فتبقى لدى تقنية المعلومات.',
       auditTitle: 'سجل التغييرات',

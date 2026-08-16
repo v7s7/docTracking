@@ -147,7 +147,7 @@ function LdapRoleModal({ user, depts, t, onSave, onClose }) {
 }
 
 // ── Create / edit one user ──────────────────────────────────────────────────
-const blankForm = { username: '', password: '', full_name: '', email: '', role: 'STAFF', dept_id: '', is_active: true, ext: '', mobile: '' };
+const blankForm = { username: '', password: '', full_name: '', email: '', role: 'STAFF', dept_id: '', is_active: true, ext: '', mobile: '', alt_email: '' };
 
 function UserModal({ initial, depts, t, can = {}, onSave, onClose }) {
   const [form, setForm] = useState(initial ? { ...initial, password: '', dept_id: initial.dept_id || '' } : blankForm);
@@ -213,6 +213,12 @@ function UserModal({ initial, depts, t, can = {}, onSave, onClose }) {
               {/* Extension and mobile feed دليل الهاتف, which people use daily —
                   so a desk move is fixed here rather than by editing a config
                   file and re-running the directory linker. */}
+              <div className="form-group">
+                <label className="form-label">{t.directory.altEmail}</label>
+                <input className="form-control" type="email" value={form.alt_email || ''}
+                  onChange={e => set('alt_email', e.target.value)} dir="ltr" placeholder="name@gmail.com" />
+                <div className="form-hint">{t.usersAdmin.altEmailHint}</div>
+              </div>
               <div className="form-group">
                 <label className="form-label">{t.directory.ext}</label>
                 <input className="form-control" value={form.ext || ''} inputMode="numeric"
@@ -335,7 +341,7 @@ function SystemUsers({ t, users, depts, loading, error, can, onReload, onEdit, o
       if (role && x.role !== role) return false;
       if (dept === '__none' ? x.dept_id : dept && x.dept_id !== dept) return false;
       if (!q) return true;
-      return [x.full_name, x.username, x.ext, x.email, x.mobile, deptLabel(x.dept_id), t.roles?.[x.role]]
+      return [x.full_name, x.username, x.ext, x.email, x.alt_email, x.mobile, deptLabel(x.dept_id), t.roles?.[x.role]]
         .some(v => String(v || '').toLowerCase().includes(q));
     });
   }, [users, search, role, dept, deptLabel, t]);
@@ -344,7 +350,7 @@ function SystemUsers({ t, users, depts, loading, error, can, onReload, onEdit, o
   // locked. Selecting one would only produce a refusal from the server, so the
   // checkbox goes too — the limit is visible before it is hit, not after.
   const locked = useCallback(
-    x => can.scope === 'hr' && x.role === 'SUPER_ADMIN',
+    x => can.scope === 'hr' && (x.is_protected || x.role === 'SUPER_ADMIN'),
     [can.scope]
   );
 
