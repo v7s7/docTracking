@@ -413,6 +413,25 @@ if (!corrAttCols.includes('event_id')) {
 db.exec("CREATE INDEX IF NOT EXISTS idx_corr_att_event ON correspondence_attachments(event_id)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_corr_awaiting  ON correspondences(awaiting_dept_id, status)");
 
+// ── Chat email bookkeeping ───────────────────────────────────
+// One row per (person, conversation) recording when we last emailed them about
+// it, so a busy thread cannot email the same person over and over while a
+// brand-new conversation still reaches them immediately.
+//
+// Deliberately its own table rather than a column on conversation_members: for
+// a DM or a group, a membership row is what GRANTS access, so inserting one as
+// a side effect of sending mail would hand people conversations they are not
+// in. This table grants nothing.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chat_email_log (
+    user_id         INTEGER NOT NULL,
+    conversation_id INTEGER NOT NULL,
+    last_emailed_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    PRIMARY KEY (user_id, conversation_id),
+    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+  );
+`);
+
 // ── التعاميم — circulars ─────────────────────────────────────
 // A تعميم is the opposite shape to a correspondence: one author, no routing,
 // no approval chain, and EVERY employee is the audience. So there is no status

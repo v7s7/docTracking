@@ -8,7 +8,22 @@ const { db } = require('../db');
 const { sendMail } = require('./mailService');
 const { readConfig } = require('./configService');
 
-const STALE_HOURS = 1;
+// A short quiet window, not a long staleness timer. Five minutes is enough for
+// a burst of messages to become ONE email, and enough for someone actually at
+// their desk to see it in the app first.
+const STALE_MINUTES = 5;
+
+// Once a thread has been emailed, stay quiet about it until the person reads
+// it — a second mail saying "you still have unread messages in the same
+// conversation" carries no new information. The exception is a thread still
+// unread hours later: one re-nudge, so nothing rots silently.
+const RENUDGE_HOURS = 4;
+
+// Someone with the app open has already had the badge and the live SSE
+// notification; emailing them too is pure inbox noise. last_seen_at is
+// refreshed every 60s by the client's presence ping, so a 3-minute window means
+// "open right now" without being brittle about one missed ping.
+const PRESENT_MINUTES = 3;
 
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({
@@ -116,39 +131,89 @@ function buildEmailHtml(items, appUrl) {
   `;
 }
 
-async function runChatReminderCheck() {
-  const cutoffIso = db.prepare(`SELECT datetime('now','localtime','-${STALE_HOURS} hours') as v`).get().v;
+// Is this person using the app right now? Two signals: a live SSE connection
+// (exact, but lost on a flaky network) and a recent presence ping (survives
+// that). Either counts. When in doubt we treat them as away and send — a
+// redundant email is a smaller failure than a missed message.
+function isPresent(userId, freshIso) {
+  try {
+    if (require('../routes/messages').isUserOnline(userId)) return true;
+  } catch (_) { /* routes not loaded (scripts, tests) — fall through */ }
+  const row = db.prepare('SELECT last_seen_at FROM users WHERE id = ?').get(userId);
+  return !!(row && row.last_seen_at && row.last_seen_at >= freshIso);
+}
 
+/**
+ * Which of this person's unread conversations may be emailed about right now.
+ *
+ * Suppressed when we have already written to them about that thread and they
+ * have not read it since — unless RENUDGE_HOURS have passed and it is STILL
+ * unread, which earns exactly one more mail.
+ */
+function emailableConversations(userId, stale, renudgeIso) {
+  const logRow = db.prepare(
+    'SELECT last_emailed_at FROM chat_email_log WHERE user_id = ? AND conversation_id = ?'
+  );
+  return stale.filter(conv => {
+    const log = logRow.get(userId, conv.id);
+    if (!log) return true;                                              // never emailed about this one
+    if (conv.last_read_at && conv.last_read_at > log.last_emailed_at) return true;  // fresh unread streak
+    return log.last_emailed_at <= renudgeIso;                           // long-overdue re-nudge
+  });
+}
+
+async function runChatReminderCheck() {
+  const t = db.prepare(`SELECT
+      datetime('now','localtime') AS now,
+      datetime('now','localtime','-${STALE_MINUTES} minutes') AS stale,
+      datetime('now','localtime','-${PRESENT_MINUTES} minutes') AS fresh,
+      datetime('now','localtime','-${RENUDGE_HOURS} hours') AS renudge`).get();
+
+  // Every active mailbox is a candidate on every run. The previous query
+  // excluded anyone already emailed today, which is why a second conversation
+  // later the same day sent nothing at all.
   const users = db.prepare(`
     SELECT id, email FROM users
     WHERE is_active = 1 AND email IS NOT NULL AND email != ''
-      AND (last_chat_reminder_at IS NULL OR date(last_chat_reminder_at) != date('now','localtime'))
   `).all();
 
   const appUrl = process.env.APP_URL || '';
-  const markReminded = db.prepare("UPDATE users SET last_chat_reminder_at = datetime('now','localtime') WHERE id = ?");
+  const remember = db.prepare(`
+    INSERT INTO chat_email_log (user_id, conversation_id, last_emailed_at) VALUES (?, ?, ?)
+    ON CONFLICT(user_id, conversation_id) DO UPDATE SET last_emailed_at = excluded.last_emailed_at
+  `);
 
-  let notified = 0;
-  let emailed  = 0;
+  let present = 0, notified = 0, emailed = 0;
 
   for (const user of users) {
-    const stale = staleConversationsForUser(user.id, cutoffIso);
+    const stale = staleConversationsForUser(user.id, t.stale);
     if (!stale.length) continue;
+
+    // Presence is checked only for people who actually have something waiting,
+    // so a quiet directory costs one query rather than 119.
+    if (isPresent(user.id, t.fresh)) { present += 1; continue; }
+
+    const due = emailableConversations(user.id, stale, t.renudge);
+    if (!due.length) continue;
     notified += 1;
 
-    const items = stale.map(c => ({ label: conversationLabel(c, user.id), unread: c.unread }));
+    // One mail listing every due thread — never one mail per thread.
+    const items = due.map(c => ({ label: conversationLabel(c, user.id), unread: c.unread }));
     const sent = await sendMail({
       to: user.email,
-      subject: `[Doc Tracking] You have unread messages in ${stale.length} conversation(s)`,
+      subject: `[Doc Tracking] You have unread messages in ${due.length} conversation(s)`,
       html: buildEmailHtml(items, appUrl),
     });
 
-    // Only dedupe on a successful send — if SMTP is down, retry on the next
-    // run instead of silently skipping the user for the rest of the day.
-    if (sent) { emailed += 1; markReminded.run(user.id); }
+    // Recorded only on a successful send: if SMTP is down we retry next minute
+    // rather than marking the thread handled and going quiet about it.
+    if (sent) {
+      emailed += 1;
+      db.transaction(() => { for (const c of due) remember.run(user.id, c.id, t.now); })();
+    }
   }
 
-  return { checked: users.length, notified, emailed };
+  return { checked: users.length, present, notified, emailed };
 }
 
 module.exports = { runChatReminderCheck };

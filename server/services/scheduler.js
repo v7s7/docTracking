@@ -17,10 +17,11 @@ function start() {
       .catch(err => console.error('[Reminders] Daily run failed:', err.message));
   });
 
-  // Every 30 minutes — chat's staleness window (1 hour unread) is much
-  // shorter than the task check's, so it needs a tighter cadence. The
-  // per-user daily dedupe still caps it at one email per person per day.
-  cron.schedule('*/30 * * * *', () => {
+  // Every minute. The chat check is now a 5-minute quiet window rather than a
+  // 1-hour staleness timer, so it has to run far more often than the daily
+  // digests. It is cheap when idle: one query per person who actually has
+  // something unread, and nothing at all otherwise.
+  cron.schedule('* * * * *', () => {
     runChatReminderCheck()
       .then(r => console.log('[Chat reminders] Run:', r))
       .catch(err => console.error('[Chat reminders] Run failed:', err.message));
