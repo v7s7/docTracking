@@ -73,13 +73,25 @@ function backupAttachments() {
   const target = path.join(BACKUP_DIR, `attachments-${stamp(new Date())}.zip`);
   if (fs.existsSync(target)) return Promise.resolve({ file: target, skipped: true });
 
-  const sources = ['correspondence-files', 'uploads']
+  // Every directory that receives uploads must be listed here. circular-files
+  // was added with التعاميم and would otherwise never be backed up — the same
+  // silent gap that hid the ENOENT below for weeks.
+  const sources = ['correspondence-files', 'circular-files', 'uploads']
     .map(d => path.join(DATA_DIR, d))
     .filter(fs.existsSync);
   if (!sources.length) return Promise.resolve({ file: null, skipped: true });
 
   const isWin = process.platform === 'win32';
-  const cmd  = isWin ? 'powershell.exe' : 'zip';
+  // Absolute path, not the bare name. On the live server this spawn failed
+  // every night with "spawn powershell.exe ENOENT" — the process could not
+  // resolve it — and because the failure is only a console.warn, the nightly
+  // backup kept reporting success while shipping the database alone. An
+  // absolute path cannot ENOENT.
+  const psExe = path.join(
+    process.env.SystemRoot || 'C:\\Windows',
+    'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
+  );
+  const cmd  = isWin ? (fs.existsSync(psExe) ? psExe : 'powershell.exe') : 'zip';
   const args = isWin
     ? ['-NoProfile', '-NonInteractive', '-Command',
        `Compress-Archive -Path ${sources.map(s => `'${s}'`).join(',')} -DestinationPath '${target}' -Force`]
@@ -88,10 +100,14 @@ function backupAttachments() {
   return new Promise(resolve => {
     execFile(cmd, args, { timeout: 10 * 60 * 1000 }, err => {
       if (err) {
-        console.warn('[Backup] attachments skipped:', err.message);
+        // Loud on purpose. This ran silently for at least four nights.
+        console.error('[Backup] ATTACHMENTS NOT BACKED UP —', err.message);
+        console.error('[Backup]   tried:', cmd);
         return resolve({ file: null, error: err.message });
       }
-      resolve({ file: target, bytes: fs.existsSync(target) ? fs.statSync(target).size : 0 });
+      const bytes = fs.existsSync(target) ? fs.statSync(target).size : 0;
+      console.log(`[Backup] attachments: ${path.basename(target)} (${(bytes / 1048576).toFixed(1)} MB)`);
+      resolve({ file: target, bytes });
     });
   });
 }
