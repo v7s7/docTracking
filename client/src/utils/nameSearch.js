@@ -253,7 +253,7 @@ export function makeMatcher(query) {
   const q = normalizeArabic(String(query || '')).trim().toLowerCase();
   if (!q) return null;
 
-  const tokens = q.split(/\s+/).filter(Boolean).map(tok => ({
+  const mkToken = tok => ({
     raw: tok,
     // A one-letter skeleton matches nearly every name, so it is not used — such
     // a query falls back to plain substring, which is what was meant by it.
@@ -264,14 +264,37 @@ export function makeMatcher(query) {
     // the loose pass on their query only drags in near-misses, which is how
     // الشعراوي used to return everyone in الموارد البشرية.
     loose: /[a-z]/.test(tok),
-  }));
-  if (!tokens.length) return null;
+  });
+
+  const words = q.split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+
+  // Arabic compound names are written both ways — عبد العزيز and عبدالعزيز,
+  // عبد الله and عبدالله — and the same person is stored under one spelling
+  // while being searched with the other, often in the other script too.
+  //
+  // Typed apart, the second half reduces to a two-sound skeleton (العزيز → az)
+  // that landsIn deliberately requires to BE a whole word, so it cannot land on
+  // the Latin "Abdulaziz", indexed whole as `abdlz`. Loosening landsIn would
+  // undo the rule that keeps علي and the ال- article from matching everybody.
+  //
+  // So instead, offer the query in its joined forms as well: «عبد العزيز» is
+  // also tried as «عبدالعزيز», whose skeleton lands cleanly. Adjacent pairs
+  // only — merging everything would break «عبد العزيز وليد».
+  const variants = [words];
+  for (let i = 0; i + 1 < words.length; i++) {
+    variants.push([...words.slice(0, i), words[i] + words[i + 1], ...words.slice(i + 2)]);
+  }
+  // Built once per query, not per record.
+  const tokenSets = variants.map(v => v.map(mkToken));
 
   return index => {
     if (!index) return false;
-    return tokens.every(tk =>
+    const lands = tk =>
       index.raw.includes(tk.raw)
       || tk.skels.some(s => landsIn(index, s))
-      || (tk.loose && tk.skels.some(s => index.words.some(w => nearSubsequence(s, w)))));
+      || (tk.loose && tk.skels.some(s => index.words.some(w => nearSubsequence(s, w))));
+    // Every word of SOME reading of the query has to land.
+    return tokenSets.some(set => set.every(lands));
   };
 }
