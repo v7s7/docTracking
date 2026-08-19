@@ -39,7 +39,7 @@ function start() {
       .catch(err => console.error('[Chat reminders] Startup run failed:', err.message));
   }, 15_000);
 
-  console.log('[Reminders] Scheduler started — task digest daily at 07:00, chat check every 30 min, plus startup catch-up.');
+  console.log('[Reminders] Scheduler started — task digest daily at 07:00, chat check every minute, plus startup catch-up.');
 }
 
 module.exports = { start };
