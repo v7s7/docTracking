@@ -1,12 +1,16 @@
 // server/services/chatReminderService.js
-// Finds users who have chat messages sitting unread for too long and emails
-// them a nudge (deduped to once per calendar day via
-// users.last_chat_reminder_at). "Unread" uses the same definition as the
-// in-app badge (server/routes/messages.js): a message not sent by the user,
+// Finds chat messages sitting unread past a short quiet window and emails the
+// person one digest covering all of them. "Unread" uses the same definition as
+// the in-app badge (server/routes/messages.js): a message not sent by the user,
 // newer than their last_read_at for that conversation.
+//
+// Deduping is per (person, conversation) in chat_email_log — NOT once per
+// calendar day per person, which is what it used to be and why a second
+// conversation in the afternoon sent nothing at all.
 const { db } = require('../db');
 const { sendMail } = require('./mailService');
 const { readConfig } = require('./configService');
+const { layout, rowsTable, arabicPlural, CONVERSATIONS } = require('./emailTemplate');
 
 // A short quiet window, not a long staleness timer. Five minutes is enough for
 // a burst of messages to become ONE email, and enough for someone actually at
@@ -104,31 +108,16 @@ function conversationLabel(conv, userId) {
 }
 
 function buildEmailHtml(items, appUrl) {
-  const rows = items.map(i => `
-    <tr>
-      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${escapeHtml(i.label)}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${i.unread}</td>
-    </tr>
-  `).join('');
-
-  return `
-    <div style="font-family:Arial,sans-serif;">
-      <div style="direction:rtl;text-align:right;">
-        <p>لديك رسائل غير مقروءة في <b>${items.length}</b> محادثة:</p>
-      </div>
-      <p style="color:#666;font-size:0.9em;">You have unread messages waiting in <b>${items.length}</b> conversation(s):</p>
-      <table style="border-collapse:collapse;width:100%;margin-top:10px;">
-        <thead>
-          <tr style="background:#f5f5f5;">
-            <th style="padding:6px 10px;text-align:left;">Conversation</th>
-            <th style="padding:6px 10px;text-align:left;">Unread</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      ${appUrl ? `<p style="margin-top:14px;"><a href="${appUrl}" style="color:#C41E1E;">${escapeHtml(appUrl)}</a></p>` : ''}
-    </div>
-  `;
+  const total = items.reduce((n, i) => n + Number(i.unread || 0), 0);
+  return layout({
+    title: `لديك ${arabicPlural(items.length, CONVERSATIONS)} بها رسائل غير مقروءة`,
+    lead:  `مجموع الرسائل غير المقروءة: ${total}.`,
+    bodyHtml: rowsTable(items.map(i => ({ label: i.label, value: i.unread })),
+                        ['المحادثة', 'غير مقروءة']),
+    ctaUrl: appUrl,
+    ctaLabel: 'فتح المحادثات',
+    footer: `${items.length} conversation${items.length === 1 ? '' : 's'} with unread messages`,
+  });
 }
 
 // Is this person using the app right now? Two signals: a live SSE connection
@@ -201,7 +190,7 @@ async function runChatReminderCheck() {
     const items = due.map(c => ({ label: conversationLabel(c, user.id), unread: c.unread }));
     const sent = await sendMail({
       to: user.email,
-      subject: `[Doc Tracking] You have unread messages in ${due.length} conversation(s)`,
+      subject: `رسائل غير مقروءة — ${arabicPlural(due.length, CONVERSATIONS)}`,
       html: buildEmailHtml(items, appUrl),
     });
 
