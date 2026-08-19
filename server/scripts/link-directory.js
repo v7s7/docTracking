@@ -202,6 +202,10 @@ async function review() {
       rows.push({ ...base,
         username: confident ? best.u.username : '',
         ad_name: confident ? (best.u.name || '') : '',
+        // AD already returns mail (see browseAllUsers). Carrying it through is
+        // the whole reason 112 of 119 accounts had no address: it was fetched
+        // here and dropped before --apply ever saw it.
+        email: confident ? (best.u.email || '') : '',
         confidence: best.s ? best.s.toFixed(2) : '0.00',
         // Runners-up, so a wrong guess is easy to correct by hand.
         alternatives: scored.slice(0, 3).filter(x => x.s > 0.4)
@@ -211,7 +215,7 @@ async function review() {
   }
 
   const head = ['dept_id','dept_label','rank','role','arabic_name','ext','mobile',
-                'username','ad_name','confidence','alternatives'];
+                'username','email','ad_name','confidence','alternatives'];
   const csv = [head.join(',')]
     .concat(rows.map(r => head.map(h => csvCell(r[h])).join(',')))
     .join('\r\n');
@@ -296,13 +300,17 @@ function apply() {
         if (existing.password_hash) {   // never touch a local password account
           console.warn(`  skip — "${r.username}" is a local account, not AD`); skipped++; continue;
         }
-        db.prepare('UPDATE users SET full_name=?, role=?, dept_id=?, ext=?, mobile=?, is_active=1 WHERE id=?')
-          .run(name, role, r.dept_id, r.ext || null, r.mobile || null, existing.id);
+        // COALESCE(NULLIF(...)) so a blank in the sheet never wipes an address
+        // the person already has — a login writes one too, and that must win
+        // over an empty cell.
+        db.prepare(`UPDATE users SET full_name=?, role=?, dept_id=?, ext=?, mobile=?,
+                      email = COALESCE(NULLIF(?, ''), email), is_active=1 WHERE id=?`)
+          .run(name, role, r.dept_id, r.ext || null, r.mobile || null, r.email || '', existing.id);
         updated++;
       } else {
         db.prepare(`INSERT INTO users (username, password_hash, full_name, email, role, dept_id, ext, mobile, created_by)
-                    VALUES (?, NULL, ?, '', ?, ?, ?, ?, 'link-directory')`)
-          .run(r.username, name, role, r.dept_id, r.ext || null, r.mobile || null);
+                    VALUES (?, NULL, ?, ?, ?, ?, ?, ?, 'link-directory')`)
+          .run(r.username, name, r.email || '', role, r.dept_id, r.ext || null, r.mobile || null);
         created++;
       }
 
