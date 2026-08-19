@@ -1497,6 +1497,27 @@ code.tag {
   margin-top: 0.15rem;
 }
 
+/* The department name under a thread's person-name. On the department's side
+   this is the only thing saying which department the thread belongs to. */
+.msg-list-item-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 0.1rem;
+}
+
+/* Section heading inside the new-chat picker, separating الأقسام from people. */
+.msg-dir-section {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-3);
+  padding: 0.6rem 0.9rem 0.3rem;
+  letter-spacing: 0.02em;
+}
+
 .msg-list-item-snippet {
   font-size: var(--fs-xs);
   color: var(--text-3);

@@ -515,7 +515,13 @@ function AppShell() {
           lastSeenMsgRef.current[conv.id] = last.created_at;
 
           if (isNew && (document.hidden || viewRef.current !== 'messages')) {
-            const title = conv.type === 'department' ? (t.groupLabels?.[conv.dept_id] || conv.name) : (last.sender_name || conv.name);
+            // A department now has many threads, so its label alone would put
+            // the same title on every one of them. `peer` is the counterpart the
+            // server sends; when it is me, the department name IS the identity.
+            const deptTitle = conv.peer && Number(conv.peer.id) !== Number(user?.id)
+              ? `${conv.peer.full_name} — ${t.groupLabels?.[conv.dept_id] || conv.dept_id}`
+              : (t.groupLabels?.[conv.dept_id] || conv.name);
+            const title = conv.type === 'department' ? deptTitle : (last.sender_name || conv.name);
             const body = conv.unread > 1
               ? (t.newMessagesCount || '{n} new messages').replace('{n}', String(conv.unread))
               : (last.content || last.file_name || '');

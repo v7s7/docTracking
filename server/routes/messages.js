@@ -65,18 +65,80 @@ function deptLabel(deptId) {
   return dept ? dept.label : deptId;
 }
 
-function ensureDeptConversation(deptId) {
-  let conv = db.prepare("SELECT * FROM conversations WHERE type='department' AND dept_id=?").get(deptId);
+// A department conversation is one of two things, decided by peer_user_id:
+//   NULL     → the department's internal team channel
+//   a userId → that person's private thread with the department
+// The explicit IS NULL / = ? predicate matters: the old single-row lookup had
+// no ORDER BY and no LIMIT, so with several rows per department it would return
+// an arbitrary one, silently.
+function ensureDeptConversation(deptId, peerUserId = null) {
+  const peer = peerUserId == null ? null : Number(peerUserId);
+  let conv = peer === null
+    ? db.prepare("SELECT * FROM conversations WHERE type='department' AND dept_id=? AND peer_user_id IS NULL").get(deptId)
+    : db.prepare("SELECT * FROM conversations WHERE type='department' AND dept_id=? AND peer_user_id=?").get(deptId, peer);
   if (!conv) {
-    const info = db.prepare("INSERT INTO conversations (type, dept_id) VALUES ('department', ?)").run(deptId);
+    const info = db.prepare("INSERT INTO conversations (type, dept_id, peer_user_id) VALUES ('department', ?, ?)").run(deptId, peer);
     conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(info.lastInsertRowid);
   }
   return conv;
 }
 
-// Every department has a group conversation, visible to all staff (Teams-style channels).
+// Which thread does this person belong in for this department? Someone who
+// works there belongs in the internal channel; everyone else gets their own
+// private thread with it.
+function resolveDeptThread(deptId, user) {
+  if (!user || String(user.dept_id || '') === String(deptId)) return ensureDeptConversation(deptId, null);
+  return ensureDeptConversation(deptId, user.id);
+}
+
+// Seeds ONLY the internal channels — one per department. Person-threads are
+// created lazily on first contact and must never be pre-created: this runs on
+// every /conversations, /search and /unread-count call, and the client polls
+// those every 15s and 20s. Seeding the cross product would be 119 x 23 threads.
 function ensureAllDeptConversations() {
-  readConfig().departments.forEach(d => ensureDeptConversation(d.id));
+  readConfig().departments.forEach(d => ensureDeptConversation(d.id, null));
+}
+
+/**
+ * Everyone who may see this conversation. THE single definition — the SSE
+ * fan-outs and the mention scanner both use it.
+ *
+ * This is the security-critical function in this file. SSE does not go through
+ * getAccessibleConversation, so a wrong answer here leaks full message bodies
+ * and attachment URLs to people who would be refused over HTTP, with no error
+ * anywhere. Previously every one of these sites read
+ * "SELECT id FROM users WHERE is_active=1" — all 119 employees.
+ */
+function audienceOf(conv) {
+  if (!conv) return [];
+  if (conv.type !== 'department') {
+    return db.prepare("SELECT user_id AS id FROM conversation_members WHERE conversation_id=?")
+      .all(conv.id).map(r => r.id);
+  }
+  const ids = db.prepare("SELECT id FROM users WHERE is_active=1 AND dept_id=?")
+    .all(conv.dept_id).map(r => r.id);
+  if (conv.peer_user_id) ids.push(Number(conv.peer_user_id));
+  return [...new Set(ids)];
+}
+
+/**
+ * May this user open this conversation?
+ *
+ * Department staff see every thread addressed to their department (SWD's rule —
+ * a shared team inbox, so nobody waits on one person). An outsider sees only
+ * his own thread. Deliberately NO مدير النظام bypass: the role is not a
+ * department, and reading another department's private threads is not part of
+ * running the system — same reasoning as visibilityClause() in utils/approvals.js.
+ */
+function canSeeConversation(conv, user) {
+  if (!conv || !user) return false;
+  if (conv.type !== 'department') {
+    return !!db.prepare("SELECT 1 FROM conversation_members WHERE conversation_id=? AND user_id=?")
+      .get(conv.id, user.id);
+  }
+  if (conv.dept_id && String(user.dept_id || '') === String(conv.dept_id)) return true;
+  if (conv.peer_user_id && Number(conv.peer_user_id) === Number(user.id)) return true;
+  return false;
 }
 
 function ensureMembership(conversationId, userId) {
@@ -116,7 +178,14 @@ function detectMentions(content, conv, senderId) {
 
   let candidates;
   if (conv.type === 'department') {
-    candidates = db.prepare("SELECT id, full_name FROM users WHERE is_active=1").all();
+    // Only the thread's real audience. Mentioning someone who cannot reach the
+    // thread writes a message_mentions row and fires an SSE for a conversation
+    // they then 403 on — and is_read is only ever set by touchRead, inside that
+    // unreachable route, so the badge would stick permanently.
+    const ids = audienceOf(conv);
+    candidates = ids.length
+      ? db.prepare(`SELECT id, full_name FROM users WHERE is_active=1 AND id IN (${ids.map(() => '?').join(',')})`).all(...ids)
+      : [];
   } else if (conv.type === 'group') {
     candidates = db.prepare(`
       SELECT u.id, u.full_name FROM conversation_members cm JOIN users u ON u.id = cm.user_id
@@ -228,10 +297,7 @@ function groupMembers(convId) {
 function getAccessibleConversation(conversationId, user) {
   const conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(conversationId);
   if (!conv) return null;
-  // Department groups are open channels — every user can view and post.
-  if (conv.type === 'department') return conv;
-  const member = db.prepare("SELECT 1 FROM conversation_members WHERE conversation_id=? AND user_id=?").get(conversationId, user.id);
-  return member ? conv : null;
+  return canSeeConversation(conv, user) ? conv : null;
 }
 
 // GET /messages/directory — colleagues available to start a DM with
@@ -271,7 +337,8 @@ router.get('/conversations', (req, res) => {
     FROM conversations c
     LEFT JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
     WHERE c.type = 'department'
-  `).all(req.user.id);
+      AND (c.peer_user_id = ? OR c.dept_id = ?)
+  `).all(req.user.id, req.user.id, req.user.dept_id || '');
 
   const dmRows = db.prepare(`
     SELECT c.*, cm.last_read_at, cm.hidden_at
@@ -295,7 +362,18 @@ router.get('/conversations', (req, res) => {
 
     let display;
     if (conv.type === 'department') {
-      display = { name: deptLabel(conv.dept_id), dept_id: conv.dept_id };
+      // Without the counterpart, twelve threads for الموارد البشرية render as
+      // twelve byte-identical rows — same label, same icon — and an HR employee
+      // cannot tell whose thread is whose without opening each one.
+      const peer = conv.peer_user_id
+        ? db.prepare("SELECT id, full_name, avatar_url, avatar_color, presence_status FROM users WHERE id=?").get(conv.peer_user_id)
+        : null;
+      display = {
+        name: deptLabel(conv.dept_id),
+        dept_id: conv.dept_id,
+        is_internal: !conv.peer_user_id,
+        peer: peer ? { ...peer, online: isUserOnline(peer.id) } : null,
+      };
     } else if (conv.type === 'group') {
       const others = groupMembers(conv.id).filter(m => m.id !== req.user.id);
       display = { name: others.map(o => o.full_name).join(', '), avatar_url: conv.avatar_url, avatar_color: conv.avatar_color };
@@ -334,6 +412,37 @@ router.get('/conversations', (req, res) => {
 });
 
 // POST /messages/dm/:userId — get or create a DM conversation
+// POST /messages/dept/:deptId — open (or create) my thread with a department.
+//
+// This is a NEW entry point, and the feature does not work without it. Before
+// per-person threads an outsider reached a department only because the server
+// handed every channel to every user — there was nothing to "open". Now that
+// the list is scoped, a person with no thread yet would see no way to contact
+// the department at all.
+//
+// Threads are created here, lazily, on first contact — never pre-seeded.
+router.post('/dept/:deptId', (req, res) => {
+  const deptId = String(req.params.deptId || '');
+  const known = (readConfig().departments || []).some(d => d.id === deptId);
+  if (!known) return res.status(404).json({ success: false, message: 'القسم غير موجود.' });
+
+  const conv = resolveDeptThread(deptId, req.user);
+  ensureMembership(conv.id, req.user.id);
+
+  res.json({
+    success: true,
+    conversation: {
+      id: conv.id,
+      type: 'department',
+      name: deptLabel(deptId),
+      dept_id: deptId,
+      is_internal: !conv.peer_user_id,
+      unread: 0,
+      last_message: null,
+    },
+  });
+});
+
 router.post('/dm/:userId', (req, res) => {
   const otherId = Number(req.params.userId);
   if (otherId === req.user.id) {
@@ -579,9 +688,7 @@ router.post('/conversations/:id/messages', uploadSingle, (req, res) => {
   const message = attachExtras(db.prepare("SELECT * FROM messages WHERE id=?").get(info.lastInsertRowid));
   res.status(201).json({ success: true, message });
 
-  const recipientIds = conv.type === 'department'
-    ? db.prepare("SELECT id FROM users WHERE is_active=1").all().map(r => r.id)
-    : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(conv.id).map(r => r.user_id);
+  const recipientIds = audienceOf(conv);
   broadcastToUsers(recipientIds, 'message', { conversation_id: conv.id, message });
   broadcastReadReceipt(conv, req.user.id, lastReadAt);
 
@@ -617,9 +724,16 @@ router.get('/conversations/:id/members', (req, res) => {
 
   let members;
   if (conv.type === 'department') {
-    members = db.prepare(
-      "SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color, ext, mobile FROM users WHERE is_active=1 AND dept_id=? ORDER BY full_name COLLATE NOCASE"
-    ).all(conv.dept_id).map(m => ({ ...m, online: isUserOnline(m.id) }));
+    // Department staff, plus the outsider whose thread this is — he is a
+    // participant but his dept_id is a different department, so the query
+    // below would omit him from his own conversation.
+    const ids = audienceOf(conv);
+    members = ids.length
+      ? db.prepare(
+          `SELECT id, full_name, role, dept_id, last_seen_at, presence_status, status_text, avatar_url, avatar_color, ext, mobile
+             FROM users WHERE is_active=1 AND id IN (${ids.map(() => '?').join(',')}) ORDER BY full_name COLLATE NOCASE`
+        ).all(...ids).map(m => ({ ...m, online: isUserOnline(m.id) }))
+      : [];
   } else if (conv.type === 'group') {
     members = groupMembers(conv.id);
   } else {
@@ -660,9 +774,7 @@ router.post('/conversations/:id/typing', (req, res) => {
   const conv = getAccessibleConversation(Number(req.params.id), req.user);
   if (!conv) return res.status(403).json({ success: false, message: 'Access denied.' });
 
-  const memberIds = conv.type === 'department'
-    ? db.prepare("SELECT id FROM users WHERE is_active=1 AND id != ?").all(req.user.id).map(r => r.id)
-    : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=? AND user_id != ?").all(conv.id, req.user.id).map(r => r.user_id);
+  const memberIds = audienceOf(conv).filter(id => id !== req.user.id);
 
   res.json({ success: true });
   broadcastToUsers(memberIds, 'typing', { conversation_id: conv.id, user_id: req.user.id, full_name: req.user.name || req.user.username });
@@ -689,9 +801,7 @@ router.post('/conversations/:convId/messages/:msgId/react', (req, res) => {
   const reactions = getReactions(msg.id);
   res.json({ success: true, reactions });
 
-  const recipientIds = conv.type === 'department'
-    ? db.prepare("SELECT id FROM users WHERE is_active=1").all().map(r => r.id)
-    : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(conv.id).map(r => r.user_id);
+  const recipientIds = audienceOf(conv);
   broadcastToUsers(recipientIds, 'reaction', { conversation_id: conv.id, message_id: msg.id, reactions });
 });
 
@@ -719,9 +829,7 @@ router.post('/conversations/:convId/messages/:msgId/pin', (req, res) => {
   const pinned = getPinnedMessage(conv.id);
   res.json({ success: true, pinned });
 
-  const recipientIds = conv.type === 'department'
-    ? db.prepare("SELECT id FROM users WHERE is_active=1").all().map(r => r.id)
-    : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(conv.id).map(r => r.user_id);
+  const recipientIds = audienceOf(conv);
   broadcastToUsers(recipientIds, 'pin', { conversation_id: conv.id, pinned });
 });
 
@@ -738,9 +846,7 @@ router.post('/conversations/:convId/messages/:msgId/unpin', (req, res) => {
 
   res.json({ success: true, pinned: null });
 
-  const recipientIds = conv.type === 'department'
-    ? db.prepare("SELECT id FROM users WHERE is_active=1").all().map(r => r.id)
-    : db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id=?").all(conv.id).map(r => r.user_id);
+  const recipientIds = audienceOf(conv);
   broadcastToUsers(recipientIds, 'pin', { conversation_id: conv.id, pinned: null });
 });
 
@@ -757,7 +863,9 @@ router.get('/search', (req, res) => {
     conversationIds = [conv.id];
   } else {
     ensureAllDeptConversations();
-    const deptIds = db.prepare("SELECT id FROM conversations WHERE type='department'").all().map(r => r.id);
+    const deptIds = db.prepare(
+      "SELECT id FROM conversations WHERE type='department' AND (peer_user_id = ? OR dept_id = ?)"
+    ).all(req.user.id, req.user.dept_id || '').map(r => r.id);
     const memberIds = db.prepare("SELECT conversation_id FROM conversation_members WHERE user_id=?").all(req.user.id).map(r => r.conversation_id);
     conversationIds = [...new Set([...deptIds, ...memberIds])];
   }
@@ -847,9 +955,10 @@ router.get('/unread-count', (req, res) => {
     JOIN conversations c ON c.id = msg.conversation_id
     LEFT JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
     WHERE msg.sender_id != ?
-      AND (cm.user_id IS NOT NULL OR c.type = 'department')
+      AND (cm.user_id IS NOT NULL
+           OR (c.type = 'department' AND (c.peer_user_id = ? OR c.dept_id = ?)))
       AND (cm.last_read_at IS NULL OR msg.created_at > cm.last_read_at)
-  `).get(req.user.id, req.user.id).n;
+  `).get(req.user.id, req.user.id, req.user.id, req.user.dept_id || '').n;
 
   res.json({ success: true, unread: total });
 });
@@ -889,3 +998,5 @@ module.exports.ensureAllDeptConversations = ensureAllDeptConversations;
 module.exports.ensureMembership         = ensureMembership;
 module.exports.isUserOnline             = isUserOnline;
 module.exports.broadcastToUsers         = broadcastToUsers;
+module.exports.audienceOf               = audienceOf;
+module.exports.resolveDeptThread        = resolveDeptThread;

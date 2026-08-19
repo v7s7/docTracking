@@ -34,17 +34,26 @@ function postSystem(conversationId, text) {
   }
 }
 
-/** Announce something in a department's channel. Best-effort. */
+/**
+ * Announce something in a department's INTERNAL team channel. Best-effort.
+ *
+ * The explicit null is load-bearing: department conversations are now split
+ * into an internal channel (peer_user_id NULL) and one private thread per
+ * outside person. A workflow notice — "مراسلة واردة, بانتظار الإنجاز" — is
+ * addressed to the whole receiving team, not to one requester, so it belongs in
+ * the internal channel. Passing null pins it there instead of relying on which
+ * row the lookup happens to return first.
+ */
 function postToDepartment(deptId, text) {
   if (!deptId) return null;
   try {
-    const conv = chat().ensureDeptConversation(deptId);
+    const conv = chat().ensureDeptConversation(deptId, null);
     const id = postSystem(conv.id, text);
     if (id) {
-      // Wake anyone with the app open, same as a human message would.
-      const members = db.prepare(
-        'SELECT user_id FROM conversation_members WHERE conversation_id = ?'
-      ).all(conv.id).map(r => r.user_id);
+      // Wake the department, not just whoever happens to have a
+      // conversation_members row — membership is created lazily on first open,
+      // so it covers almost nobody (4 rows across 22 channels today).
+      const members = chat().audienceOf(conv);
       try { chat().broadcastToUsers(members, 'message', { conversation_id: conv.id }); } catch { /* SSE optional */ }
     }
     return conv.id;

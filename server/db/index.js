@@ -99,11 +99,18 @@ db.exec(`
     created_at     TEXT NOT NULL DEFAULT (datetime('now','localtime'))
   );
 
+  -- peer_user_id splits a department conversation in two kinds:
+  --   NULL     → the department's own internal team channel
+  --   not NULL → that one person's private thread with the department
+  -- Every member of the department sees all of its threads; an outsider sees
+  -- only his own. NULL is the internal channel because that is what the 22
+  -- pre-existing rows already are, so the migration moves no data.
   CREATE TABLE IF NOT EXISTS conversations (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    type        TEXT NOT NULL CHECK(type IN ('dm','department','group')),
-    dept_id     TEXT,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    type         TEXT NOT NULL CHECK(type IN ('dm','department','group')),
+    dept_id      TEXT,
+    peer_user_id INTEGER,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
   );
 
   CREATE TABLE IF NOT EXISTS conversation_members (
@@ -207,18 +214,45 @@ if (convTableSql && !convTableSql.includes("'group'")) {
   db.exec(`
     PRAGMA foreign_keys = OFF;
     CREATE TABLE conversations_new (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      type        TEXT NOT NULL CHECK(type IN ('dm','department','group')),
-      dept_id     TEXT,
-      created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      type         TEXT NOT NULL CHECK(type IN ('dm','department','group')),
+      dept_id      TEXT,
+      peer_user_id INTEGER,
+      avatar_url   TEXT,
+      avatar_color TEXT,
+      created_at   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     );
-    INSERT INTO conversations_new (id, type, dept_id, created_at) SELECT id, type, dept_id, created_at FROM conversations;
+    INSERT INTO conversations_new (id, type, dept_id, peer_user_id, avatar_url, avatar_color, created_at)
+      SELECT id, type, dept_id, peer_user_id, avatar_url, avatar_color, created_at FROM conversations;
     DROP TABLE conversations;
     ALTER TABLE conversations_new RENAME TO conversations;
     CREATE INDEX IF NOT EXISTS idx_conv_dept ON conversations(dept_id);
     PRAGMA foreign_keys = ON;
   `);
 }
+
+// Department conversations became per-person threads: one internal team channel
+// per department (peer_user_id NULL) plus one private thread per outside person.
+// The 22 existing rows stay exactly as they are and become the internal
+// channels — no data moves, and the one message already in it stays put.
+const convCols2 = db.prepare("PRAGMA table_info(conversations)").all().map(c => c.name);
+if (!convCols2.includes('peer_user_id')) {
+  db.exec("ALTER TABLE conversations ADD COLUMN peer_user_id INTEGER");
+}
+
+// Two indexes, not one: SQLite treats NULLs as DISTINCT in a unique index, so a
+// single index over (dept_id, peer_user_id) would happily allow ten internal
+// channels for the same department. The partial index below is what actually
+// protects them. Without these, two concurrent requests from the same person
+// both find nothing and both insert, splitting his history across two threads.
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_conv_dept_peer
+    ON conversations(dept_id, peer_user_id)
+    WHERE type = 'department' AND peer_user_id IS NOT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_conv_dept_internal
+    ON conversations(dept_id)
+    WHERE type = 'department' AND peer_user_id IS NULL;
+`);
 
 const convMemberCols = db.prepare("PRAGMA table_info(conversation_members)").all().map(c => c.name);
 if (!convMemberCols.includes('hidden_at')) {

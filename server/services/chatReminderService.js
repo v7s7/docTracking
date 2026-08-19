@@ -20,22 +20,28 @@ function deptLabel(id) {
   return readConfig().departments.find(d => d.id === id)?.label || id;
 }
 
-// Department channels have no explicit conversation_members row until the
-// user first opens them, so DM/group (always an explicit row) and
-// department (implicit access for everyone) need separate queries.
+// Department threads have no explicit conversation_members row until the user
+// first opens them, so DM/group (always an explicit row) and department
+// (implicit access) need separate queries.
+//
+// The department predicate is NOT "every department conversation" any more.
+// Without the peer/dept scoping below, this digest would email every employee a
+// daily list of every private thread in the organisation.
 function staleConversationsForUser(userId, cutoffIso) {
+  const me = db.prepare('SELECT dept_id FROM users WHERE id = ?').get(userId) || {};
   const deptRows = db.prepare(`
-    SELECT c.id, c.type, c.dept_id, cm.last_read_at
+    SELECT c.id, c.type, c.dept_id, c.peer_user_id, cm.last_read_at
     FROM conversations c
     LEFT JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
     WHERE c.type = 'department'
+      AND (c.peer_user_id = ? OR c.dept_id = ?)
       AND EXISTS (
         SELECT 1 FROM messages m
         WHERE m.conversation_id = c.id AND m.sender_id != ?
           AND (cm.last_read_at IS NULL OR m.created_at > cm.last_read_at)
           AND m.created_at <= ?
       )
-  `).all(userId, userId, cutoffIso);
+  `).all(userId, userId, me.dept_id || '', userId, cutoffIso);
 
   const dmRows = db.prepare(`
     SELECT c.id, c.type, c.dept_id, cm.last_read_at
@@ -61,7 +67,13 @@ function staleConversationsForUser(userId, cutoffIso) {
 }
 
 function conversationLabel(conv, userId) {
-  if (conv.type === 'department') return deptLabel(conv.dept_id);
+  if (conv.type === 'department') {
+    // Several threads of the same department would otherwise repeat one
+    // identical name down the digest with nothing to tell them apart.
+    if (!conv.peer_user_id) return deptLabel(conv.dept_id);
+    const peer = db.prepare('SELECT full_name FROM users WHERE id = ?').get(conv.peer_user_id);
+    return peer ? `${deptLabel(conv.dept_id)} — ${peer.full_name}` : deptLabel(conv.dept_id);
+  }
   if (conv.type === 'group') {
     const others = db.prepare(`
       SELECT u.full_name FROM conversation_members cm JOIN users u ON u.id = cm.user_id

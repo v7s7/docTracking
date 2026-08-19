@@ -3,12 +3,13 @@ import { createPortal } from 'react-dom';
 import { useLang } from '../../context/LangContext';
 import { useAuth } from '../../context/AuthContext';
 import {
-  getDirectory, getConversations, openDM, getMessages, sendMessage, markRead, fileUrl,
+  getDirectory, getConversations, openDM, openDeptThread, getMessages, sendMessage, markRead, fileUrl,
   getConversationMembers, streamUrl, startGroupChat, hideConversation, unhideConversation,
   getReadStatus, sendTyping, toggleReaction, searchMessages,
   getPinnedMessage, pinMessage, unpinMessage, translateMessage,
   uploadGroupAvatar, setGroupAvatarColor as setGroupAvatarColorApi, removeGroupAvatar,
 } from '../../services/messageService';
+import { getDepartments } from '../../services/deptService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
   Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff, Loader2, MoreHorizontal,
@@ -97,8 +98,37 @@ function formatMsgTime(dateStr) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function deptDisplayName(conv, t) {
-  return t.groupLabels?.[conv.dept_id] || conv.name || conv.dept_id;
+// A department conversation is one of three things depending on who is looking:
+//   the internal team channel      → the department's own name
+//   MY thread with a department    → the department's name (I only have one)
+//   a thread addressed to US       → the other person's name (we have many)
+//
+// That last case is the whole point. Without it, twelve threads addressed to
+// الموارد البشرية render as twelve identical rows and an HR employee cannot tell
+// which is which without opening each one.
+function deptDisplayName(conv, t, meId) {
+  const deptName = t.groupLabels?.[conv.dept_id] || conv.name || conv.dept_id;
+  if (conv.is_internal || !conv.peer) return deptName;
+  if (meId != null && Number(conv.peer.id) === Number(meId)) return deptName;
+  return conv.peer.full_name || deptName;
+}
+
+// The small line under the name. Carries information only on the department's
+// side, where the department name is the part every row has in common.
+function deptSubLabel(conv, t, meId) {
+  if (!conv || conv.type !== 'department') return null;
+  if (conv.is_internal || !conv.peer) return null;
+  if (meId != null && Number(conv.peer.id) === Number(meId)) return null;
+  return t.groupLabels?.[conv.dept_id] || conv.dept_id;
+}
+
+// True when this row should be drawn as a PERSON — their photo, their initials,
+// their online dot — rather than as a department building icon.
+function threadShowsPerson(conv, meId) {
+  return conv?.type === 'department'
+    && !conv.is_internal
+    && !!conv.peer
+    && (meId == null || Number(conv.peer.id) !== Number(meId));
 }
 
 function escapeRegExp(s) {
@@ -157,12 +187,16 @@ function Avatar({ name, isGroup, isDept, online, away, avatarUrl, avatarColor })
   );
 }
 
-function ConversationItem({ conv, active, onClick, onToggleHide, t }) {
-  const isDept  = conv.type === 'department';
-  const isGroup = isDept || conv.type === 'group';
-  const name = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
-  const online = !isGroup && isOnline(conv.other_user);
-  const away   = !isGroup && isAway(conv.other_user);
+function ConversationItem({ conv, active, onClick, onToggleHide, t, meId }) {
+  const isDept   = conv.type === 'department';
+  const asPerson = threadShowsPerson(conv, meId);
+  // asPerson threads are department-type but must not render as a department.
+  const isGroup  = (isDept && !asPerson) || conv.type === 'group';
+  const name = isDept ? deptDisplayName(conv, t, meId) : (conv.name || '—');
+  const sub  = deptSubLabel(conv, t, meId);
+  const person = asPerson ? conv.peer : conv.other_user;
+  const online = !isGroup && isOnline(person);
+  const away   = !isGroup && isAway(person);
 
   const last = conv.last_message;
   let snippet = '';
@@ -173,14 +207,15 @@ function ConversationItem({ conv, active, onClick, onToggleHide, t }) {
 
   return (
     <div className={`msg-list-item${active ? ' active' : ''}`} onClick={onClick}>
-      <Avatar name={name} isGroup={isGroup} isDept={isDept} online={online} away={away}
-        avatarUrl={conv.type === 'group' ? conv.avatar_url : conv.other_user?.avatar_url}
-        avatarColor={conv.type === 'group' ? conv.avatar_color : conv.other_user?.avatar_color} />
+      <Avatar name={name} isGroup={isGroup} isDept={isDept && !asPerson} online={online} away={away}
+        avatarUrl={conv.type === 'group' ? conv.avatar_url : person?.avatar_url}
+        avatarColor={conv.type === 'group' ? conv.avatar_color : person?.avatar_color} />
       <div className="msg-list-item-body">
         <div className="msg-list-item-top">
           <span className="msg-list-item-name">{name}</span>
           {last && <span className="msg-list-item-time">{relativeTime(last.created_at, t)}</span>}
         </div>
+        {sub && <div className="msg-list-item-sub">{sub}</div>}
         <div className="msg-list-item-preview">
           <span className="msg-list-item-snippet">{snippet || (t.noMessagesYet || '')}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}>
@@ -311,14 +346,21 @@ function MembersPanel({ members, t, currentUserId, onOpenChat, onStartGroup }) {
   );
 }
 
-function DirectoryPanel({ onPick, onClose, t }) {
+function DirectoryPanel({ onPick, onPickDept, onClose, t }) {
   const [users, setUsers]   = useState([]);
+  const [depts, setDepts]   = useState([]);
   const [search, setSearch] = useState('');
 
   useEffect(() => { getDirectory().then(d => setUsers(d.users || [])).catch(() => {}); }, []);
+  // Departments are their own section: messaging a department is a different
+  // act from messaging a person, and before per-person threads there was no way
+  // to start one at all — department channels simply appeared for everybody.
+  useEffect(() => { getDepartments().then(d => setDepts(d.departments || d || [])).catch(() => {}); }, []);
 
-  const filtered = users.filter(u =>
-    u.full_name.toLowerCase().includes(search.trim().toLowerCase())
+  const q = search.trim().toLowerCase();
+  const filtered = users.filter(u => u.full_name.toLowerCase().includes(q));
+  const filteredDepts = depts.filter(d =>
+    String(t.groupLabels?.[d.id] || d.label || '').toLowerCase().includes(q)
   );
 
   return (
@@ -344,13 +386,36 @@ function DirectoryPanel({ onPick, onClose, t }) {
           </div>
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
-          {!filtered.length ? (
+          {!filtered.length && !filteredDepts.length ? (
             <div className="empty-state" style={{ padding: '2rem 1rem' }}>
               <div className="empty-sub">{t.noResults}</div>
             </div>
-          ) : filtered.map(u => (
-            <PersonItem key={u.id} person={u} onClick={() => onPick(u)} t={t} />
-          ))}
+          ) : (
+            <>
+              {!!filteredDepts.length && (
+                <>
+                  <div className="msg-dir-section">{t.departmentsSection}</div>
+                  {filteredDepts.map(d => (
+                    <div key={d.id} className="msg-person-item" onClick={() => onPickDept(d)} role="button" tabIndex={0}
+                      onKeyDown={e => e.key === 'Enter' && onPickDept(d)}>
+                      <div className="msg-avatar dept"><Building2 size={18} strokeWidth={1.8} /></div>
+                      <div className="msg-person-body">
+                        <div className="msg-person-name">{t.groupLabels?.[d.id] || d.label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+              {!!filtered.length && (
+                <>
+                  {!!filteredDepts.length && <div className="msg-dir-section">{t.peopleSection}</div>}
+                  {filtered.map(u => (
+                    <PersonItem key={u.id} person={u} onClick={() => onPick(u)} t={t} />
+                  ))}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -641,7 +706,7 @@ function ChatThread({
   const isDept     = conv.type === 'department';
   const isGroup    = isDept || conv.type === 'group';
   const isAdHocGroup = conv.type === 'group';
-  const name       = isDept ? deptDisplayName(conv, t) : (conv.name || '—');
+  const name       = isDept ? deptDisplayName(conv, t, user?.id) : (conv.name || '—');
 
   // Any member of an ad-hoc group can change its icon — kept as local state so
   // the header updates immediately without waiting on the conversation list to refetch.
@@ -1068,7 +1133,12 @@ function ChatThread({
 
   let status = '';
   if (isDept) {
-    status = t.departmentGroup;
+    // On the department's side the header already shows the person's name, so
+    // the status line is where the department belongs — otherwise nothing on
+    // the screen says which department this thread is with.
+    status = threadShowsPerson(conv, user?.id)
+      ? (t.groupLabels?.[conv.dept_id] || conv.dept_id)
+      : (conv.is_internal ? t.departmentGroup : (t.deptThread || t.departmentGroup));
   } else if (isGroup) {
     status = t.groupChat;
   } else if (away) {
@@ -1421,7 +1491,14 @@ export default function Messages({ openConversation = null, onOpened }) {
 
     const conv = conversationsRef.current.find(c => c.id === conversationId);
     const isMentioned = !!message.mentions?.some(m => m.id === user.id);
-    const isDirect = conv ? conv.type !== 'department' : false;
+    // A thread is "direct" for the person it belongs to — it is his private
+    // conversation with the department, and under the default 'mentions_dms'
+    // level he would otherwise be told nothing at all when they reply.
+    // Deliberately NOT direct for the department's own staff: all six of them
+    // would be pinged for every message in every thread they handle.
+    const isDirect = conv
+      ? conv.type !== 'department' || (!conv.is_internal && !threadShowsPerson(conv, user?.id))
+      : false;
     // "Mentions & DMs only" mode skips ordinary department-channel chatter,
     // which is almost always the highest-volume, lowest-signal source of pings.
     if (notifLevelRef.current === 'mentions_dms' && !isMentioned && !isDirect) return;
@@ -1431,7 +1508,7 @@ export default function Messages({ openConversation = null, onOpened }) {
     lastNotifiedAtRef.current[conversationId] = Date.now();
 
     const convName = conv
-      ? (conv.type === 'department' ? deptDisplayName(conv, t) : (conv.name || t.messages))
+      ? (conv.type === 'department' ? deptDisplayName(conv, t, user?.id) : (conv.name || t.messages))
       : t.messages;
     const body = message.content || (message.file_name ? `📎 ${message.file_name}` : '');
     let n;
@@ -1596,6 +1673,16 @@ export default function Messages({ openConversation = null, onOpened }) {
     setMessageResultsLoadingMore(false);
   }
 
+  async function handlePickDept(dept) {
+    try {
+      const { conversation } = await openDeptThread(dept.id);
+      setConversations(prev => (prev.some(c => c.id === conversation.id) ? prev : [conversation, ...prev]));
+      setActiveId(conversation.id);
+    } catch (_) {}
+    setShowDirectory(false);
+    setSearch('');
+  }
+
   async function handlePickUser(otherUser) {
     try {
       const { conversation } = await openDM(otherUser.id);
@@ -1642,8 +1729,11 @@ export default function Messages({ openConversation = null, onOpened }) {
 
   const query = search.trim().toLowerCase();
   const filteredConversations = !query ? conversations : conversations.filter(conv => {
-    const name = conv.type === 'department' ? deptDisplayName(conv, t) : (conv.name || '');
-    return name.toLowerCase().includes(query);
+    const name = conv.type === 'department' ? deptDisplayName(conv, t, user?.id) : (conv.name || '');
+    // Match the department name too, so an HR employee can still find every
+    // thread by typing «الموارد» even though the rows are labelled by person.
+    const sub = deptSubLabel(conv, t, user?.id) || '';
+    return name.toLowerCase().includes(query) || sub.toLowerCase().includes(query);
   });
 
   const dmUserIds = new Set(
@@ -1734,7 +1824,7 @@ export default function Messages({ openConversation = null, onOpened }) {
             ) : (
               <>
                 {visibleConversations.map(conv => (
-                  <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} />
+                  <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} meId={user?.id} />
                 ))}
                 {filteredPeople.length > 0 && (
                   <>
@@ -1777,7 +1867,7 @@ export default function Messages({ openConversation = null, onOpened }) {
                       <span>{t.hiddenChats} ({hiddenConversations.length})</span>
                     </button>
                     {showHidden && hiddenConversations.map(conv => (
-                      <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} />
+                      <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} meId={user?.id} />
                     ))}
                   </div>
                 )}
@@ -1814,7 +1904,7 @@ export default function Messages({ openConversation = null, onOpened }) {
       </div>
 
       {showDirectory && (
-        <DirectoryPanel onPick={handlePickUser} onClose={() => setShowDirectory(false)} t={t} />
+        <DirectoryPanel onPick={handlePickUser} onPickDept={handlePickDept} onClose={() => setShowDirectory(false)} t={t} />
       )}
 
       {showNotifSettings && (

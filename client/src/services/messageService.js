@@ -15,6 +15,9 @@ async function req(path, opts = {}) {
 export const getDirectory     = ()        => req('/messages/directory');
 export const getConversations = ()        => req('/messages/conversations');
 export const openDM           = (userId)  => req(`/messages/dm/${userId}`, { method: 'POST' });
+// Find-or-create my thread with a department. Someone who works in that
+// department lands in its internal team channel instead; the server decides.
+export const openDeptThread   = (deptId)  => req(`/messages/dept/${deptId}`, { method: 'POST' });
 export const startGroupChat   = (memberIds) => req('/messages/group', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
