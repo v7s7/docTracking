@@ -180,6 +180,11 @@ async function review() {
         rows.push({ ...base,
           username: p.username,
           ad_name: acct ? (acct.name || '') : '',
+          // The email has to be carried here too, not only on the fuzzy-match
+          // path below. Once a username has been written back into
+          // directory.json this branch is the one almost everybody takes, so
+          // omitting it left 120 of 121 rows with a blank address.
+          email: acct ? (acct.email || '') : '',
           confidence: '1.00',
           alternatives: 'confirmed by hand',
         });
