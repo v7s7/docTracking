@@ -229,6 +229,10 @@ async function review() {
 [link] ${matched} auto-matched to an AD account (confidence >= 0.72)
 [link] ${rows.length - matched} need a username filled in by hand
 [link] heads/deputies matched: ${leaders.filter(r => r.username).length} / ${leaders.length}
+[link] with an email address:  ${rows.filter(r => r.email).length} / ${matched}${
+  rows.filter(r => r.email).length === 0
+    ? '   ** none — AD returned no usable address; check mail / proxyAddresses / userPrincipalName **'
+    : ''}
 
   Review:  ${CSV_PATH}
   Fill the "username" column where it is blank, correct anything wrong

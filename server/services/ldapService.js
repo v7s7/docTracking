@@ -134,6 +134,34 @@ async function authenticateUser(username, password) {
  * Requires LDAP_BIND_DN and LDAP_BIND_PASSWORD in environment.
  * Filters out computer accounts and disabled users.
  */
+/**
+ * Where a usable address actually lives, in order of trustworthiness.
+ *
+ * `mail` is the canonical attribute, but it is blank across almost all of SWD's
+ * directory — of 140 matched people exactly one had it. That is normal when
+ * mailboxes are provisioned through Exchange Online: the address then lives in
+ * proxyAddresses, and the name people actually sign in with is the
+ * userPrincipalName (the server log shows exactly that — "a.alkubaesy@swd.bh").
+ */
+function resolveEmail(o) {
+  if (o.mail) return String(o.mail).trim();
+
+  // proxyAddresses looks like ["SMTP:primary@swd.bh", "smtp:alias@swd.bh"] —
+  // an UPPERCASE SMTP marks the primary. ldapjs hands back a bare string when
+  // there is only one value, hence the concat.
+  const proxies = [].concat(o.proxyAddresses || []).map(String);
+  const primary = proxies.find(p => p.startsWith('SMTP:')) || proxies.find(p => /^smtp:/i.test(p));
+  if (primary) return primary.slice(5).trim();
+
+  // The sign-in name. A real address in most tenants — but NOT when the forest
+  // uses an internal-only domain, so a .local UPN is refused rather than
+  // generating undeliverable mail for the whole organisation.
+  const upn = String(o.userPrincipalName || '').trim();
+  if (upn.includes('@') && !/\.local$/i.test(upn.split('@')[1] || '')) return upn;
+
+  return '';
+}
+
 async function browseAllUsers() {
   const bindDN  = process.env.LDAP_BIND_DN;
   const bindPwd = process.env.LDAP_BIND_PASSWORD;
@@ -156,7 +184,8 @@ async function browseAllUsers() {
       scope:      'sub',
       // Active user accounts only (not computers, not disabled)
       filter:     '(&(objectClass=user)(!(objectClass=computer))(sAMAccountName=*))',
-      attributes: ['sAMAccountName', 'displayName', 'cn', 'mail', 'department', 'title', 'userAccountControl'],
+      attributes: ['sAMAccountName', 'displayName', 'cn', 'mail', 'userPrincipalName',
+                   'proxyAddresses', 'department', 'title', 'userAccountControl'],
       sizeLimit:  2000,
     };
 
@@ -173,7 +202,7 @@ async function browseAllUsers() {
         users.push({
           username:   o.sAMAccountName || '',
           name:       o.displayName   || o.cn || '',
-          email:      o.mail          || '',
+          email:      resolveEmail(o),
           department: o.department    || '',
           title:      o.title         || '',
         });
