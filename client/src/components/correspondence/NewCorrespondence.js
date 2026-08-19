@@ -57,6 +57,16 @@ export default function NewCorrespondence({ editing = null, onDone, onCancel }) 
 
   const selectedDept = depts.find(d => d.id === toDept);
   const services = selectedDept?.services || [];
+
+  // Two kinds of subject can appear for one recipient: things my own department
+  // issues to them, and things they accept from us. When both are present the
+  // list is split under two headings, because "ما نرسله إليهم" and "ما نطلبه
+  // منهم" are different acts and picking the wrong one sends the memo the wrong
+  // way. With only one kind present the headings would be noise, so they are
+  // dropped and the plain list is shown.
+  const issued   = services.filter(s => s.direction === 'issue');
+  const accepted = services.filter(s => s.direction !== 'issue');
+  const grouped  = issued.length > 0 && accepted.length > 0;
   const isOther  = service === OTHER;
 
   // Changing the receiving department invalidates whichever request type was
@@ -207,7 +217,16 @@ export default function NewCorrespondence({ editing = null, onDone, onCancel }) 
               disabled={!toDept}
               onChange={e => { setService(e.target.value); if (e.target.value !== OTHER) setSubject(''); }}>
               <option value="">{toDept ? c.choose : c.pickDeptFirst}</option>
-              {services.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              {grouped ? (
+                <>
+                  <optgroup label={c.svcWeIssue}>
+                    {issued.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </optgroup>
+                  <optgroup label={c.svcTheyAccept}>
+                    {accepted.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </optgroup>
+                </>
+              ) : services.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
               <option value={OTHER}>{c.other}</option>
             </select>
           </div>

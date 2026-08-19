@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
-import { X, Printer, Check, XCircle, CheckCircle2, Pencil, Paperclip, Download, MessageCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Printer, Check, XCircle, CheckCircle2, Pencil, Paperclip, Download, MessageCircle, Send } from 'lucide-react';
 import { useLang } from '../../context/LangContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../common/Toast';
 import {
   approveCorrespondence, rejectCorrespondence, completeCorrespondence, downloadAttachment,
-  discussCorrespondence,
+  discussCorrespondence, replyToCorrespondence,
 } from '../../services/correspondenceService';
-import { StatusBadge, PriorityBadge, EVENT_ICONS, EVENT_COLORS, fmtDate, fmtDateTime, fmtSize } from './constants';
+import { StatusBadge, PriorityBadge, ExtLink, EVENT_ICONS, EVENT_COLORS, fmtDate, fmtDateTime, fmtSize } from './constants';
 import PrintLetter from './PrintLetter';
 
 export default function CorrespondenceDetail({ item, canApprove, onClose, onChanged, onEdit, onDiscuss }) {
@@ -20,6 +20,9 @@ export default function CorrespondenceDetail({ item, canApprove, onClose, onChan
   const [err, setErr]       = useState('');
   const [rejecting, setRej] = useState(false);
   const [reason, setReason] = useState('');
+  const [replyText, setReplyText] = useState('');
+  const [replyAtt, setReplyAtt]   = useState([]);
+  const replyFileInput = useRef(null);
 
   if (!item) return null;
 
@@ -27,8 +30,28 @@ export default function CorrespondenceDetail({ item, canApprove, onClose, onChan
   const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(user?.role);
 
   const showApprove  = item.status === 'pending'  && canApprove;
+  // Either department may reply, as often as the matter needs.
+  const canReply     = item.status === 'approved' &&
+    (isAdmin || myDepts.includes(item.from_dept_id) || myDepts.includes(item.to_dept_id));
+  // ...but الإنجاز belongs to the RECEIVING department — رئيس القسم or the
+  // موظف who did the work. قسم A raised the request; it does not get to declare
+  // the work finished. Mirrors the server check in POST /:id/complete.
   const showComplete = item.status === 'approved' && (isAdmin || myDepts.includes(item.to_dept_id));
   const showEdit     = item.status === 'returned' && item.from_user_id === user?.id;
+
+  async function sendReply() {
+    setBusy(true); setErr('');
+    try {
+      await replyToCorrespondence(item.id, { note: replyText, files: replyAtt });
+      toast.success(c.reply.sent);
+      setReplyText('');
+      setReplyAtt([]);
+      onChanged?.();
+      onClose?.();
+    } catch (e) {
+      setErr(e.message);
+    } finally { setBusy(false); }
+  }
 
   async function run(fn, okMsg, ...args) {
     setBusy(true); setErr('');
@@ -65,7 +88,13 @@ export default function CorrespondenceDetail({ item, canApprove, onClose, onChan
             {err && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>{err}</div>}
 
             <div className="corr-meta">
-              <div><span>{c.sender}</span><strong>{item.from_user_name}</strong></div>
+              <div>
+                <span>{c.sender}</span>
+                <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  {item.from_user_name}
+                  <ExtLink ext={item.from_user_ext} title={t.directory.callExt} />
+                </strong>
+              </div>
               <div><span>{c.fromDept}</span><strong>{deptName(item.from_dept_id, item.from_dept_label)}</strong></div>
               <div><span>{c.toDept}</span><strong>{deptName(item.to_dept_id, item.to_dept_label)}</strong></div>
               <div><span>{c.date}</span><strong>{fmtDate(item.created_at)}</strong></div>
@@ -119,12 +148,92 @@ export default function CorrespondenceDetail({ item, canApprove, onClose, onChan
                       {e.note && (
                         <div className={e.is_reject ? 'corr-reject-callout small' : 'text-sm'}>{e.note}</div>
                       )}
-                      <div className="text-sm text-muted">{e.actor_name} · {fmtDateTime(e.created_at)}</div>
+                      {/* Files that came with THIS reply, not with the memo. */}
+                      {!!e.attachments?.length && (
+                        <div className="corr-chips" style={{ marginTop: '0.35rem' }}>
+                          {e.attachments.map(a => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              className="corr-chip corr-chip-btn"
+                              onClick={() => downloadAttachment(item.id, a.id, a.file_name).catch(er => toast.error(er.message))}>
+                              <Download size={12} strokeWidth={2} />
+                              <span className="corr-chip-name">{a.file_name}</span>
+                              <span className="corr-chip-size">{fmtSize(a.file_size)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div
+                        className="text-sm text-muted"
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <span>{e.actor_name}</span>
+                        <ExtLink ext={e.actor_ext} title={t.directory.callExt} />
+                        <span>· {fmtDateTime(e.created_at)}</span>
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
+
+            {canReply && (
+              <>
+                <div className="corr-body-label">{c.reply.label}</div>
+                <textarea
+                  className="form-control"
+                  rows={3}
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  placeholder={c.reply.placeholder} />
+
+                <input
+                  ref={replyFileInput}
+                  type="file"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    setReplyAtt(prev => [...prev, ...Array.from(e.target.files || [])]);
+                    e.target.value = '';
+                  }} />
+
+                {!!replyAtt.length && (
+                  <div className="corr-chips" style={{ marginTop: '0.5rem' }}>
+                    {replyAtt.map((f, i) => (
+                      <span className="corr-chip" key={`${f.name}-${i}`}>
+                        <Paperclip size={13} strokeWidth={2} />
+                        <span className="corr-chip-name">{f.name}</span>
+                        <span className="corr-chip-size">{fmtSize(f.size)}</span>
+                        <button
+                          type="button"
+                          className="corr-chip-x"
+                          aria-label={c.removeFile}
+                          onClick={() => setReplyAtt(prev => prev.filter((_, j) => j !== i))}>
+                          <X size={12} strokeWidth={2.5} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={busy}
+                    onClick={() => replyFileInput.current?.click()}>
+                    <Paperclip size={13} strokeWidth={2} /> {c.addFiles}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={busy || (!replyText.trim() && !replyAtt.length)}
+                    onClick={sendReply}>
+                    <Send size={13} strokeWidth={2} /> {c.reply.send}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="modal-foot">

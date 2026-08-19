@@ -94,8 +94,12 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
   const [editing,   setEditing]  = useState(false);
   const [label,     setLabel]    = useState(service.label);
   const [desc,      setDesc]     = useState(service.description || '');
-  // Which departments may request this service. Empty = every department.
-  const [fromDepts, setFromDepts] = useState(service.fromDepts || []);
+  // A subject is either something this department RECEIVES (وارد) or something
+  // it SENDS (صادر), and the scope list means the opposite thing in each case:
+  // for an incoming subject it is who may ask, for an outgoing one it is who
+  // receives. One state holds it; `isIssue` decides which key it is saved under.
+  const isIssue = service.direction === 'issue';
+  const [scope, setScope] = useState(service.scope || service.fromDepts || service.toDepts || []);
   const [addingF,   setAddingF]  = useState(false);
   const [editingF,  setEditingF] = useState(null);
   const [err,       setErr]      = useState('');
@@ -106,7 +110,8 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
   async function saveLabel() {
     setBusy(true);
     try {
-      const { service: updated } = await api.updateService(deptId, service.id, { label, description: desc, fromDepts });
+      const body = { label, description: desc, ...(isIssue ? { toDepts: scope } : { fromDepts: scope }) };
+      const { service: updated } = await api.updateService(deptId, service.id, body);
       onUpdated(updated); setEditing(false); setErr('');
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
@@ -177,25 +182,25 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
 
               <div style={{ marginTop: '0.5rem' }}>
                 <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-3)', marginBottom: '0.3rem' }}>
-                  {t.fromDeptsLabel}
+                  {isIssue ? t.toDeptsLabel : t.fromDeptsLabel}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
                   <button
                     type="button"
-                    className={`corr-filter${fromDepts.length === 0 ? ' active' : ''}`}
+                    className={`corr-filter${scope.length === 0 ? ' active' : ''}`}
                     style={{ fontSize: 'var(--fs-xs)', padding: '0.15rem 0.6rem' }}
-                    onClick={() => setFromDepts([])}>
+                    onClick={() => setScope([])}>
                     {t.fromDeptsAll}
                   </button>
                   {allDepts.filter(d => d.id !== deptId).map(d => {
-                    const on = fromDepts.includes(d.id);
+                    const on = scope.includes(d.id);
                     return (
                       <button
                         key={d.id}
                         type="button"
                         className={`corr-filter${on ? ' active' : ''}`}
                         style={{ fontSize: 'var(--fs-xs)', padding: '0.15rem 0.6rem' }}
-                        onClick={() => setFromDepts(p => on ? p.filter(x => x !== d.id) : [...p, d.id])}>
+                        onClick={() => setScope(p => on ? p.filter(x => x !== d.id) : [...p, d.id])}>
                         {d.label}
                       </button>
                     );
@@ -205,11 +210,20 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
             </div>
             <div style={{ display: 'flex', gap: '0.35rem', alignSelf: 'flex-start', paddingTop: '0.1rem' }}>
               <button className="btn btn-primary btn-sm" onClick={saveLabel} disabled={busy}>{busy ? '…' : t.save}</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(service.label); setDesc(service.description || ''); setFromDepts(service.fromDepts || []); }} disabled={busy}>{t.cancel}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setLabel(service.label); setDesc(service.description || ''); setScope(service.scope || []); }} disabled={busy}>{t.cancel}</button>
             </div>
           </div>
         ) : (
           <div style={{ flex: 1 }}>
+            <span
+              className="tag"
+              style={{
+                fontSize: 'var(--fs-xs)', marginInlineEnd: '0.45rem', fontWeight: 600,
+                color: isIssue ? 'var(--accent-hover)' : 'var(--text-2)',
+                background: isIssue ? 'var(--accent-light)' : 'var(--surface-2)',
+              }}>
+              {isIssue ? t.dirIssue : t.dirRequest}
+            </span>
             <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{service.label}</span>
             {service.description && (
               <span style={{ marginInlineStart: '0.5rem', fontSize: 'var(--fs-xs)', color: 'var(--text-3)' }}>{service.description}</span>
@@ -217,9 +231,9 @@ function ServiceRow({ deptId, service, onUpdated, onDeleted, t, allDepts = [] })
             <span style={{ marginInlineStart: '0.5rem', fontSize: 'var(--fs-xs)', color: 'var(--text-3)' }}>
               · {(service.fields || []).length} {t.fieldsSuffix}
             </span>
-            <span style={{ marginInlineStart: '0.5rem', fontSize: 'var(--fs-xs)', color: (service.fromDepts || []).length ? 'var(--accent)' : 'var(--text-3)' }}>
-              · {(service.fromDepts || []).length
-                   ? t.fromDeptsSome.replace('{n}', service.fromDepts.length)
+            <span style={{ marginInlineStart: '0.5rem', fontSize: 'var(--fs-xs)', color: (service.scope || []).length ? 'var(--accent)' : 'var(--text-3)' }}>
+              · {(service.scope || []).length
+                   ? t.fromDeptsSome.replace('{n}', service.scope.length)
                    : t.fromDeptsAll}
             </span>
           </div>
@@ -310,6 +324,9 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t, allDepts = [] }) {
   const [addingSvc, setAddingSvc] = useState(false);
   const [newSvcLabel, setNewSvcLabel] = useState('');
   const [newSvcDesc,  setNewSvcDesc]  = useState('');
+  // Which way a new subject runs. Defaults to 'request' — the older meaning, and
+  // still the common one — so nothing changes for whoever is used to this form.
+  const [newSvcDir,   setNewSvcDir]   = useState('request');
   const [err,       setErr]       = useState('');
   const [busy,      setBusy]      = useState(false);
   const [confirm, confirmDialog] = useConfirm();
@@ -336,9 +353,11 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t, allDepts = [] }) {
     if (!newSvcLabel.trim()) return;
     setBusy(true);
     try {
-      const { service } = await api.createService(dept.id, { label: newSvcLabel.trim(), description: newSvcDesc.trim() });
-      onUpdated({ ...dept, services: [...services, service] });
-      setNewSvcLabel(''); setNewSvcDesc(''); setAddingSvc(false); setErr('');
+      const { service } = await api.createService(dept.id, {
+        label: newSvcLabel.trim(), description: newSvcDesc.trim(), direction: newSvcDir,
+      });
+      onUpdated({ ...dept, services: [...services, { ...service, direction: newSvcDir, scope: [] }] });
+      setNewSvcLabel(''); setNewSvcDesc(''); setNewSvcDir('request'); setAddingSvc(false); setErr('');
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
   }
@@ -448,9 +467,28 @@ function DeptRow({ dept, userCount, onUpdated, onDeleted, t, allDepts = [] }) {
                     placeholder={t.serviceDescExample} />
                 </div>
               </div>
+              <div style={{ marginTop: '0.65rem' }}>
+                <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-3)', marginBottom: '0.3rem' }}>{t.dirLabel}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                  {[['request', t.dirRequest, t.dirRequestHint], ['issue', t.dirIssue, t.dirIssueHint]].map(([v, lbl, hint]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      title={hint}
+                      className={`corr-filter${newSvcDir === v ? ' active' : ''}`}
+                      style={{ fontSize: 'var(--fs-xs)', padding: '0.15rem 0.6rem' }}
+                      onClick={() => setNewSvcDir(v)}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-3)', margin: '0.35rem 0 0' }}>
+                  {newSvcDir === 'issue' ? t.dirIssueHint : t.dirRequestHint}
+                </p>
+              </div>
               <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.65rem' }}>
                 <button className="btn btn-primary btn-sm" onClick={handleAddService} disabled={!newSvcLabel.trim() || busy}>{busy ? '…' : t.add}</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setAddingSvc(false); setNewSvcLabel(''); setNewSvcDesc(''); }} disabled={busy}>{t.cancel}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setAddingSvc(false); setNewSvcLabel(''); setNewSvcDesc(''); setNewSvcDir('request'); }} disabled={busy}>{t.cancel}</button>
               </div>
             </div>
           )}

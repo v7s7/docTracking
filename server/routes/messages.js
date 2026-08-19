@@ -3,6 +3,7 @@ const fs      = require('fs');
 const path    = require('path');
 const multer  = require('multer');
 const { db }  = require('../db');
+ const { decodeUploadName } = require('../utils/uploadName');
 const { verifyToken, ROLE_WEIGHT } = require('../middleware/authMiddleware');
 const { readConfig }  = require('../services/configService');
 const { detectLang, translateText } = require('../services/translateService');
@@ -566,7 +567,7 @@ router.post('/conversations/:id/messages', uploadSingle, (req, res) => {
   `).run(
     conv.id, req.user.id, req.user.name || req.user.username, content || null,
     file ? `/uploads/messages/${file.filename}` : null,
-    file ? file.originalname : null,
+    file ? decodeUploadName(file.originalname) : null,
     file ? file.mimetype : null,
     file ? file.size : null,
     mentions.length ? JSON.stringify(mentions) : null,

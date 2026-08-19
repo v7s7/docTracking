@@ -3,7 +3,7 @@
 // duplicate their STATUS_COLORS map across two files, which is how the two
 // drifted apart.
 import React from 'react';
-import { CheckCircle2, PlusCircle, Send, XCircle, Check } from 'lucide-react';
+import { CheckCircle2, PlusCircle, Send, XCircle, Check, MessageSquare, Phone } from 'lucide-react';
 
 export const STATUSES   = ['pending', 'approved', 'done', 'returned'];
 export const PRIORITIES = ['high', 'med', 'low'];
@@ -26,6 +26,7 @@ export const EVENT_ICONS = {
   approved:    Check,
   rejected:    XCircle,
   resubmitted: Send,
+  reply:       MessageSquare,
   completed:   CheckCircle2,
 };
 
@@ -34,8 +35,36 @@ export const EVENT_COLORS = {
   approved:    '#15803d',
   rejected:    '#b45309',
   resubmitted: '#0e7490',
+  reply:       '#6d28d9',
   completed:   'var(--success)',
 };
+
+/**
+ * A person's phone extension, rendered exactly as the directory renders it so
+ * the two screens look like one system — same .dir-ext class, same tel: link.
+ *
+ * Returns null when there is no extension on file, so call sites can drop it in
+ * unconditionally without guarding. stopPropagation because these sit inside
+ * clickable table rows and modal bodies; tapping the number should dial, not
+ * open the record behind it.
+ */
+export function ExtLink({ ext, title, variant = 'pill' }) {
+  if (!ext) return null;
+  // 'pill' is the directory's bordered chip — right for a table cell of its own.
+  // 'inline' is the flatter treatment already used for the approver line in the
+  // composer; a bordered chip dropped into a run of interpunct-separated grey
+  // text reads as a stray button.
+  const cls = variant === 'inline' ? 'corr-approver-ext' : 'dir-ext';
+  return (
+    <a
+      className={cls}
+      href={`tel:${ext}`}
+      title={title}
+      onClick={e => e.stopPropagation()}>
+      <Phone size={variant === 'inline' ? 11 : 12} strokeWidth={2.2} /><span>{ext}</span>
+    </a>
+  );
+}
 
 export function StatusBadge({ status, t }) {
   const c = STATUS_COLORS[status] || { bg: '#F0F0F0', color: '#666' };

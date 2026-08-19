@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Inbox, CheckCircle2, RotateCcw, Archive as ArchiveIcon, Check, XCircle, Eye, Pencil } from 'lucide-react';
 import { useLang } from '../../context/LangContext';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../common/Toast';
 import {
   listCorrespondence, getCorrespondence, completeCorrespondence,
 } from '../../services/correspondenceService';
-import { StatusBadge, PriorityBadge, fmtDate } from './constants';
+import { StatusBadge, PriorityBadge, ExtLink, fmtDate } from './constants';
 import CorrespondenceDetail from './CorrespondenceDetail';
 
 // One component behind all four screens — they differ only in which server-side
@@ -20,6 +21,7 @@ const BOXES = {
 
 export default function CorrespondenceList({ box, canApproveFor = [], onEdit, onDiscuss, refreshKey }) {
   const { t, deptName } = useLang();
+  const { user } = useAuth();
   const toast = useToast();
   const c = t.corr;
   const conf = BOXES[box] || BOXES.archive;
@@ -121,13 +123,20 @@ export default function CorrespondenceList({ box, canApproveFor = [], onEdit, on
                     <tr key={it.id} onClick={() => openOne(it.id)} style={{ cursor: 'pointer' }}>
                       <td><code className="tag">{it.serial}</code></td>
                       <td style={{ fontWeight: 600 }}>{it.subject}</td>
-                      <td>{it.from_user_name}</td>
+                      <td>
+                        {it.from_user_name}
+                        <ExtLink ext={it.from_user_ext} title={t.directory.callExt} />
+                      </td>
                       <td>{deptName(it.from_dept_id, it.from_dept_label)}</td>
                       <td>{deptName(it.to_dept_id, it.to_dept_label)}</td>
                       <td>{fmtDate(it.created_at)}</td>
                       <td><StatusBadge status={it.status} t={t} /></td>
                       <td onClick={e => e.stopPropagation()}>
-                        {box === 'inbox' && it.status === 'approved' && (
+                        {/* The inbox now also carries memos that have come BACK
+                            to قسم A after a reply, so "in the inbox" is no longer
+                            the same as "we are the receiving department". Only
+                            قسم B closes, so check that explicitly. */}
+                        {box === 'inbox' && it.status === 'approved' && it.to_dept_id === user?.dept_id && (
                           <button
                             className="btn btn-primary btn-sm"
                             disabled={busyId === it.id}
@@ -149,7 +158,8 @@ export default function CorrespondenceList({ box, canApproveFor = [], onEdit, on
                     <div>
                       <div className="corr-card-subject">{it.subject}</div>
                       <div className="text-sm text-muted">
-                        <code className="tag">{it.serial}</code> · {it.from_user_name} ·{' '}
+                        <code className="tag">{it.serial}</code> · {it.from_user_name}
+                        <ExtLink ext={it.from_user_ext} title={t.directory.callExt} variant="inline" /> ·{' '}
                         {deptName(it.from_dept_id, it.from_dept_label)} ← {deptName(it.to_dept_id, it.to_dept_label)} · {fmtDate(it.created_at)}
                       </div>
                     </div>

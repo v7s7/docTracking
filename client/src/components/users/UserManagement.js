@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLang } from '../../context/LangContext';
+import { searchIndex, makeMatcher } from '../../utils/nameSearch';
 import {
   getUsers, getLdapUsers, createUser, updateUser, deleteUser, assignLdapRole,
   bulkUpdateUsers,
@@ -335,16 +336,25 @@ function SystemUsers({ t, users, depts, loading, error, can, onReload, onEdit, o
 
   // Every field on screen is searchable, because people arrive here knowing
   // different things: a name, a four-digit extension, half an email address.
-  const shown = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return users.filter(x => {
-      if (role && x.role !== role) return false;
-      if (dept === '__none' ? x.dept_id : dept && x.dept_id !== dept) return false;
-      if (!q) return true;
-      return [x.full_name, x.username, x.ext, x.email, x.alt_email, x.mobile, deptLabel(x.dept_id), t.roles?.[x.role]]
-        .some(v => String(v || '').toLowerCase().includes(q));
-    });
-  }, [users, search, role, dept, deptLabel, t]);
+  // The name matches across scripts as well — "ahmed" finds أحمد, الكبيسي
+  // finds a.alkubaesy — since the account list is Latin and the staff list is
+  // Arabic and nobody switches keyboards to search. See utils/nameSearch.js.
+  const index = useMemo(() => {
+    const m = new Map();
+    users.forEach(x => m.set(x.id, searchIndex(
+      [x.full_name, x.username, x.email, x.alt_email],
+      [x.ext, x.mobile, deptLabel(x.dept_id), t.roles?.[x.role]],
+    )));
+    return m;
+  }, [users, deptLabel, t]);
+
+  const match = useMemo(() => makeMatcher(search), [search]);
+
+  const shown = useMemo(() => users.filter(x => {
+    if (role && x.role !== role) return false;
+    if (dept === '__none' ? x.dept_id : dept && x.dept_id !== dept) return false;
+    return !match || match(index.get(x.id));
+  }), [users, match, index, role, dept]);
 
   // A row HR may not change: a system administrator account. IT sees none
   // locked. Selecting one would only produce a refusal from the server, so the
@@ -570,12 +580,19 @@ function UnassignedLdap({ t, knownUsernames, depts, onAssigned }) {
 
   useEffect(() => { if (open && list === null) load(); }, [open, list, load]);
 
-  const unassigned = (list || []).filter(x => !knownUsernames.has(String(x.username || '').toLowerCase()));
-  const shown = unassigned.filter(x => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return [x.name, x.username, x.email, x.department, x.title].some(v => String(v || '').toLowerCase().includes(q));
-  });
+  const unassigned = useMemo(
+    () => (list || []).filter(x => !knownUsernames.has(String(x.username || '').toLowerCase())),
+    [list, knownUsernames]);
+
+  // The AD list can run to several hundred rows, so the searchable form is
+  // built when the list arrives, not on every keystroke.
+  const index = useMemo(
+    () => new Map(unassigned.map(x =>
+      [x.username, searchIndex([x.name, x.username, x.email], [x.department, x.title])])),
+    [unassigned]);
+
+  const match = useMemo(() => makeMatcher(search), [search]);
+  const shown = unassigned.filter(x => !match || match(index.get(x.username)));
 
   return (
     <div className="card" style={{ marginTop: '1.25rem' }}>

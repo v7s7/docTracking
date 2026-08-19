@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   RotateCcw, CheckCircle2, Check, AlertTriangle, Inbox, Send,
-  ClipboardList, Users, ArrowLeft, ArrowRight, ShieldAlert,
+  Users, ArrowLeft, ArrowRight, ShieldAlert,
 } from 'lucide-react';
 import { useLang } from '../../context/LangContext';
 import { getMyDay, getCorrespondence, completeCorrespondence } from '../../services/correspondenceService';
@@ -172,10 +172,6 @@ export default function HomeDashboard({ onEdit, onDiscuss, onNavigate, refreshKe
           icon={<Inbox size={17} strokeWidth={1.9} />}
           value={counts.deptIncoming ?? 0} label={h.deptIncoming}
           onClick={() => onNavigate?.('corr-inbox')} />
-        <Count
-          icon={<ClipboardList size={17} strokeWidth={1.9} />}
-          value={counts.tasksOpen ?? 0} label={h.myTasks}
-          hint={counts.tasksOverdue ? h.tasksOverdue.replace('{n}', counts.tasksOverdue) : undefined} />
         {dept && (
           <Count
             icon={<CheckCircle2 size={17} strokeWidth={1.9} />}

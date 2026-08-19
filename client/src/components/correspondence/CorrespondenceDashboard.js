@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Clock, CheckCircle2, PlayCircle, RotateCcw } from 'lucide-react';
 import { useLang } from '../../context/LangContext';
 import { getCorrStats, listCorrespondence, getCorrespondence } from '../../services/correspondenceService';
-import { StatusBadge, fmtDate } from './constants';
+import { StatusBadge, ExtLink, fmtDate } from './constants';
 import CorrespondenceDetail from './CorrespondenceDetail';
 
 function StatCard({ icon, label, value, color, bg }) {
@@ -90,7 +90,10 @@ export default function CorrespondenceDashboard({ onEdit, onDiscuss, refreshKey 
                       style={{ cursor: 'pointer' }}
                       onClick={() => getCorrespondence(it.id).then(r => setOpen(r.item)).catch(e => setErr(e.message))}>
                       <td style={{ fontWeight: 600 }}>{it.subject}</td>
-                      <td>{it.from_user_name}</td>
+                      <td>
+                        {it.from_user_name}
+                        <ExtLink ext={it.from_user_ext} title={t.directory.callExt} />
+                      </td>
                       <td>{it.from_dept_label}</td>
                       <td>{it.to_dept_label}</td>
                       <td>{fmtDate(it.created_at)}</td>

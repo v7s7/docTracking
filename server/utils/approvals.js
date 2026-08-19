@@ -110,37 +110,45 @@ function departmentsWithoutApprover() {
  * Which departments' pending correspondence belongs in this user's الموافقات.
  *
  * Deliberately NOT the same question as canApproveFor(). مدير النظام *may*
- * approve for any department — that is the fallback that stops anything getting
- * permanently stuck — but that is authority, not work. Putting all 22
- * departments in the queue meant every IT account inherited the whole
- * organisation's approvals, including their badge count, for correspondence
- * between two departments they have nothing to do with.
+ * approve for any department — that is authority, not work.
  *
- * So an admin's queue is what they actually lead, plus any department that
- * nobody else can act on. Everything else stays approvable by opening it.
+ * This must return the same departments visibilityClause() admits, or a record
+ * appears in a queue the user is refused when they open it (loadVisible() in
+ * routes/correspondence.js gates the single read with that same clause).
+ *
+ * departmentsWithoutApprover() used to be folded in here so correspondence in a
+ * leaderless department could never get permanently stuck. SWD asked for strict
+ * department scoping instead: IT does not read other departments traffic. The
+ * leaderless departments are still reported — as counts and labels, never
+ * content — in the system health block of GET /dashboard.
  */
 function approvalQueueFor(user) {
   const { departments = [] } = readConfig();
   if (!isAdmin(user)) {
     return departments.map(d => d.id).filter(id => canApproveFor(user, id));
   }
-  return [...new Set([...ledDepartments(user), ...departmentsWithoutApprover()])];
+  return myDepartments(user);
 }
 
 /**
  * SQL fragment scoping a correspondence query to what this user may read.
- * Returns { clause, params } — clause is null when the user sees everything.
+ * Returns { clause, params } — clause is null only when the user has no
+ * department at all to scope by.
  *
- *   admin              → everything
  *   head/deputy/manager→ anything from or to a department they act for
  *   everyone else      → what they sent, or what is addressed to their department
+ *
+ * مدير النظام gets NO bypass here. The role is not a department — the same
+ * person is تقنية المعلومات *and* مدير النظام (see effectiveRole() in
+ * utils/permissions.js, which grants the role three different ways). Being able
+ * to fix the system is not a reason to read الموارد البشرية correspondence, so
+ * an admin is scoped by dept_id exactly like everyone else. Authority to approve
+ * is unaffected and still org-wide — that lives in canApproveFor().
  *
  * The same fragment is used by the list, the single-record read and the badge
  * counts, so a record can never appear in a list the user cannot open.
  */
 function visibilityClause(user, table = 'c') {
-  if (isAdmin(user)) return { clause: null, params: [] };
-
   const depts = myDepartments(user);
   const inList = depts.length ? depts.map(() => '?').join(',') : null;
 

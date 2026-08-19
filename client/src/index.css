@@ -2180,7 +2180,7 @@ code.tag {
 .corr-filter.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 
 .corr-search { display: flex; align-items: center; gap: 0.45rem; color: var(--text-3); }
-.corr-search .form-control { min-width: 220px; }
+.corr-search .form-control { min-width: 240px; }
 
 /* Detail modal */
 .corr-meta {

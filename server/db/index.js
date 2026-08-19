@@ -76,23 +76,6 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_events_task_id ON task_events(task_id);
   CREATE INDEX IF NOT EXISTS idx_notifs_dept    ON notifications(dept_id, is_read);
 
-  -- A user's own to-do list — separate from the dept-routed tasks table,
-  -- which models document hand-offs between departments, not individual
-  -- ownership. No dept_id/routing here; any user manages only their own rows.
-  CREATE TABLE IF NOT EXISTS personal_tasks (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id          INTEGER NOT NULL,
-    title            TEXT NOT NULL,
-    due_at           TEXT,
-    done             INTEGER NOT NULL DEFAULT 0,
-    completed_at     TEXT,
-    last_reminder_at TEXT,
-    created_at       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-    updated_at       TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-  CREATE INDEX IF NOT EXISTS idx_personal_tasks_user ON personal_tasks(user_id, done);
-
   CREATE TABLE IF NOT EXISTS sessions (
     jti        TEXT PRIMARY KEY,
     username   TEXT NOT NULL,
@@ -267,11 +250,6 @@ if (!taskCols.includes('last_reminder_at')) {
   db.exec("ALTER TABLE tasks ADD COLUMN last_reminder_at TEXT");
 }
 
-const personalTaskCols = db.prepare("PRAGMA table_info(personal_tasks)").all().map(c => c.name);
-if (!personalTaskCols.includes('category')) {
-  db.exec("ALTER TABLE personal_tasks ADD COLUMN category TEXT");
-}
-
 db.exec(`
   CREATE TABLE IF NOT EXISTS message_mentions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -363,6 +341,101 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_corr_author  ON correspondences(from_user_id, status);
   CREATE INDEX IF NOT EXISTS idx_corr_events  ON correspondence_events(correspondence_id, id);
   CREATE INDEX IF NOT EXISTS idx_corr_attach  ON correspondence_attachments(correspondence_id);
+`);
+
+// ── Two-way correspondence: whose turn, and per-reply attachments ────────
+// Added after first release, so ALTER rather than a changed CREATE — the same
+// pattern as the users/conversations migrations higher up this file.
+//
+// awaiting_dept_id is the department the memo is currently sitting with. It is
+// NOT derivable from status: once قسم A and قسم B start replying to each other
+// the status stays 'approved' the whole time, and only this column says whose
+// move it is. NULL once the memo is closed.
+const corrCols = db.prepare("PRAGMA table_info(correspondences)").all().map(c => c.name);
+if (!corrCols.includes('awaiting_dept_id')) {
+  db.exec("ALTER TABLE correspondences ADD COLUMN awaiting_dept_id TEXT");
+  // Backfill from the status each existing memo is in:
+  //   pending / returned → قسم A must act (approve it, or fix and resend)
+  //   approved           → قسم B must act
+  //   done               → nobody
+  db.exec(`
+    UPDATE correspondences SET awaiting_dept_id =
+      CASE status
+        WHEN 'pending'  THEN from_dept_id
+        WHEN 'returned' THEN from_dept_id
+        WHEN 'approved' THEN to_dept_id
+        ELSE NULL
+      END
+  `);
+}
+
+// event_id ties an attachment to the reply it came with. NULL means it was part
+// of the original memo, which is exactly what every existing row is — so the
+// backfill is "do nothing" and old attachments keep rendering where they always did.
+const corrAttCols = db.prepare("PRAGMA table_info(correspondence_attachments)").all().map(c => c.name);
+if (!corrAttCols.includes('event_id')) {
+  db.exec("ALTER TABLE correspondence_attachments ADD COLUMN event_id INTEGER");
+}
+db.exec("CREATE INDEX IF NOT EXISTS idx_corr_att_event ON correspondence_attachments(event_id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_corr_awaiting  ON correspondences(awaiting_dept_id, status)");
+
+// ── التعاميم — circulars ─────────────────────────────────────
+// A تعميم is the opposite shape to a correspondence: one author, no routing,
+// no approval chain, and EVERY employee is the audience. So there is no status
+// column and no visibilityClause() here — a circular that only some departments
+// could read would not be a تعميم.
+//
+//   source  'deputy_chairman'  → تعميم نائب الرئيس   (مكتب نائب الرئيس)
+//           'director_general' → تعميم المدير العام  (مكتب المدير العام)
+//
+// Who may publish is NOT stored here — it is derived from the head/deputy named
+// on the matching department in config/departments.json, via utils/circularAuth.js.
+// Keeping it out of the row means moving a manager updates who can publish with
+// no data migration.
+//
+// circular_reads is a RECEIPT, not a fan-out: a row appears only once a person
+// has actually opened the circular. Unread is therefore NOT EXISTS, which keeps
+// working for employees hired after publication — the fan-out used by
+// correspondence_notifications would silently miss them, and "no تعميم lost" is
+// the whole point of the feature.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS circulars (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    serial            TEXT UNIQUE,
+    source            TEXT NOT NULL,
+    title             TEXT NOT NULL,
+    body              TEXT NOT NULL,
+    published_by_id   INTEGER,
+    published_by_name TEXT NOT NULL,
+    published_by_dept TEXT,
+    edited_at         TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    CHECK (source IN ('deputy_chairman','director_general'))
+  );
+
+  CREATE TABLE IF NOT EXISTS circular_attachments (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    circular_id  INTEGER NOT NULL,
+    stored_name  TEXT NOT NULL,
+    file_name    TEXT NOT NULL,
+    file_type    TEXT,
+    file_size    INTEGER,
+    uploaded_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY(circular_id) REFERENCES circulars(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS circular_reads (
+    circular_id INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL,
+    read_at     TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    PRIMARY KEY (circular_id, user_id),
+    FOREIGN KEY(circular_id) REFERENCES circulars(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_circ_source     ON circulars(source, created_at);
+  CREATE INDEX IF NOT EXISTS idx_circ_attach     ON circular_attachments(circular_id);
+  CREATE INDEX IF NOT EXISTS idx_circ_reads_user ON circular_reads(user_id);
 `);
 
 // ── Serial number helper ─────────────────────────────────────

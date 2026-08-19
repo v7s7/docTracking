@@ -51,6 +51,15 @@ export const approveCorrespondence = id =>
 export const rejectCorrespondence = (id, reason) =>
   req(`/correspondence/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) });
 
+// A reply from either department: free text, attachments, or both. Sent as
+// FormData for the same reason as the composer — files cannot ride on JSON.
+export const replyToCorrespondence = (id, { note, files = [] }) => {
+  const form = new FormData();
+  form.append('note', note || '');
+  files.forEach(f => form.append('attachments', f));
+  return req(`/correspondence/${id}/reply`, { method: 'POST', body: form });
+};
+
 export const completeCorrespondence = id =>
   req(`/correspondence/${id}/complete`, { method: 'POST', body: JSON.stringify({}) });
 

@@ -107,6 +107,9 @@ export default function PrintLetter({ item }) {
         <div className="pl-sign-space" />
         <div className="pl-sign-name">{item.from_user_name}</div>
         <div className="pl-sign-title">{senderTitle}</div>
+        {item.from_user_ext && (
+          <div className="pl-sign-title" dir="ltr">{t.directory.ext}: {item.from_user_ext}</div>
+        )}
       </div>
 
       {!!item.events?.length && (

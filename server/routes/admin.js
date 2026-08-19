@@ -5,7 +5,6 @@ const { verifyToken, requireRole } = require('../middleware/authMiddleware');
 const { readConfig, writeConfig }  = require('../services/configService');
 const { runReminderCheck }         = require('../services/reminderService');
 const { runChatReminderCheck }     = require('../services/chatReminderService');
-const { runPersonalTaskReminderCheck } = require('../services/personalTaskReminderService');
 
 const router    = express.Router();
 const SUPER_ONLY = [verifyToken, requireRole('SUPER_ADMIN')];
@@ -34,6 +33,26 @@ function parseFromDepts(raw, cfg) {
   return { value: [...seen] };
 }
 
+// A department's subjects live in two arrays, and both are editable here:
+//   services — what it RECEIVES; scoped by `fromDepts` (who may ask)
+//   outgoing — what it ISSUES;   scoped by `toDepts`   (who may receive)
+// Everything below finds a subject in whichever array holds it, so the admin
+// screen never silently hides half a department's list.
+function locateService(dept, svcId) {
+  let idx = (dept.services || []).findIndex(s => s.id === svcId);
+  if (idx !== -1) return { list: dept.services, idx, direction: 'request', scopeKey: 'fromDepts' };
+  idx = (dept.outgoing || []).findIndex(s => s.id === svcId);
+  if (idx !== -1) return { list: dept.outgoing, idx, direction: 'issue', scopeKey: 'toDepts' };
+  return null;
+}
+
+function listServices(dept) {
+  return [
+    ...(dept.outgoing || []).map(s => ({ ...s, direction: 'issue',   scope: s.toDepts   || [] })),
+    ...(dept.services || []).map(s => ({ ...s, direction: 'request', scope: s.fromDepts || [] })),
+  ];
+}
+
 // ── Full config export/import ─────────────────────────────────────────────
 
 router.get('/config', ...SUPER_ONLY, (req, res) => {
@@ -52,7 +71,11 @@ router.put('/config', ...SUPER_ONLY, (req, res) => {
 // ── Departments ───────────────────────────────────────────────────────────
 
 router.get('/departments', ...SUPER_ONLY, (req, res) => {
-  res.json({ success: true, departments: readConfig().departments });
+  // `services` is flattened across both directions here so the admin screen
+  // shows a department's whole subject list. Each entry carries `direction` and
+  // `scope`; the write endpoints below route it back to the right array.
+  const departments = readConfig().departments.map(d => ({ ...d, services: listServices(d) }));
+  res.json({ success: true, departments });
 });
 
 router.post('/departments', ...SUPER_ONLY, (req, res) => {
@@ -100,32 +123,41 @@ router.delete('/departments/:id', ...SUPER_ONLY, (req, res) => {
 router.get('/departments/:id/services', ...SUPER_ONLY, (req, res) => {
   const dept = readConfig().departments.find(d => d.id === req.params.id);
   if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
-  res.json({ success: true, services: dept.services || [] });
+  res.json({ success: true, services: listServices(dept) });
 });
 
 router.post('/departments/:id/services', ...SUPER_ONLY, (req, res) => {
-  const { label, description, fromDepts } = req.body || {};
+  const { label, description, fromDepts, toDepts, direction } = req.body || {};
   if (!label) return res.status(400).json({ success: false, message: '`label` is required.' });
+  if (direction !== undefined && direction !== 'request' && direction !== 'issue') {
+    return res.status(400).json({ success: false, message: '`direction` must be "request" or "issue".' });
+  }
 
   const cfg  = readConfig();
   const dept = cfg.departments.find(d => d.id === req.params.id);
   if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
 
-  const parsed = parseFromDepts(fromDepts, cfg);
+  const isIssue  = direction === 'issue';
+  const scopeKey = isIssue ? 'toDepts' : 'fromDepts';
+  const parsed   = parseFromDepts(isIssue ? toDepts : fromDepts, cfg);
   if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
 
   if (!dept.services) dept.services = [];
+  if (!dept.outgoing) dept.outgoing = [];
+  // Ids must be unique across BOTH arrays — servicesBetween() unions them, so a
+  // collision would make one subject shadow the other.
+  const taken = new Set([...dept.services, ...dept.outgoing].map(s => s.id));
 
   // Arabic labels transliterate to nothing under [^a-z0-9], which would collapse
   // every service on a department to the same id — fall back to a numeric suffix.
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
   let id = slug ? `${req.params.id}_${slug}` : `${req.params.id}_svc`;
-  if (dept.services.find(s => s.id === id)) {
+  if (taken.has(id)) {
     if (slug) {
       return res.status(409).json({ success: false, message: `Service id "${id}" already exists.` });
     }
     let n = 2;
-    while (dept.services.find(s => s.id === `${id}_${n}`)) n++;
+    while (taken.has(`${id}_${n}`)) n++;
     id = `${id}_${n}`;
   }
 
@@ -134,9 +166,9 @@ router.post('/departments/:id/services', ...SUPER_ONLY, (req, res) => {
     label: label.trim(),
     description: (description || '').trim(),
     fields: [],
-    fromDepts: parsed.value || [],
+    [scopeKey]: parsed.value || [],
   };
-  dept.services.push(service);
+  (isIssue ? dept.outgoing : dept.services).push(service);
   writeConfig(cfg);
   res.status(201).json({ success: true, service });
 });
@@ -146,19 +178,25 @@ router.put('/departments/:id/services/:svcId', ...SUPER_ONLY, (req, res) => {
   const dept = cfg.departments.find(d => d.id === req.params.id);
   if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
 
-  const idx = (dept.services || []).findIndex(s => s.id === req.params.svcId);
-  if (idx === -1) return res.status(404).json({ success: false, message: 'Service not found.' });
+  const found = locateService(dept, req.params.svcId);
+  if (!found) return res.status(404).json({ success: false, message: 'Service not found.' });
+  const { list, idx, direction, scopeKey } = found;
 
-  const { label, description, fromDepts } = req.body || {};
+  const { label, description, fromDepts, toDepts } = req.body || {};
 
-  const parsed = parseFromDepts(fromDepts, cfg);
+  // The scope field the caller sends is read from whichever key matches this
+  // subject's direction, so an outgoing subject can never grow a `fromDepts`.
+  const rawScope = scopeKey === 'toDepts'
+    ? (toDepts !== undefined ? toDepts : fromDepts)
+    : (fromDepts !== undefined ? fromDepts : toDepts);
+  const parsed = parseFromDepts(rawScope, cfg);
   if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
 
-  if (label       !== undefined) dept.services[idx].label       = label.trim();
-  if (description !== undefined) dept.services[idx].description = description.trim();
-  if (parsed.value !== undefined) dept.services[idx].fromDepts  = parsed.value;
+  if (label        !== undefined) list[idx].label       = label.trim();
+  if (description  !== undefined) list[idx].description = description.trim();
+  if (parsed.value !== undefined) list[idx][scopeKey]   = parsed.value;
   writeConfig(cfg);
-  res.json({ success: true, service: dept.services[idx] });
+  res.json({ success: true, service: { ...list[idx], direction, scope: list[idx][scopeKey] || [] } });
 });
 
 router.delete('/departments/:id/services/:svcId', ...SUPER_ONLY, (req, res) => {
@@ -166,11 +204,9 @@ router.delete('/departments/:id/services/:svcId', ...SUPER_ONLY, (req, res) => {
   const dept = cfg.departments.find(d => d.id === req.params.id);
   if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
 
-  const before = (dept.services || []).length;
-  dept.services = (dept.services || []).filter(s => s.id !== req.params.svcId);
-  if (dept.services.length === before) {
-    return res.status(404).json({ success: false, message: 'Service not found.' });
-  }
+  const found = locateService(dept, req.params.svcId);
+  if (!found) return res.status(404).json({ success: false, message: 'Service not found.' });
+  found.list.splice(found.idx, 1);
   writeConfig(cfg);
   res.json({ success: true });
 });
@@ -180,9 +216,9 @@ router.delete('/departments/:id/services/:svcId', ...SUPER_ONLY, (req, res) => {
 function findService(cfg, deptId, svcId) {
   const dept = cfg.departments.find(d => d.id === deptId);
   if (!dept) return { err: 'Department not found.' };
-  const svc = (dept.services || []).find(s => s.id === svcId);
-  if (!svc) return { err: 'Service not found.' };
-  return { dept, svc };
+  const found = locateService(dept, svcId);
+  if (!found) return { err: 'Service not found.' };
+  return { dept, svc: found.list[found.idx] };
 }
 
 router.get('/departments/:id/services/:svcId/fields', ...SUPER_ONLY, (req, res) => {
@@ -302,15 +338,6 @@ router.post('/reminders/run', ...SUPER_ONLY, async (req, res) => {
 router.post('/chat-reminders/run', ...SUPER_ONLY, async (req, res) => {
   try {
     const result = await runChatReminderCheck();
-    res.json({ success: true, ...result });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-router.post('/personal-task-reminders/run', ...SUPER_ONLY, async (req, res) => {
-  try {
-    const result = await runPersonalTaskReminderCheck();
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

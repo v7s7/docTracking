@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Phone, MessageCircle, Users, X } from 'lucide-react';
 import { useLang } from '../../context/LangContext';
 import { getStaffDirectory } from '../../services/directoryService';
+import { searchIndex, makeMatcher } from '../../utils/nameSearch';
 
 // دليل الهاتف — the extension lookup everyone does several times a day.
 //
@@ -10,7 +11,9 @@ import { getStaffDirectory } from '../../services/directoryService';
 // down it. Cards make you hunt for the number in a different place on each one.
 //
 // Search matches name, department, username, email AND extension, so typing
-// "5022" finds the person as readily as typing their name.
+// "5022" finds the person as readily as typing their name — and it matches
+// across scripts, so "ahmed", "ahmad" and "ahmd" all find أحمد, and typing
+// الكبيسي finds the account a.alkubaesy. See utils/nameSearch.js.
 export default function StaffDirectory({ onChat }) {
   const { t, lang, deptName } = useLang();
   const d = t.directory;
@@ -37,33 +40,49 @@ export default function StaffDirectory({ onChat }) {
     return [...seen.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), lang));
   }, [users, deptName, lang]);
 
+  // The searchable form of each row, built once for the list rather than once
+  // per keystroke. It depends on the language too, since the department name
+  // shown is part of what you can search on.
+  const index = useMemo(() => {
+    const m = new Map();
+    users.forEach(u => m.set(u.id, searchIndex(
+      [u.full_name, u.username, u.email, u.alt_email],
+      [deptName(u.dept_id, u.dept_label), u.dept_label, u.ext, u.mobile],
+    )));
+    return m;
+  }, [users, deptName]);
+
+  const match = useMemo(() => makeMatcher(q), [q]);
+
   const shown = useMemo(() => {
-    const needle = q.trim().toLowerCase();
     return users
       .filter(u => {
         if (dept && u.dept_id !== dept) return false;
-        if (!needle) return true;
-        return [u.full_name, deptName(u.dept_id, u.dept_label), u.username, u.ext, u.mobile, u.email, u.alt_email]
-          .some(v => String(v || '').toLowerCase().includes(needle));
+        return !match || match(index.get(u.id));
       })
       // Grouped by department, then alphabetical inside it — the order people
       // already have in their heads when they go looking for someone.
       .sort((a, b) =>
         deptName(a.dept_id, a.dept_label).localeCompare(deptName(b.dept_id, b.dept_label), lang)
         || String(a.full_name || '').localeCompare(String(b.full_name || ''), lang));
-  }, [users, q, dept, deptName, lang]);
+  }, [users, match, index, dept, deptName, lang]);
 
   // A department's own lines are not a person, but they are still something you
   // come here to look up — so they belong in the table, filed under their
   // department, rather than in a banner above it that you scroll past every time.
-  const lines = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return deptLines
+  const lineIndex = useMemo(() => {
+    const m = new Map();
+    deptLines.forEach(dl => m.set(dl.id, searchIndex(
+      [], [deptName(dl.id, dl.label), dl.label, ...dl.phones.map(x => x.number)],
+    )));
+    return m;
+  }, [deptLines, deptName]);
+
+  const lines = useMemo(() =>
+    deptLines
       .filter(dl => !dept || dl.id === dept)
-      .filter(dl => !needle
-        || dl.phones.some(x => String(x.number).includes(needle))
-        || deptName(dl.id, dl.label).toLowerCase().includes(needle));
-  }, [deptLines, dept, q, deptName]);
+      .filter(dl => !match || match(lineIndex.get(dl.id))),
+  [deptLines, dept, match, lineIndex]);
 
   // Interleaved so a department's lines sit with its people, not in a block of
   // their own at one end of the table.

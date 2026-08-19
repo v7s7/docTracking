@@ -3,7 +3,7 @@
   "departments": [
     {
       "id": "board_office",
-      "label": "مكتب رئيس المجلس",
+      "label": "مكتب نائب الرئيس",
       "ldapGroup": "board_office",
       "services": [],
       "head": {
@@ -57,7 +57,7 @@
     },
     {
       "id": "strategic_planning_dept",
-      "label": "التخطيط الاستراتيجي ومتابعة المشاريع الوقفية",
+      "label": "قسم التخطيط الاستراتيجي ومتابعة المشاريع الوقفية",
       "ldapGroup": "strategic_planning_dept",
       "services": [],
       "head": {
@@ -71,11 +71,54 @@
         "username": "o.khalil",
         "ext": "5021",
         "mobile": "39899001"
-      }
+      },
+      "outgoing": [
+        {
+          "id": "sp_objectives_progress",
+          "label": "تحديث سير الأهداف الإستراتيجية",
+          "description": "تحديث سير العمل على الأهداف الإستراتيجية",
+          "fields": []
+        },
+        {
+          "id": "sp_operational_objectives",
+          "label": "طلب أهداف تشغيلية",
+          "description": "طلب اعتماد الأهداف التشغيلية للقسم",
+          "fields": []
+        },
+        {
+          "id": "sp_risk_forms",
+          "label": "تحديث استمارات تحديد المخاطر",
+          "description": "تحديث استمارات تحديد وتقييم المخاطر",
+          "fields": []
+        },
+        {
+          "id": "sp_nonconformity_analysis",
+          "label": "تحليل حالات عدم المطابقة",
+          "description": "تحليل حالات عدم المطابقة والإجراءات التصحيحية",
+          "fields": []
+        },
+        {
+          "id": "sp_quality_procedures",
+          "label": "تحديث إجراءات الجودة",
+          "description": "تحديث إجراءات ووثائق نظام الجودة",
+          "fields": []
+        },
+        {
+          "id": "sp_directory_update",
+          "label": "تحديث الدليل",
+          "description": "تحديث الدليل الخاص بالقسم",
+          "fields": [],
+          "toDepts": [
+            "mosques_guidance_dept",
+            "endowment_disbursement_dept",
+            "resources_information_dept"
+          ]
+        }
+      ]
     },
     {
       "id": "investments_dept",
-      "label": "الاستثمارات الوقفية",
+      "label": "قسم الاستثمارات الوقفية",
       "ldapGroup": "investments_dept",
       "services": [],
       "head": {
@@ -93,7 +136,7 @@
     },
     {
       "id": "revenue_collection_dept",
-      "label": "تحصيل الإيرادات",
+      "label": "قسم تحصيل الإيرادات",
       "ldapGroup": "revenue_collection_dept",
       "services": [],
       "head": {
@@ -111,7 +154,7 @@
     },
     {
       "id": "endowment_disbursement_dept",
-      "label": "المصارف الوقفية وتنمية الوقف",
+      "label": "قسم المصارف الوقفية وتنمية الوقف",
       "ldapGroup": "endowment_disbursement_dept",
       "services": [
         {
@@ -287,7 +330,7 @@
     },
     {
       "id": "sharia_studies_dept",
-      "label": "الوقف الشرعي والدراسات",
+      "label": "قسم الوقف الشرعي والدراسات",
       "ldapGroup": "sharia_studies_dept",
       "services": [],
       "head": {
@@ -305,7 +348,7 @@
     },
     {
       "id": "legal_affairs_dept",
-      "label": "الشؤون القانونية والأملاك الوقفية",
+      "label": "قسم الشؤون القانونية والأملاك الوقفية",
       "ldapGroup": "legal_affairs_dept",
       "services": [],
       "head": {
@@ -336,7 +379,7 @@
     },
     {
       "id": "engineering_services_dept",
-      "label": "المشاريع والخدمات الهندسية",
+      "label": "قسم المشاريع والخدمات الهندسية",
       "ldapGroup": "engineering_services_dept",
       "services": [
         {
@@ -471,7 +514,7 @@
     },
     {
       "id": "accounts_dept",
-      "label": "الحسابات",
+      "label": "قسم الحسابات",
       "ldapGroup": "accounts_dept",
       "services": [
         {
@@ -621,7 +664,7 @@
     },
     {
       "id": "hr_dept",
-      "label": "الموارد البشرية",
+      "label": "قسم الموارد البشرية",
       "ldapGroup": "hr_dept",
       "services": [
         {
@@ -705,24 +748,10 @@
           ]
         },
         {
-          "id": "hr_training",
-          "label": "التدريب",
-          "description": "طلبات الدورات والبرامج التدريبية",
+          "id": "hr_violations",
+          "label": "المخالفات",
+          "description": "رفع المخالفات والإجراءات المتعلقة بها",
           "fields": []
-        },
-        {
-          "id": "hr_evaluation",
-          "label": "التقييم",
-          "description": "طلبات تقييم الأداء الوظيفي",
-          "fields": [
-            {
-              "key": "employee_name",
-              "label": "اسم الموظف",
-              "type": "text",
-              "required": true,
-              "placeholder": "الاسم الكامل"
-            }
-          ]
         },
         {
           "id": "hr_transfers",
@@ -761,36 +790,10 @@
           ]
         },
         {
-          "id": "hr_violations",
-          "label": "مخالفات",
-          "description": "رفع المخالفات والإجراءات المتعلقة بها",
-          "fields": [],
-          "fromDepts": [
-            "mosques_guidance_dept"
-          ]
-        },
-        {
           "id": "hr_cleaning_allowance",
           "label": "علاوة تنظيف",
           "description": "طلبات صرف علاوة التنظيف",
           "fields": [],
-          "fromDepts": [
-            "mosques_guidance_dept"
-          ]
-        },
-        {
-          "id": "hr_good_conduct",
-          "label": "حسن السيرة والسلوك",
-          "description": "طلب شهادة حسن السيرة والسلوك",
-          "fields": [
-            {
-              "key": "employee_name",
-              "label": "اسم الموظف",
-              "type": "text",
-              "required": true,
-              "placeholder": "الاسم الكامل"
-            }
-          ],
           "fromDepts": [
             "mosques_guidance_dept"
           ]
@@ -807,11 +810,50 @@
         "username": "Ateyatalla.alkhalifa",
         "ext": "4044",
         "mobile": "36711111"
-      }
+      },
+      "outgoing": [
+        {
+          "id": "hr_training",
+          "label": "التدريب",
+          "description": "طلبات الدورات والبرامج التدريبية",
+          "fields": []
+        },
+        {
+          "id": "hr_evaluation",
+          "label": "التقييم",
+          "description": "طلبات تقييم الأداء الوظيفي",
+          "fields": [
+            {
+              "key": "employee_name",
+              "label": "اسم الموظف",
+              "type": "text",
+              "required": true,
+              "placeholder": "الاسم الكامل"
+            }
+          ]
+        },
+        {
+          "id": "hr_good_conduct",
+          "label": "حسن السيرة والسلوك",
+          "description": "طلب شهادة حسن السيرة والسلوك",
+          "fields": [
+            {
+              "key": "employee_name",
+              "label": "اسم الموظف",
+              "type": "text",
+              "required": true,
+              "placeholder": "الاسم الكامل"
+            }
+          ],
+          "toDepts": [
+            "mosques_guidance_dept"
+          ]
+        }
+      ]
     },
     {
       "id": "procurement_dept",
-      "label": "المشتريات",
+      "label": "قسم المشتريات",
       "ldapGroup": "procurement_dept",
       "services": [],
       "head": {
@@ -829,7 +871,7 @@
     },
     {
       "id": "it_dept",
-      "label": "تقنية المعلومات",
+      "label": "قسم تقنية المعلومات",
       "ldapGroup": "it_dept",
       "services": [],
       "head": {
@@ -847,13 +889,13 @@
     },
     {
       "id": "resources_information_dept",
-      "label": "الموارد والمعلومات",
+      "label": "قسم الموارد والمعلومات",
       "ldapGroup": "resources_information_dept",
       "services": []
     },
     {
       "id": "admin_affairs_dept",
-      "label": "الخدمات الإدارية",
+      "label": "قسم الخدمات الإدارية",
       "ldapGroup": "admin_affairs_dept",
       "services": [],
       "head": {
@@ -871,7 +913,7 @@
     },
     {
       "id": "mosques_guidance_dept",
-      "label": "المساجد والإرشاد الديني",
+      "label": "قسم المساجد والإرشاد الديني",
       "ldapGroup": "mosques_guidance_dept",
       "services": [],
       "head": {
@@ -889,7 +931,7 @@
     },
     {
       "id": "community_relations_dept",
-      "label": "الإتصال وخدمة المجتمع",
+      "label": "قسم الاتصال وخدمة العملاء",
       "ldapGroup": "community_relations_dept",
       "services": [],
       "head": {
@@ -907,7 +949,7 @@
     },
     {
       "id": "maintenance_dept",
-      "label": "الصيانة",
+      "label": "قسم الصيانة",
       "ldapGroup": "maintenance_dept",
       "services": [],
       "head": {
@@ -939,7 +981,7 @@
     },
     {
       "id": "reception_dept",
-      "label": "الإستقبال",
+      "label": "قسم الاستقبال",
       "ldapGroup": "reception_dept",
       "services": [
         {

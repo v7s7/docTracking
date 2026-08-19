@@ -18,6 +18,7 @@ const fs      = require('fs');
 const { db }          = require('../db');
 const { verifyToken, requireStaff } = require('../middleware/authMiddleware');
 const { logAudit }    = require('../utils/audit');
+const { decodeUploadName } = require('../utils/uploadName');
 const { readConfig }  = require('../services/configService');
 const { resolveSubject, OTHER_SERVICE_ID } = require('../utils/serviceScope');
 const {
@@ -94,22 +95,55 @@ function hydrate(row) {
     ...row,
     from_dept_label: deptLabel(row.from_dept_id),
     to_dept_label:   deptLabel(row.to_dept_id),
-    events: db.prepare(
-      // id as the tiebreaker: created_at has 1-second resolution, and a create
-      // followed immediately by an approve would otherwise order at random.
-      'SELECT * FROM correspondence_events WHERE correspondence_id = ? ORDER BY created_at ASC, id ASC'
-    ).all(row.id),
+    from_user_ext:   extsFor([row.from_user_id])[row.from_user_id] || null,
+    events: hydrateEvents(row.id),
+    // event_id IS NULL == came with the original memo. Replies carry their own
+    // files, hung off the timeline entry instead of the memo.
     attachments: db.prepare(
-      'SELECT id, file_name, file_type, file_size FROM correspondence_attachments WHERE correspondence_id = ? ORDER BY id'
+      'SELECT id, file_name, file_type, file_size FROM correspondence_attachments WHERE correspondence_id = ? AND event_id IS NULL ORDER BY id'
     ).all(row.id),
   };
 }
 
+// Phone extensions for a set of user ids, as { id: ext }.
+//
+// Looked up at read time on purpose. from_user_name and actor_name are
+// deliberate SNAPSHOTS — the memo must keep saying who sent it even if that
+// person is later renamed — but an extension is the opposite: the caller wants
+// the number that reaches them today, not the one they had last year. So the
+// name is frozen and the number is live.
+function extsFor(ids) {
+  const uniq = [...new Set(ids.filter(id => id != null))];
+  if (!uniq.length) return {};
+  const rows = db.prepare(
+    `SELECT id, ext FROM users WHERE id IN (${uniq.map(() => '?').join(',')})`
+  ).all(...uniq);
+  return Object.fromEntries(rows.map(u => [u.id, u.ext || null]));
+}
+
+// Timeline entries with each reply's own attachments attached.
+function hydrateEvents(corrId) {
+  // id as the tiebreaker: created_at has 1-second resolution, and a create
+  // followed immediately by an approve would otherwise order at random.
+  const events = db.prepare(
+    'SELECT * FROM correspondence_events WHERE correspondence_id = ? ORDER BY created_at ASC, id ASC'
+  ).all(corrId);
+  const files = db.prepare(
+    'SELECT id, event_id, file_name, file_type, file_size FROM correspondence_attachments WHERE correspondence_id = ? AND event_id IS NOT NULL ORDER BY id'
+  ).all(corrId);
+  const exts = extsFor(events.map(e => e.actor_id));
+  return events.map(e => ({
+    ...e,
+    actor_ext: exts[e.actor_id] || null,
+    attachments: files.filter(f => f.event_id === e.id),
+  }));
+}
+
 function addEvent(id, type, user, note = null, isReject = 0) {
-  db.prepare(`
+  return db.prepare(`
     INSERT INTO correspondence_events (correspondence_id, type, actor_id, actor_name, note, is_reject)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, type, user.id || null, user.name || user.username, note, isReject);
+  `).run(id, type, user.id || null, user.name || user.username, note, isReject).lastInsertRowid;
 }
 
 // Loads a record and enforces read access with the shared clause.
@@ -144,8 +178,14 @@ router.get('/', AUTH, (req, res) => {
 
   if (box === 'inbox') {
     if (!inMine) return res.json({ success: true, items: [], total: 0 });
-    where.push(`c.to_dept_id IN (${inMine})`, `c.status IN ('approved','done')`);
-    params.push(...mine);
+    // Addressed to us, OR handed back to us by a reply. Before the two-way
+    // flow existed to_dept_id alone was enough; now a memo قسم A sent can be
+    // waiting on قسم A, and it must appear in their inbox.
+    where.push(
+      `(c.to_dept_id IN (${inMine}) OR c.awaiting_dept_id IN (${inMine}))`,
+      `c.status IN ('approved','done')`
+    );
+    params.push(...mine, ...mine);
   } else if (box === 'approvals') {
     // What belongs in this person's queue — not everything they *could* approve.
     // For مدير النظام those differ: authority is org-wide, the queue is not.
@@ -174,6 +214,10 @@ router.get('/', AUTH, (req, res) => {
     `SELECT c.* ${sql} ORDER BY c.created_at DESC, c.id DESC LIMIT ? OFFSET ?`
   ).all(...params, Math.min(Number(limit) || 100, 500), Number(offset) || 0);
 
+  // One query for the whole page rather than one per row — a 500-row archive
+  // page would otherwise mean 500 extra lookups just to print a phone number.
+  const exts = extsFor(rows.map(r => r.from_user_id));
+
   res.json({
     success: true,
     total,
@@ -181,6 +225,7 @@ router.get('/', AUTH, (req, res) => {
       ...r,
       from_dept_label: deptLabel(r.from_dept_id),
       to_dept_label:   deptLabel(r.to_dept_id),
+      from_user_ext:   exts[r.from_user_id] || null,
     })),
   });
 });
@@ -206,7 +251,7 @@ router.get('/stats', AUTH, (req, res) => {
   const approvable = (readConfig().departments || []).map(d => d.id).filter(id => canApproveFor(user, id));
 
   const inboxBadge = inMine
-    ? db.prepare(`SELECT COUNT(*) n FROM correspondences WHERE to_dept_id IN (${inMine}) AND status = 'approved'`).get(...mine).n
+    ? db.prepare(`SELECT COUNT(*) n FROM correspondences WHERE awaiting_dept_id IN (${inMine}) AND status = 'approved'`).get(...mine).n
     : 0;
   const approvalsBadge = queue.length
     ? db.prepare(`SELECT COUNT(*) n FROM correspondences WHERE status = 'pending' AND from_dept_id IN (${queue.map(() => '?').join(',')})`).get(...queue).n
@@ -301,10 +346,6 @@ router.get('/my-day', AUTH, (req, res) => {
     deptIncoming: mine.length
       ? one(`SELECT COUNT(*) n FROM correspondences WHERE to_dept_id IN (${mine.map(() => '?').join(',')}) AND status = 'approved'`, ...mine)
       : 0,
-    tasksOpen:    one('SELECT COUNT(*) n FROM personal_tasks WHERE user_id = ? AND done = 0', uid),
-    tasksOverdue: one(
-      `SELECT COUNT(*) n FROM personal_tasks
-        WHERE user_id = ? AND done = 0 AND due_at IS NOT NULL AND julianday(due_at) < julianday('now')`, uid),
   };
 
   // A رئيس قسم also carries the department: what it has sent that is still
@@ -398,6 +439,7 @@ router.get('/reports', AUTH, (req, res) => {
   const serviceLabels = {};
   for (const d of readConfig().departments || []) {
     for (const sv of d.services || []) serviceLabels[sv.id] = sv.label;
+    for (const sv of d.outgoing || []) serviceLabels[sv.id] = sv.label;
   }
 
   const byStatus = {};
@@ -586,7 +628,7 @@ router.post('/', AUTH, requireStaff, withUploads, (req, res) => {
       db.prepare(`
         INSERT INTO correspondence_attachments (correspondence_id, stored_name, file_name, file_type, file_size)
         VALUES (?, ?, ?, ?, ?)
-      `).run(id, f.filename, f.originalname, f.mimetype, f.size);
+      `).run(id, f.filename, decodeUploadName(f.originalname), f.mimetype, f.size);
     }
     addEvent(id, 'created', user, null, 0);
     return id;
@@ -639,7 +681,7 @@ router.put('/:id', AUTH, withUploads, (req, res) => {
       db.prepare(`
         INSERT INTO correspondence_attachments (correspondence_id, stored_name, file_name, file_type, file_size)
         VALUES (?, ?, ?, ?, ?)
-      `).run(row.id, f.filename, f.originalname, f.mimetype, f.size);
+      `).run(row.id, f.filename, decodeUploadName(f.originalname), f.mimetype, f.size);
     }
     addEvent(row.id, 'resubmitted', user, null, 0);
   });
@@ -712,7 +754,8 @@ router.post('/:id/approve', AUTH, (req, res) => {
   db.transaction(() => {
     db.prepare(`
       UPDATE correspondences
-         SET status = 'approved', approved_by_name = ?, approved_at = datetime('now','localtime'),
+         SET status = 'approved', awaiting_dept_id = to_dept_id,
+             approved_by_name = ?, approved_at = datetime('now','localtime'),
              updated_at = datetime('now','localtime')
        WHERE id = ?
     `).run(user.name || user.username, row.id);
@@ -744,7 +787,8 @@ router.post('/:id/reject', AUTH, (req, res) => {
   db.transaction(() => {
     db.prepare(`
       UPDATE correspondences
-         SET status = 'returned', rejection_reason = ?, updated_at = datetime('now','localtime')
+         SET status = 'returned', awaiting_dept_id = from_dept_id,
+             rejection_reason = ?, updated_at = datetime('now','localtime')
        WHERE id = ?
     `).run(reason, row.id);
     addEvent(row.id, 'rejected', user, reason, 1);
@@ -756,6 +800,60 @@ router.post('/:id/reject', AUTH, (req, res) => {
   res.json({ success: true, item: updated });
 });
 
+// ── POST /:id/reply — either department writes back ───────────────────────
+// The heart of the two-way flow. قسم B used to have exactly one move — تم
+// الإنجاز — so a memo could be answered only by being closed. Now either side
+// can write a reply, with attachments, as many times as the matter needs.
+//
+// No re-approval on the way: رئيس قسم A gates the memo once, when it first
+// leaves the department. After that the two departments talk directly, and only
+// قسم A closes (see /complete below).
+router.post('/:id/reply', AUTH, withUploads, (req, res) => {
+  const user = req.user;
+  const row  = db.prepare('SELECT * FROM correspondences WHERE id = ?').get(req.params.id);
+  if (!row) return fail(req, res, 404, 'المراسلة غير موجودة.');
+  if (row.status !== 'approved') {
+    return fail(req, res, 400, 'لا يمكن الرد إلا على مراسلة تمت الموافقة عليها ولم تُنجز بعد.');
+  }
+
+  const mine = myDepartments(user);
+  const inA  = mine.includes(row.from_dept_id);
+  const inB  = mine.includes(row.to_dept_id);
+  if (!inA && !inB && !isAdmin(user)) {
+    return fail(req, res, 403, 'لا تملك صلاحية الرد على هذه المراسلة.');
+  }
+
+  const note = String(req.body?.note || '').trim();
+  if (!note && !(req.files || []).length) {
+    return fail(req, res, 400, 'اكتب رداً أو أرفق ملفاً.');
+  }
+
+  // Which side is this person speaking for? Someone who sits in both — a manager
+  // heading two departments — speaks for whichever side is currently holding the
+  // memo, so it still changes hands instead of bouncing straight back to them.
+  const actingFor = (row.awaiting_dept_id && mine.includes(row.awaiting_dept_id))
+    ? row.awaiting_dept_id
+    : (inB ? row.to_dept_id : row.from_dept_id);
+  const nextDept = actingFor === row.to_dept_id ? row.from_dept_id : row.to_dept_id;
+
+  db.transaction(() => {
+    const eventId = addEvent(row.id, 'reply', user, note || null, 0);
+    const ins = db.prepare(`
+      INSERT INTO correspondence_attachments (correspondence_id, stored_name, file_name, file_type, file_size, event_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    for (const f of req.files || []) {
+      ins.run(row.id, path.basename(f.path), decodeUploadName(f.originalname), f.mimetype, f.size, eventId);
+    }
+    db.prepare(
+      "UPDATE correspondences SET awaiting_dept_id = ?, updated_at = datetime('now','localtime') WHERE id = ?"
+    ).run(nextDept, row.id);
+  })();
+
+  logAudit(user, 'CORRESPONDENCE_REPLIED', 'correspondence', row.id, { to: nextDept }, req.ip);
+  res.json({ success: true });
+});
+
 // ── POST /:id/complete — receiving department marks it done ───────────────
 router.post('/:id/complete', AUTH, (req, res) => {
   const user = req.user;
@@ -764,14 +862,26 @@ router.post('/:id/complete', AUTH, (req, res) => {
   if (row.status !== 'approved') {
     return res.status(400).json({ success: false, message: 'لا يمكن الإنجاز إلا بعد الموافقة.' });
   }
-  if (!isAdmin(user) && !myDepartments(user).includes(row.to_dept_id)) {
-    return res.status(403).json({ success: false, message: 'هذه المراسلة ليست موجهة إلى قسمك.' });
+  // الإنجاز belongs to whoever actually did the work — the RECEIVING department:
+  // its رئيس قسم, or the موظف who carried the request out. قسم A raised the
+  // request and can reply to it, but only the people who did the work are in a
+  // position to say it is finished.
+  //
+  // myDepartments covers ordinary staff of قسم B; canApproveFor covers its
+  // رئيس/نائب named in departments.json, and keeps مدير النظام as the
+  // unstick-anything fallback.
+  if (!myDepartments(user).includes(row.to_dept_id) && !canApproveFor(user, row.to_dept_id)) {
+    return res.status(403).json({
+      success: false,
+      message: 'الإنجاز من صلاحية القسم المستلم — رئيس القسم أو الموظف المستلم.',
+    });
   }
 
   db.transaction(() => {
     db.prepare(`
       UPDATE correspondences
-         SET status = 'done', completed_by_name = ?, completed_at = datetime('now','localtime'),
+         SET status = 'done', awaiting_dept_id = NULL,
+             completed_by_name = ?, completed_at = datetime('now','localtime'),
              updated_at = datetime('now','localtime')
        WHERE id = ?
     `).run(user.name || user.username, row.id);

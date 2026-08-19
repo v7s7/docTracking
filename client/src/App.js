@@ -4,11 +4,11 @@ import { LangProvider, useLang } from './context/LangContext';
 import {
   LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, MessageCircle, Camera, Trash2, Download,
   Mail, PenSquare, Inbox, CheckCircle2, RotateCcw, Archive, ChevronDown, ChevronLeft, BookUser, BarChart3,
+  Megaphone,
 } from 'lucide-react';
 import { exportTasks } from './services/taskService';
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
-import MyTasks from './components/dashboard/MyTasks';
 import HomeDashboard from './components/dashboard/HomeDashboard';
 import { ToastProvider, useToast } from './components/common/Toast';
 import TaskDetail from './components/tasks/TaskDetail';
@@ -20,6 +20,8 @@ import NewCorrespondence from './components/correspondence/NewCorrespondence';
 import { getCorrStats } from './services/correspondenceService';
 import StaffDirectory from './components/directory/StaffDirectory';
 import Reports from './components/reports/Reports';
+import CircularsList from './components/circulars/CircularsList';
+import { getCircStats } from './services/circularService';
 import { getDepartments } from './services/deptService';
 import { getUnreadCount, getConversations, sendPresence, getStatusText, setStatusText, fileUrl } from './services/messageService';
 import { uploadAvatar, setAvatarColor, removeAvatar } from './services/userService';
@@ -30,6 +32,7 @@ const PRESENCE_MS      = 60_000;
 const MSG_POLL_MS      = 20_000;
 const AWAY_IDLE_SECONDS = 5 * 60;
 const NOTIF_BATCH_MS   = 5 * 60_000;
+const CIRC_POLL_MS     = 60_000;
 
 // True when running inside the docTracking desktop app (see /desktop).
 const isElectron = typeof window !== 'undefined' && !!window.electron?.isElectron;
@@ -44,6 +47,13 @@ function canManageUsers(u) { return isSuperAdmin(u?.role) || String(u?.dept_id |
 
 // The correspondence sub-menu. Ids double as view keys.
 const CORR_VIEWS = ['corr-new', 'corr-inbox', 'corr-approvals', 'corr-returned', 'corr-archive', 'corr-reports'];
+
+// التعاميم. Two entries, one screen — `source` is the only difference, and it
+// doubles as the key into the unread counts returned by GET /circulars/stats.
+const CIRC_VIEWS = {
+  'circ-deputy':   'deputy_chairman',
+  'circ-director': 'director_general',
+};
 
 function corrChildren(t) {
   const c = t.corr.nav;
@@ -75,6 +85,14 @@ function navItems(user, t, hasMessages, chatOnly) {
   if (hasMessages) items.push({ id: 'messages', icon: <MessageCircle size={20} strokeWidth={1.8} />, label: t.messages });
   if (canManageUsers(user)) items.push({ id: 'users',    icon: <Users    size={20} strokeWidth={1.8} />, label: t.users });
   if (isSuperAdmin(role)) items.push({ id: 'settings', icon: <Settings size={20} strokeWidth={1.8} />, label: t.settings });
+
+  // التعاميم are organisation-wide, so every role gets both entries — reading is
+  // open to all; only the signing office can publish, and that is enforced
+  // server-side in utils/circularAuth.js. `dividerBefore` puts a gap above the
+  // group so it reads as separate from the working screens rather than as one
+  // more item on the end of the list.
+  items.push({ id: 'circ-deputy',   icon: <Megaphone size={20} strokeWidth={1.8} />, label: t.circulars.deputy,   badge: 'deputy_chairman',  dividerBefore: true });
+  items.push({ id: 'circ-director', icon: <Megaphone size={20} strokeWidth={1.8} />, label: t.circulars.director, badge: 'director_general' });
   return items;
 }
 
@@ -252,7 +270,7 @@ function Header({ user, onTaskClick, onCorrClick }) {
 }
 
 // ── Sidebar ──────────────────────────────────────────────────
-function Sidebar({ activeView, onNav, user, unreadMsgs, corrBadges }) {
+function Sidebar({ activeView, onNav, user, unreadMsgs, corrBadges, circBadges }) {
   const { t } = useLang();
   const items = navItems(user, t, !!user?.id, isElectron);
   const inCorr = CORR_VIEWS.includes(activeView);
@@ -306,19 +324,22 @@ function Sidebar({ activeView, onNav, user, unreadMsgs, corrBadges }) {
         }
 
         return (
-          <div
-            key={item.id}
-            className={`sidebar-item${activeView === item.id ? ' active' : ''}`}
-            style={{ paddingInlineStart: '1.25rem', gap: '0.7rem' }}
-            onClick={() => onNav(item.id)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && onNav(item.id)}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{item.icon}</span>
-            <span style={{ flex: 1 }}>{item.label}</span>
-            {item.id === 'messages' && <NavBadge n={unreadMsgs} />}
-          </div>
+          <React.Fragment key={item.id}>
+            {item.dividerBefore && <div className="sidebar-divider" />}
+            <div
+              className={`sidebar-item${activeView === item.id ? ' active' : ''}`}
+              style={{ paddingInlineStart: '1.25rem', gap: '0.7rem' }}
+              onClick={() => onNav(item.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => e.key === 'Enter' && onNav(item.id)}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{item.icon}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.id === 'messages' && <NavBadge n={unreadMsgs} />}
+              {item.badge && <NavBadge n={circBadges?.[item.badge]} />}
+            </div>
+          </React.Fragment>
         );
       })}
     </aside>
@@ -343,6 +364,7 @@ function AppShell() {
   const [corrBadges, setCorrBadges]   = useState({ inbox: 0, approvals: 0, returned: 0 });
   const [corrApprovable, setCorrApprovable] = useState([]);
   const [corrRefresh, setCorrRefresh] = useState(0);
+  const [circBadges, setCircBadges]   = useState({ deputy_chairman: 0, director_general: 0 });
   // Set when another screen asks to open a specific conversation; Messages
   // reads it on mount and clears it.
   const [pendingConv, setPendingConv] = useState(null);
@@ -376,6 +398,22 @@ function AppShell() {
       .catch(() => { /* badges are cosmetic — never block the shell */ });
     return () => { cancelled = true; };
   }, [user?.id, view, corrRefresh]);
+
+  // Unread تعاميم. Polled on a timer as well as on nav, because a تعميم is
+  // published by another office — nothing the user does would refresh it, and a
+  // count that only moves on navigation is how a تعميم gets missed.
+  const loadCircBadges = useCallback(() => {
+    getCircStats()
+      .then(r => setCircBadges(r.unread || { deputy_chairman: 0, director_general: 0 }))
+      .catch(() => { /* badges are cosmetic — never block the shell */ });
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    loadCircBadges();
+    const id = setInterval(loadCircBadges, CIRC_POLL_MS);
+    return () => clearInterval(id);
+  }, [user?.id, view, loadCircBadges]);
 
   const openCorrEditor = useCallback(item => {
     setEditingCorr(item);
@@ -517,7 +555,8 @@ function AppShell() {
           onNav={handleNavAndClearTask}
           user={user}
           unreadMsgs={unreadMsgs}
-          corrBadges={corrBadges} />
+          corrBadges={corrBadges}
+          circBadges={circBadges} />
 
         <main className="app-main" id="main-content" tabIndex={-1}>
           {taskId ? (
@@ -533,9 +572,6 @@ function AppShell() {
                 onDiscuss={id => { setPendingConv({ conversationId: id }); handleNavAndClearTask('messages'); }}
                 onNavigate={handleNavAndClearTask}
                 refreshKey={corrRefresh} />
-              {/* Personal to-do list — its own table, unaffected by the
-                  correspondence merge, so it stays on the landing page. */}
-              <div style={{ marginTop: '1.25rem' }}><MyTasks /></div>
             </>
           ) : view === 'corr-new' ? (
             <NewCorrespondence
@@ -563,6 +599,8 @@ function AppShell() {
                 <Download size={14} strokeWidth={2} />{t.exportCSV}
               </button>
             </div>
+          ) : CIRC_VIEWS[view] ? (
+            <CircularsList source={CIRC_VIEWS[view]} onBadgeChange={loadCircBadges} />
           ) : view === 'directory' ? (
             <StaffDirectory
               onChat={u => { setPendingConv({ userId: u.id }); handleNavAndClearTask('messages'); }}
