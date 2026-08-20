@@ -134,6 +134,38 @@ function paragraph(text) {
                       line-height:1.9;white-space:pre-wrap;">${esc(text)}</div>`;
 }
 
+/**
+ * Isolate a value that may be Latin inside an Arabic line.
+ *
+ * Without this, «من: Abdulaziz Taha Alkubaesy — قسم تقنية المعلومات» renders as
+ * "Abdulaziz Taha Alkubaesyقسم تقنية المعلومات" — the bidi algorithm moves the
+ * separator to the far side of the Latin run and the two collide. <bdi> is the
+ * element for this but email clients do not support it reliably, so an explicit
+ * dir + unicode-bidi:isolate on a span is used instead.
+ */
+function ltr(v) {
+  return `<span dir="ltr" style="unicode-bidi:isolate;display:inline-block;">${esc(v)}</span>`;
+}
+
+/**
+ * Label/value table. Each field gets its OWN row — mixing a Latin name and an
+ * Arabic department on one line is what broke the correspondence email, and the
+ * fix is to stop putting them on the same line at all.
+ *
+ * Pass { label, value, latin } — latin:true isolates the value.
+ */
+function kvTable(fields) {
+  const rows = fields.filter(f => f && f.value).map(f => `
+    <tr>
+      <td style="padding:7px 0 7px 14px;font-family:Tahoma,Arial,sans-serif;font-size:12px;
+                 color:${BRAND.muted};white-space:nowrap;vertical-align:top;">${esc(f.label)}</td>
+      <td style="padding:7px 0;font-family:Tahoma,Arial,sans-serif;font-size:14px;
+                 color:${BRAND.ink};font-weight:bold;">${f.latin ? ltr(f.value) : esc(f.value)}</td>
+    </tr>`).join('');
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" dir="rtl"
+                 style="width:100%;">${rows}</table>`;
+}
+
 /** Small grey key/value line — «رقم التعميم: DC-2026-0001». */
 function meta(pairs) {
   return pairs.filter(p => p && p[1]).map(([k, v]) =>
@@ -141,4 +173,4 @@ function meta(pairs) {
        ${esc(k)}: <span style="color:${BRAND.ink};">${esc(v)}</span></div>`).join('');
 }
 
-module.exports = { layout, rowsTable, paragraph, meta, arabicPlural, CONVERSATIONS, esc, BRAND };
+module.exports = { layout, rowsTable, kvTable, paragraph, meta, ltr, arabicPlural, CONVERSATIONS, esc, BRAND };

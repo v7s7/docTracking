@@ -11,6 +11,7 @@
 const { db } = require('../db');
 const { sendMail } = require('./mailService');
 const { readConfig } = require('../services/configService');
+const { layout, kvTable } = require('./emailTemplate');
 const { approversOf, DEPT_APPROVER_ROLES } = require('../utils/approvals');
 const chat = require('./chatBridge');
 
@@ -69,20 +70,23 @@ const userById = id =>
 
 function emailBody(type, item) {
   const [title, action] = COPY[type] || ['إشعار مراسلة', ''];
-  const link = APP_URL ? `<p><a href="${APP_URL}" style="color:#1C7C1C">فتح النظام</a></p>` : '';
-  return `
-<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;font-size:14px;color:#1A1A1A">
-  <h2 style="color:#1C7C1C;margin:0 0 12px">${title}</h2>
-  <p style="margin:0 0 12px">${action}</p>
-  <table cellpadding="6" style="border-collapse:collapse;font-size:13px">
-    <tr><td style="color:#666">رقم المراسلة</td><td><b>${item.serial || ''}</b></td></tr>
-    <tr><td style="color:#666">الموضوع</td><td><b>${item.subject || ''}</b></td></tr>
-    <tr><td style="color:#666">من</td><td>${item.from_user_name || ''} — ${deptLabel(item.from_dept_id)}</td></tr>
-    <tr><td style="color:#666">إلى</td><td>${deptLabel(item.to_dept_id)}</td></tr>
-  </table>
-  ${link}
-  <p style="color:#888;font-size:12px;margin-top:16px">نظام المراسلات الداخلية</p>
-</div>`;
+  return layout({
+    title,
+    lead: action,
+    // One field per row. The old version put «الاسم — القسم» on a single line,
+    // and with a Latin name in an RTL paragraph the bidi algorithm threw the
+    // separator to the far side, so the two ran together as
+    // "Abdulaziz Taha Alkubaesyقسم تقنية المعلومات". Separate rows cannot collide.
+    bodyHtml: kvTable([
+      { label: 'رقم المراسلة', value: item.serial || '', latin: true },
+      { label: 'الموضوع',      value: item.subject || '' },
+      { label: 'المرسل',       value: item.from_user_name || '', latin: true },
+      { label: 'القسم المرسل', value: deptLabel(item.from_dept_id) },
+      { label: 'القسم المستلم', value: deptLabel(item.to_dept_id) },
+    ]),
+    ctaUrl: APP_URL,
+    ctaLabel: 'فتح المراسلة',
+  });
 }
 
 /**
