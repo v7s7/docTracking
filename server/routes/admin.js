@@ -344,4 +344,22 @@ router.post('/chat-reminders/run', ...SUPER_ONLY, async (req, res) => {
   }
 });
 
+// ── Email master switch ───────────────────────────────────────────────────
+// A runtime toggle so the system can be demonstrated, or tested against real
+// data, without mailing the whole organisation. Everything else — in-app
+// notifications, badges, read receipts — is unaffected either way.
+router.get('/email-switch', ...SUPER_ONLY, (req, res) => {
+  res.json({ success: true, ...emailStatus() });
+});
+
+router.put('/email-switch', ...SUPER_ONLY, (req, res) => {
+  const enabled = req.body?.enabled === true || req.body?.enabled === 'true';
+  setSetting('email_enabled', enabled ? 'true' : 'false', req.user?.username);
+  logAudit(req.user, enabled ? 'EMAIL_ENABLED' : 'EMAIL_DISABLED', 'setting', 'email_enabled', null, req.ip);
+  // Printed to the server console so the state is visible to whoever is
+  // watching the window, not only to whoever clicked it.
+  console.log(`[Mail] switch turned ${enabled ? 'ON' : 'OFF'} by ${req.user?.username || 'unknown'}`);
+  res.json({ success: true, ...emailStatus() });
+});
+
 module.exports = router;

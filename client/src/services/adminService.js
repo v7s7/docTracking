@@ -42,3 +42,8 @@ export const deleteRoleEntry  = (group)     => request('DELETE', `/admin/role-ma
 // Full config backup/restore
 export const getConfig        = ()          => request('GET',    '/admin/config');
 export const replaceConfig    = (config)    => request('PUT',    '/admin/config', { config });
+
+// Email master switch — off means nothing is sent, while every in-app
+// notification carries on as normal. Kept for testing and demonstrations.
+export const getEmailSwitch   = ()          => request('GET',    '/admin/email-switch');
+export const setEmailSwitch   = (enabled)   => request('PUT',    '/admin/email-switch', { enabled });

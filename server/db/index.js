@@ -413,6 +413,19 @@ if (!corrAttCols.includes('event_id')) {
 db.exec("CREATE INDEX IF NOT EXISTS idx_corr_att_event ON correspondence_attachments(event_id)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_corr_awaiting  ON correspondences(awaiting_dept_id, status)");
 
+// ── Runtime settings ─────────────────────────────────────────
+// Small key/value store for switches an administrator flips at runtime. In the
+// database rather than .env deliberately: .env needs a restart and a file edit
+// on the server, which is exactly what you cannot do mid-demo.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_by TEXT
+  );
+`);
+
 // ── Chat email bookkeeping ───────────────────────────────────
 // One row per (person, conversation) recording when we last emailed them about
 // it, so a busy thread cannot email the same person over and over while a

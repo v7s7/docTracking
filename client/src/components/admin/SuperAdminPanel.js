@@ -11,6 +11,7 @@ import {
   ChevronDown, ChevronRight, Plus, Edit2, Trash2, Info,
   Users, Settings2, LayoutTemplate, Monitor, Activity,
   LogOut, RefreshCw, ChevronLeft, Filter, ClipboardList,
+  Mail, MailX,
 } from 'lucide-react';
 import { useConfirm } from '../common/ConfirmDialog';
 
@@ -742,6 +743,77 @@ function AutoRolesTab({ t }) {
 }
 
 // ── Backup tab ─────────────────────────────────────────────────
+/**
+ * Master switch for outgoing email.
+ *
+ * Deliberately loud. A quiet toggle is how someone spends an afternoon
+ * debugging SMTP for mail that was switched off on purpose — so the current
+ * state is a coloured banner, not a checkbox, and the server logs every flip.
+ */
+function EmailSwitchCard({ t }) {
+  const [state, setState] = useState(null);
+  const [busy, setBusy]   = useState(false);
+  const [err, setErr]     = useState('');
+  const s = t.emailSwitch;
+
+  useEffect(() => {
+    api.getEmailSwitch().then(setState).catch(e => setErr(e.message));
+  }, []);
+
+  async function toggle() {
+    setBusy(true); setErr('');
+    try { setState(await api.setEmailSwitch(!state.enabled)); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  }
+
+  if (err)    return <div className="alert alert-error" style={{ marginBottom: '1.5rem' }}>{err}</div>;
+  if (!state) return null;
+
+  const on = state.enabled;
+  return (
+    <div style={{
+      border: `1px solid ${on ? 'var(--primary)' : '#F0DCA8'}`,
+      background: on ? '#F2F8F2' : '#FFFBEA',
+      borderRadius: 'var(--radius)', padding: '1rem 1.15rem', marginBottom: '1.75rem',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+        {on ? <Mail size={16} strokeWidth={2} style={{ color: 'var(--primary)' }} />
+            : <MailX size={16} strokeWidth={2} style={{ color: '#B7791F' }} />}
+        <strong style={{ fontSize: '1rem' }}>{s.title}</strong>
+        <span className="badge" style={{
+          background: on ? '#EAF4EA' : '#FFF3D6',
+          color: on ? '#2D6E2D' : '#B7791F',
+          padding: '0.15rem 0.6rem', fontWeight: 700,
+        }}>{on ? s.on : s.off}</span>
+
+        <button
+          className={`btn btn-sm ${on ? 'btn-secondary' : 'btn-primary'}`}
+          style={{ marginInlineStart: 'auto' }}
+          disabled={busy}
+          onClick={toggle}>
+          {on ? s.turnOff : s.turnOn}
+        </button>
+      </div>
+
+      <p className="text-sm" style={{ margin: '0.6rem 0 0', color: 'var(--text-2)' }}>
+        {on ? s.onNote : s.offNote}
+      </p>
+      <p className="text-sm text-muted" style={{ margin: '0.35rem 0 0' }}>{s.note}</p>
+
+      {/* The switch being on does not mean mail can actually leave the building. */}
+      {on && !state.smtpConfigured && (
+        <p className="text-sm" style={{ margin: '0.5rem 0 0', color: '#B7791F', fontWeight: 600 }}>{s.noSmtp}</p>
+      )}
+      {state.updated_by && (
+        <p className="text-sm text-muted" style={{ margin: '0.45rem 0 0' }}>
+          {s.changedBy.replace('{who}', state.updated_by).replace('{when}', state.updated_at || '')}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function BackupTab({ t }) {
   const [raw, setRaw] = useState('');
   const [msg, setMsg] = useState({ text: '', type: 'error' });
@@ -775,6 +847,7 @@ function BackupTab({ t }) {
     <div>
       <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 700 }}>{t.config}</h3>
       <p className="text-sm text-muted" style={{ marginBottom: '1.25rem' }}>{t.cfgNote}</p>
+      <EmailSwitchCard t={t} />
       <Flash msg={msg.text} type={msg.type} />
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
         <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
