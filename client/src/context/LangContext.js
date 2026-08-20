@@ -396,6 +396,7 @@ const T = {
       titleAndBodyRequired: 'Title and text are both required.',
       publishWarning: 'Once published, every employee sees this circular and is emailed about it.',
       readBy: 'Read by {n} of {total}', notReadYet: 'Not read yet',
+      existingAttachments: '{n} attachment(s) already on this circular',
     },
     groupLabels: {
       board_office:                'Deputy Chairman Office',
@@ -1068,6 +1069,7 @@ const T = {
       titleAndBodyRequired: 'العنوان والنص مطلوبان.',
       publishWarning: 'بعد الإصدار سيظهر التعميم لجميع الموظفين وسيصلهم إشعار بالبريد.',
       readBy: 'قرأه {n} من {total}', notReadYet: 'لم يقرأه بعد',
+      existingAttachments: 'يوجد {n} مرفق على هذا التعميم',
     },
     groupLabels: {
       board_office:                'مكتب نائب الرئيس',

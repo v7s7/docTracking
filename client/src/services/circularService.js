@@ -16,7 +16,11 @@ async function req(path, opts = {}) {
     },
     ...opts,
   });
-  const data = await res.json();
+  // Read defensively. A 502, a restart mid-request or a dropped connection
+  // returns HTML or nothing at all, and res.json() then throws its own English
+  // message — "Failed to fetch" — straight into an Arabic red alert.
+  let data = {};
+  try { data = await res.json(); } catch (_) { /* not JSON — fall through */ }
   if (!res.ok) throw new Error(data.message || 'تعذر تنفيذ الطلب');
   return data;
 }

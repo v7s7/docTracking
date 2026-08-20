@@ -128,7 +128,7 @@ export default function NewCircular({ source, editing, onClose, onSaved }) {
 
             {!!editing?.attachments?.length && (
               <div className="corr-attach-hint" style={{ marginTop: '0.5rem' }}>
-                {t.corr.existingAttachments.replace('{n}', editing.attachments.length)}
+                {c.existingAttachments.replace('{n}', editing.attachments.length)}
               </div>
             )}
 

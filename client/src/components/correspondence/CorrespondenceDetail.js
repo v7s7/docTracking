@@ -10,7 +10,7 @@ import {
 import { StatusBadge, PriorityBadge, ExtLink, EVENT_ICONS, EVENT_COLORS, fmtDate, fmtDateTime, fmtSize } from './constants';
 import PrintLetter from './PrintLetter';
 
-export default function CorrespondenceDetail({ item, canApprove, onClose, onChanged, onEdit, onDiscuss }) {
+export default function CorrespondenceDetail({ item, canApprove, myDepartments = [], onClose, onChanged, onEdit, onDiscuss }) {
   const { t, deptName } = useLang();
   const { user } = useAuth();
   const toast = useToast();
@@ -26,7 +26,11 @@ export default function CorrespondenceDetail({ item, canApprove, onClose, onChan
 
   if (!item) return null;
 
-  const myDepts = [user?.dept_id].filter(Boolean);
+  // The server's answer, not a guess. myDepartments() server-side is this
+  // person's own department PLUS any they lead, and two people here head a
+  // second one — deriving it as [user.dept_id] gave them an inbox badge and
+  // then no تم الإنجاز button on the memo it pointed at.
+  const myDepts = myDepartments.length ? myDepartments : [user?.dept_id].filter(Boolean);
   const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(user?.role);
 
   const showApprove  = item.status === 'pending'  && canApprove;

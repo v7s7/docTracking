@@ -301,6 +301,12 @@ router.get('/stats', AUTH, (req, res) => {
     },
     badges: { inbox: inboxBadge, approvals: approvalsBadge, returned: returnedBadge },
     canApproveFor: approvable,
+    // The departments this person ACTS FOR — their own, plus any they lead. The
+    // client used to re-derive this as [user.dept_id], which is wrong for the
+    // two people who head a second department (علي محمد قمبر, علي عبدالرحمن مطر):
+    // they got an inbox badge and then no تم الإنجاز button on the memo it
+    // pointed at, because the server and the client disagreed on who they are.
+    myDepartments: mine,
   });
 });
 

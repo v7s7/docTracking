@@ -363,6 +363,7 @@ function AppShell() {
   const [editingCorr, setEditingCorr] = useState(null);
   const [corrBadges, setCorrBadges]   = useState({ inbox: 0, approvals: 0, returned: 0 });
   const [corrApprovable, setCorrApprovable] = useState([]);
+  const [corrMyDepts, setCorrMyDepts]       = useState([]);
   const [corrRefresh, setCorrRefresh] = useState(0);
   const [circBadges, setCircBadges]   = useState({ deputy_chairman: 0, director_general: 0 });
   // Set when another screen asks to open a specific conversation; Messages
@@ -394,6 +395,7 @@ function AppShell() {
         if (cancelled) return;
         setCorrBadges(r.badges || { inbox: 0, approvals: 0, returned: 0 });
         setCorrApprovable(r.canApproveFor || []);
+        setCorrMyDepts(r.myDepartments || []);
       })
       .catch(() => { /* badges are cosmetic — never block the shell */ });
     return () => { cancelled = true; };
@@ -591,6 +593,7 @@ function AppShell() {
             <CorrespondenceList
               box={view.replace('corr-', '')}
               canApproveFor={corrApprovable}
+              myDepartments={corrMyDepts}
               onEdit={openCorrEditor}
               onDiscuss={id => { setPendingConv({ conversationId: id }); handleNavAndClearTask('messages'); }}
               refreshKey={corrRefresh} />

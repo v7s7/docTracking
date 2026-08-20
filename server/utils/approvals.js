@@ -160,9 +160,16 @@ function visibilityClause(user, table = 'c') {
   }
 
   if (inList) {
+    // awaiting_dept_id is load-bearing here, not a nicety. Since correspondence
+    // became two-way, a memo a COLLEAGUE sent can come back to this department
+    // after a reply — from_user_id is not me and to_dept_id is the other side,
+    // so the first two terms both miss it. The inbox query already lists it
+    // (routes/correspondence.js, box === 'inbox'), so without this term the row
+    // appears in the list, counts toward the badge, and then 403s when opened
+    // through loadVisible.
     return {
-      clause: `(${table}.from_user_id = ? OR ${table}.to_dept_id IN (${inList}))`,
-      params: [user?.id ?? -1, ...depts],
+      clause: `(${table}.from_user_id = ? OR ${table}.to_dept_id IN (${inList}) OR ${table}.awaiting_dept_id IN (${inList}))`,
+      params: [user?.id ?? -1, ...depts, ...depts],
     };
   }
 

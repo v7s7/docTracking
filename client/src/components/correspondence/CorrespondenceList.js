@@ -19,7 +19,7 @@ const BOXES = {
   archive:   { icon: ArchiveIcon,  variant: 'table', chips: ['', 'done', 'approved', 'returned', 'pending'] },
 };
 
-export default function CorrespondenceList({ box, canApproveFor = [], onEdit, onDiscuss, refreshKey }) {
+export default function CorrespondenceList({ box, canApproveFor = [], myDepartments = [], onEdit, onDiscuss, refreshKey }) {
   const { t, deptName } = useLang();
   const { user } = useAuth();
   const toast = useToast();
@@ -136,7 +136,7 @@ export default function CorrespondenceList({ box, canApproveFor = [], onEdit, on
                             to قسم A after a reply, so "in the inbox" is no longer
                             the same as "we are the receiving department". Only
                             قسم B closes, so check that explicitly. */}
-                        {box === 'inbox' && it.status === 'approved' && it.to_dept_id === user?.dept_id && (
+                        {box === 'inbox' && it.status === 'approved' && myDepartments.includes(it.to_dept_id) && (
                           <button
                             className="btn btn-primary btn-sm"
                             disabled={busyId === it.id}
@@ -204,6 +204,7 @@ export default function CorrespondenceList({ box, canApproveFor = [], onEdit, on
         <CorrespondenceDetail
           item={open}
           canApprove={canApproveThis(open)}
+          myDepartments={myDepartments}
           onClose={() => setOpen(null)}
           onChanged={updated => { setOpen(updated); load(); }}
           onEdit={it => { setOpen(null); onEdit?.(it); }}

@@ -396,11 +396,11 @@ function DirectoryPanel({ onPick, onPickDept, onClose, t }) {
                 <>
                   <div className="msg-dir-section">{t.departmentsSection}</div>
                   {filteredDepts.map(d => (
-                    <div key={d.id} className="msg-person-item" onClick={() => onPickDept(d)} role="button" tabIndex={0}
+                    <div key={d.id} className="msg-list-item" onClick={() => onPickDept(d)} role="button" tabIndex={0}
                       onKeyDown={e => e.key === 'Enter' && onPickDept(d)}>
                       <div className="msg-avatar dept"><Building2 size={18} strokeWidth={1.8} /></div>
-                      <div className="msg-person-body">
-                        <div className="msg-person-name">{t.groupLabels?.[d.id] || d.label}</div>
+                      <div className="msg-list-item-body">
+                        <div className="msg-list-item-name">{t.groupLabels?.[d.id] || d.label}</div>
                       </div>
                     </div>
                   ))}
