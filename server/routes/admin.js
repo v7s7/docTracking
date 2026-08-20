@@ -5,6 +5,8 @@ const { verifyToken, requireRole } = require('../middleware/authMiddleware');
 const { readConfig, writeConfig }  = require('../services/configService');
 const { runReminderCheck }         = require('../services/reminderService');
 const { runChatReminderCheck }     = require('../services/chatReminderService');
+const { emailStatus, setSetting }  = require('../services/settingsService');
+const { logAudit }                 = require('../utils/audit');
 
 const router    = express.Router();
 const SUPER_ONLY = [verifyToken, requireRole('SUPER_ADMIN')];
