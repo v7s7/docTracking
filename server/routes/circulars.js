@@ -21,6 +21,7 @@ const { db }          = require('../db');
 const { verifyToken } = require('../middleware/authMiddleware');
 const { logAudit }    = require('../utils/audit');
 const { decodeUploadName } = require('../utils/uploadName');
+const store = require('../utils/attachmentStore');
 const { sendMail }    = require('../services/mailService');
 const {
   SOURCES, sourceCode, isSource,
@@ -40,11 +41,9 @@ const MAX_BYTES   = 10 * 1024 * 1024;
 const BLOCKED_EXT = ['.exe', '.bat', '.cmd', '.sh', '.msi', '.com', '.scr', '.ps1'];
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-    filename: (_req, file, cb) =>
-      cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`),
-  }),
+  // Staged first, then filed under 2026/<serial>/ once the serial exists —
+  // multer runs before the handler, so it cannot know the serial yet.
+  storage: store.stagingStorage(multer, UPLOAD_DIR),
   limits: { fileSize: MAX_BYTES },
   fileFilter: (_req, file, cb) => {
     if (BLOCKED_EXT.includes(path.extname(file.originalname).toLowerCase())) {
@@ -235,7 +234,8 @@ router.get('/:id/attachments/:attId', AUTH, (req, res) => {
   ).get(req.params.attId, row.id);
   if (!att) return res.status(404).json({ success: false, message: 'المرفق غير موجود.' });
 
-  const full = path.join(UPLOAD_DIR, path.basename(att.stored_name));
+  const full = store.resolveStored(UPLOAD_DIR, att.stored_name);
+  if (!full) return res.status(400).json({ success: false, message: 'مسار المرفق غير صالح.' });
   if (!fs.existsSync(full)) {
     return res.status(410).json({ success: false, message: 'الملف لم يعد موجوداً على الخادم.' });
   }
@@ -283,7 +283,7 @@ router.post('/', AUTH, withUploads, (req, res) => {
         VALUES (?, ?, ?, ?, ?)
       `);
       for (const f of req.files || []) {
-        ins.run(id, path.basename(f.path), decodeUploadName(f.originalname), f.mimetype, f.size);
+        ins.run(id, store.stagedName(path.basename(f.path)), decodeUploadName(f.originalname), f.mimetype, f.size);
       }
 
       // The publisher has plainly read their own تعميم.
@@ -294,6 +294,10 @@ router.post('/', AUTH, withUploads, (req, res) => {
     return fail(req, res, 500, 'تعذر إصدار التعميم.');
   }
 
+
+  // Move the uploads out of staging into 2026/<serial>/ now the row exists.
+  store.fileAll(db, UPLOAD_DIR, { table: 'circular_attachments',
+    idColumn: 'circular_id', recordId: id, serial: serial, createdAt: db.prepare('SELECT created_at FROM circulars WHERE id = ?').get(id)?.created_at });
   logAudit(user, 'CIRCULAR_PUBLISHED', 'circular', id, { serial, source }, req.ip);
   emailEveryone({ id, serial, source, title: String(title).trim() });
 
@@ -329,10 +333,14 @@ router.put('/:id', AUTH, withUploads, (req, res) => {
       VALUES (?, ?, ?, ?, ?)
     `);
     for (const f of req.files || []) {
-      ins.run(row.id, path.basename(f.path), decodeUploadName(f.originalname), f.mimetype, f.size);
+      ins.run(row.id, store.stagedName(path.basename(f.path)), decodeUploadName(f.originalname), f.mimetype, f.size);
     }
   })();
 
+
+  // Move the uploads out of staging into 2026/<serial>/ now the row exists.
+  store.fileAll(db, UPLOAD_DIR, { table: 'circular_attachments',
+    idColumn: 'circular_id', recordId: row.id, serial: row.serial, createdAt: row.created_at });
   logAudit(req.user, 'CIRCULAR_EDITED', 'circular', row.id, { serial: row.serial }, req.ip);
   res.json({ success: true });
 });
@@ -348,7 +356,10 @@ router.delete('/:id', AUTH, (req, res) => {
   const files = db.prepare('SELECT stored_name FROM circular_attachments WHERE circular_id = ?').all(row.id);
   // ON DELETE CASCADE clears circular_attachments and circular_reads.
   db.prepare('DELETE FROM circulars WHERE id = ?').run(row.id);
-  for (const f of files) fs.unlink(path.join(UPLOAD_DIR, path.basename(f.stored_name)), () => {});
+  for (const f of files) {
+    const p = store.resolveStored(UPLOAD_DIR, f.stored_name);
+    if (p) fs.unlink(p, () => {});
+  }
 
   logAudit(req.user, 'CIRCULAR_DELETED', 'circular', row.id, { serial: row.serial }, req.ip);
   res.json({ success: true });

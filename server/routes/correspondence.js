@@ -19,6 +19,7 @@ const { db }          = require('../db');
 const { verifyToken, requireStaff } = require('../middleware/authMiddleware');
 const { logAudit }    = require('../utils/audit');
 const { decodeUploadName } = require('../utils/uploadName');
+const store = require('../utils/attachmentStore');
 const { readConfig }  = require('../services/configService');
 const { resolveSubject, OTHER_SERVICE_ID } = require('../utils/serviceScope');
 const {
@@ -41,11 +42,10 @@ const MAX_BYTES   = 10 * 1024 * 1024;               // 10MB, per the build brief
 const BLOCKED_EXT = ['.exe', '.bat', '.cmd', '.sh', '.msi', '.com', '.scr', '.ps1'];
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-    filename: (_req, file, cb) =>
-      cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`),
-  }),
+  // Uploads land in a staging folder first. multer runs before the handler, so
+  // the serial this file belongs to does not exist yet; they are moved into
+  // 2026/IT-2026-001/ once the row is committed and the serial is known.
+  storage: store.stagingStorage(multer, UPLOAD_DIR),
   limits: { fileSize: MAX_BYTES },
   fileFilter: (_req, file, cb) => {
     if (BLOCKED_EXT.includes(path.extname(file.originalname).toLowerCase())) {
@@ -622,7 +622,10 @@ router.get('/:id/attachments/:attId', AUTH, (req, res) => {
   ).get(req.params.attId, row.id);
   if (!att) return res.status(404).json({ success: false, message: 'المرفق غير موجود.' });
 
-  const full = path.join(UPLOAD_DIR, path.basename(att.stored_name));
+  // resolveStored allows subdirectories but still refuses anything escaping
+  // UPLOAD_DIR. path.basename() would have flattened the new nested paths.
+  const full = store.resolveStored(UPLOAD_DIR, att.stored_name);
+  if (!full) return res.status(400).json({ success: false, message: 'مسار المرفق غير صالح.' });
   if (!fs.existsSync(full)) {
     return res.status(410).json({ success: false, message: 'الملف لم يعد موجوداً على الخادم.' });
   }
@@ -663,7 +666,7 @@ router.post('/', AUTH, requireStaff, withUploads, (req, res) => {
       db.prepare(`
         INSERT INTO correspondence_attachments (correspondence_id, stored_name, file_name, file_type, file_size)
         VALUES (?, ?, ?, ?, ?)
-      `).run(id, f.filename, decodeUploadName(f.originalname), f.mimetype, f.size);
+      `).run(id, store.stagedName(f.filename), decodeUploadName(f.originalname), f.mimetype, f.size);
     }
     addEvent(id, 'created', user, null, 0);
     return id;
@@ -677,9 +680,18 @@ router.post('/', AUTH, requireStaff, withUploads, (req, res) => {
     return res.status(500).json({ success: false, message: 'تعذر إنشاء المراسلة.' });
   }
 
+
   logAudit(user, 'CORRESPONDENCE_CREATED', 'correspondence', id,
     { to_dept_id, service_id: resolved.serviceId, priority }, req.ip);
-  const created = hydrate(db.prepare('SELECT * FROM correspondences WHERE id = ?').get(id));
+  const row = db.prepare('SELECT * FROM correspondences WHERE id = ?').get(id);
+
+  // Move the uploads out of staging into 2026/<serial>/ now the serial exists.
+  // After the row is read, not before — the serial is assigned inside the
+  // transaction and there is nothing to name the folder after until then.
+  store.fileAll(db, UPLOAD_DIR, { table: 'correspondence_attachments',
+    idColumn: 'correspondence_id', recordId: id, serial: row.serial, createdAt: row.created_at });
+
+  const created = hydrate(row);
   notify.onSubmitted(created);
   res.status(201).json({ success: true, item: created });
 });
@@ -716,7 +728,7 @@ router.put('/:id', AUTH, withUploads, (req, res) => {
       db.prepare(`
         INSERT INTO correspondence_attachments (correspondence_id, stored_name, file_name, file_type, file_size)
         VALUES (?, ?, ?, ?, ?)
-      `).run(row.id, f.filename, decodeUploadName(f.originalname), f.mimetype, f.size);
+      `).run(row.id, store.stagedName(f.filename), decodeUploadName(f.originalname), f.mimetype, f.size);
     }
     addEvent(row.id, 'resubmitted', user, null, 0);
   });
@@ -728,6 +740,10 @@ router.put('/:id', AUTH, withUploads, (req, res) => {
     return res.status(500).json({ success: false, message: 'تعذر إعادة إرسال المراسلة.' });
   }
 
+
+  // Move the uploads out of staging into 2026/<serial>/ now the row exists.
+  store.fileAll(db, UPLOAD_DIR, { table: 'correspondence_attachments',
+    idColumn: 'correspondence_id', recordId: row.id, serial: row.serial, createdAt: row.created_at });
   logAudit(user, 'CORRESPONDENCE_RESUBMITTED', 'correspondence', row.id, null, req.ip);
   const resent = hydrate(db.prepare('SELECT * FROM correspondences WHERE id = ?').get(row.id));
   notify.onSubmitted(resent);
@@ -752,8 +768,15 @@ router.post('/:id/discuss', AUTH, (req, res) => {
     otherId = row.from_user_id;
   } else {
     const names = approversOf(row.from_dept_id);
+    // `AND id != ?` matters here, not just in the fallback below. A رئيس قسم is
+    // named as his own department's approver, so for a memo he wrote himself
+    // this query returns HIM — and the discussion becomes a conversation with
+    // yourself. Excluding him lets it fall through to the deputy, and then to
+    // the honest "nobody to talk to" message.
     const cand = names.length
-      ? db.prepare(`SELECT id FROM users WHERE is_active = 1 AND username IN (${names.map(() => '?').join(',')}) LIMIT 1`).get(...names)
+      ? db.prepare(
+          `SELECT id FROM users WHERE is_active = 1 AND username IN (${names.map(() => '?').join(',')}) AND id != ? LIMIT 1`
+        ).get(...names, me)
       : null;
     otherId = cand?.id || db.prepare(
       `SELECT id FROM users WHERE is_active = 1 AND dept_id = ? AND role IN ('MANAGER','ADMIN') AND id != ? LIMIT 1`
@@ -878,13 +901,17 @@ router.post('/:id/reply', AUTH, withUploads, (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?)
     `);
     for (const f of req.files || []) {
-      ins.run(row.id, path.basename(f.path), decodeUploadName(f.originalname), f.mimetype, f.size, eventId);
+      ins.run(row.id, store.stagedName(path.basename(f.path)), decodeUploadName(f.originalname), f.mimetype, f.size, eventId);
     }
     db.prepare(
       "UPDATE correspondences SET awaiting_dept_id = ?, updated_at = datetime('now','localtime') WHERE id = ?"
     ).run(nextDept, row.id);
   })();
 
+
+  // Move the uploads out of staging into 2026/<serial>/ now the row exists.
+  store.fileAll(db, UPLOAD_DIR, { table: 'correspondence_attachments',
+    idColumn: 'correspondence_id', recordId: row.id, serial: row.serial, createdAt: row.created_at });
   logAudit(user, 'CORRESPONDENCE_REPLIED', 'correspondence', row.id, { to: nextDept }, req.ip);
   res.json({ success: true });
 });
