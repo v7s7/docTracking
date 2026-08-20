@@ -87,7 +87,37 @@ const PRIORITIES = ['high', 'med', 'low'];
 const deptLabel = id =>
   (readConfig().departments || []).find(d => d.id === id)?.label || id || '';
 
-const serialFor = id => `MSG-${String(id).padStart(4, '0')}`;
+/**
+ * Reference numbers people can actually use: IT-2026-001.
+ *
+ *   IT    the SENDING department's code, from config/departments.json
+ *   2026  the year, so the count restarts each January and a number's age is
+ *         obvious without looking it up
+ *   001   that department's own sequence for that year
+ *
+ * Replaces MSG-0004, which said nothing about who sent it or when.
+ *
+ * The existing MSG- serials are deliberately left alone. They are already in
+ * sent email and on people's desks, and a reference that no longer resolves is
+ * worse than a mixed format.
+ *
+ * Safe to compute with MAX inside the create transaction: better-sqlite3 is
+ * synchronous, so two requests cannot interleave between the read and the
+ * write, and `serial` is UNIQUE as a backstop.
+ */
+const deptCode = id =>
+  (readConfig().departments || []).find(d => d.id === id)?.code || 'GEN';
+
+function nextSerial(fromDeptId) {
+  const code = deptCode(fromDeptId);
+  const year = new Date().getFullYear();
+  const row = db.prepare(
+    `SELECT serial FROM correspondences
+      WHERE serial LIKE ? ORDER BY serial DESC LIMIT 1`
+  ).get(`${code}-${year}-%`);
+  const n = row ? (parseInt(String(row.serial).split('-').pop(), 10) || 0) + 1 : 1;
+  return `${code}-${year}-${String(n).padStart(3, '0')}`;
+}
 
 function hydrate(row) {
   if (!row) return null;
@@ -610,8 +640,7 @@ router.post('/', AUTH, requireStaff, withUploads, (req, res) => {
   if (!String(body || '').trim())     return fail(req, res, 400, 'نص المراسلة مطلوب.');
   if (!PRIORITIES.includes(priority)) return fail(req, res, 400, 'الأولوية غير صحيحة.');
 
-  // One transaction: insert, stamp the serial from the row id (so two
-  // simultaneous creates can never compute the same number), attach files.
+  // One transaction: insert, stamp the department-scoped serial, attach files.
   const create = db.transaction(() => {
     const info = db.prepare(`
       INSERT INTO correspondences
@@ -622,7 +651,7 @@ router.post('/', AUTH, requireStaff, withUploads, (req, res) => {
       user.id || null, user.name || user.username, fromDeptId, to_dept_id, priority,
     );
     const id = info.lastInsertRowid;
-    db.prepare('UPDATE correspondences SET serial = ? WHERE id = ?').run(serialFor(id), id);
+    db.prepare('UPDATE correspondences SET serial = ? WHERE id = ?').run(nextSerial(fromDeptId), id);
 
     for (const f of req.files || []) {
       db.prepare(`

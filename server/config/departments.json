@@ -17,7 +17,8 @@
         "username": null,
         "ext": "5033",
         "mobile": "33998086"
-      }
+      },
+      "code": "VP"
     },
     {
       "id": "director_general_office",
@@ -35,7 +36,8 @@
         "username": "b.yassen",
         "ext": "5004",
         "mobile": "36737776"
-      }
+      },
+      "code": "DG"
     },
     {
       "id": "advisors_office",
@@ -53,7 +55,8 @@
         "username": null,
         "ext": "5030",
         "mobile": "38314329"
-      }
+      },
+      "code": "ADV"
     },
     {
       "id": "strategic_planning_dept",
@@ -114,7 +117,8 @@
             "resources_information_dept"
           ]
         }
-      ]
+      ],
+      "code": "SP"
     },
     {
       "id": "investments_dept",
@@ -132,7 +136,8 @@
         "username": "a.khashman",
         "ext": "5043",
         "mobile": "33344465"
-      }
+      },
+      "code": "INV"
     },
     {
       "id": "revenue_collection_dept",
@@ -150,7 +155,8 @@
         "username": "m.alansari",
         "ext": "5081",
         "mobile": "36860800"
-      }
+      },
+      "code": "REV"
     },
     {
       "id": "endowment_disbursement_dept",
@@ -326,7 +332,8 @@
         "username": "k.almutawa",
         "ext": "5007",
         "mobile": "32288979"
-      }
+      },
+      "code": "DIS"
     },
     {
       "id": "sharia_studies_dept",
@@ -344,7 +351,8 @@
         "username": "y.almubarak",
         "ext": "5093",
         "mobile": "39363338"
-      }
+      },
+      "code": "SHR"
     },
     {
       "id": "legal_affairs_dept",
@@ -362,7 +370,8 @@
         "username": "a.aldoseri",
         "ext": "5088",
         "mobile": "39691165"
-      }
+      },
+      "code": "LEG"
     },
     {
       "id": "legal_counsel_office",
@@ -375,7 +384,8 @@
         "ext": "5029",
         "mobile": "39453911"
       },
-      "deputy": null
+      "deputy": null,
+      "code": "LC"
     },
     {
       "id": "engineering_services_dept",
@@ -510,7 +520,8 @@
         "username": "k.alkawwari",
         "ext": "5084",
         "mobile": "33558869"
-      }
+      },
+      "code": "ENG"
     },
     {
       "id": "accounts_dept",
@@ -660,7 +671,8 @@
         "username": "a.shafie",
         "ext": "5009",
         "mobile": "39966607"
-      }
+      },
+      "code": "ACC"
     },
     {
       "id": "hr_dept",
@@ -849,7 +861,8 @@
             "mosques_guidance_dept"
           ]
         }
-      ]
+      ],
+      "code": "HR"
     },
     {
       "id": "procurement_dept",
@@ -867,7 +880,8 @@
         "username": "j.darraj",
         "ext": "5034",
         "mobile": "39666921"
-      }
+      },
+      "code": "PRC"
     },
     {
       "id": "it_dept",
@@ -885,13 +899,15 @@
         "username": "a.khairi",
         "ext": "5010",
         "mobile": "33036364"
-      }
+      },
+      "code": "IT"
     },
     {
       "id": "resources_information_dept",
       "label": "قسم الموارد والمعلومات",
       "ldapGroup": "resources_information_dept",
-      "services": []
+      "services": [],
+      "code": "RI"
     },
     {
       "id": "admin_affairs_dept",
@@ -909,7 +925,8 @@
         "username": "Ateyatalla.alkhalifa",
         "ext": "4044",
         "mobile": "36711111"
-      }
+      },
+      "code": "ADM"
     },
     {
       "id": "mosques_guidance_dept",
@@ -927,7 +944,8 @@
         "username": null,
         "ext": "5045",
         "mobile": "66939909"
-      }
+      },
+      "code": "MSQ"
     },
     {
       "id": "community_relations_dept",
@@ -945,7 +963,8 @@
         "username": "a.ghaith",
         "ext": "5036",
         "mobile": "39881002"
-      }
+      },
+      "code": "COM"
     },
     {
       "id": "maintenance_dept",
@@ -977,7 +996,8 @@
           "number": "35117350",
           "label": "خط مباشر"
         }
-      ]
+      ],
+      "code": "MNT"
     },
     {
       "id": "reception_dept",
@@ -1109,13 +1129,15 @@
             }
           ]
         }
-      ]
+      ],
+      "code": "REC"
     },
     {
       "id": "other_dept",
       "label": "أخرى",
       "ldapGroup": "other_dept",
-      "services": []
+      "services": [],
+      "code": "OTH"
     }
   ],
   "roleGroupMap": {

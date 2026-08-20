@@ -16,6 +16,7 @@
 // published until someone is named. Filling in `head` / `deputy` there is a
 // config edit; no code changes.
 const { approversOf, sameUser } = require('./approvals');
+const { readConfig } = require('../services/configService');
 
 // Ids double as the `source` column value in the circulars table, and the
 // CHECK constraint there must be kept in step with this list.
@@ -32,11 +33,21 @@ const SOURCE_DEPT = {
   director_general: 'director_general_office',
 };
 
-// source → serial prefix, e.g. DC-2026-0001 / DG-2026-0001.
-const SOURCE_CODE = {
-  deputy_chairman:  'DC',
-  director_general: 'DG',
-};
+/**
+ * Serial prefix for each kind — VP-2026-001 / DG-2026-001.
+ *
+ * Read from the signing office's `code` in config/departments.json rather than
+ * hardcoded, so a تعميم and a correspondence from the same office carry the
+ * same prefix and there is one place to change it. Falls back to a literal only
+ * if the config is somehow missing the field.
+ */
+const FALLBACK_CODE = { deputy_chairman: 'VP', director_general: 'DG' };
+
+function sourceCode(source) {
+  const deptId = SOURCE_DEPT[source];
+  const { departments = [] } = readConfig();
+  return departments.find(d => d.id === deptId)?.code || FALLBACK_CODE[source] || 'GEN';
+}
 
 function isSource(source) {
   return SOURCES.includes(source);
@@ -76,7 +87,7 @@ function canModifyCircular(user, row) {
 module.exports = {
   SOURCES,
   SOURCE_DEPT,
-  SOURCE_CODE,
+  sourceCode,
   isSource,
   deptOfSource,
   canPublishCircular,

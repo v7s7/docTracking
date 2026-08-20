@@ -23,7 +23,7 @@ const { logAudit }    = require('../utils/audit');
 const { decodeUploadName } = require('../utils/uploadName');
 const { sendMail }    = require('../services/mailService');
 const {
-  SOURCES, SOURCE_CODE, isSource,
+  SOURCES, sourceCode, isSource,
   canPublishCircular, publishableSources, canModifyCircular,
 } = require('../utils/circularAuth');
 
@@ -79,14 +79,15 @@ function fail(req, res, code, message) {
 
 // ── Serial: DC-2026-0001 / DG-2026-0001 ───────────────────────────────────
 function nextSerial(source) {
-  const prefix = SOURCE_CODE[source];
+  // Same shape as correspondence — VP-2026-001 — and the prefix comes from the
+  // signing office's code in departments.json, so both features stay in step.
+  const prefix = sourceCode(source);
   const year   = new Date().getFullYear();
-  const like   = `${prefix}-${year}-%`;
   const last   = db.prepare(
-    'SELECT serial FROM circulars WHERE serial LIKE ? ORDER BY id DESC LIMIT 1'
-  ).get(like);
+    'SELECT serial FROM circulars WHERE serial LIKE ? ORDER BY serial DESC LIMIT 1'
+  ).get(`${prefix}-${year}-%`);
   const n = last ? (parseInt(String(last.serial).split('-').pop(), 10) || 0) + 1 : 1;
-  return `${prefix}-${year}-${String(n).padStart(4, '0')}`;
+  return `${prefix}-${year}-${String(n).padStart(3, '0')}`;
 }
 
 const attachmentsOf = id => db.prepare(
