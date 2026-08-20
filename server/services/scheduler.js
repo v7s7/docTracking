@@ -3,8 +3,9 @@
 // reminder check, plus a more frequent check for chat messages sitting
 // unread too long. Both are safe to run any number of times —
 // runReminderCheck dedupes per task per calendar day via
-// tasks.last_reminder_at, and runChatReminderCheck dedupes per user per
-// calendar day via users.last_chat_reminder_at.
+// tasks.last_reminder_at, and runChatReminderCheck dedupes per
+// (person, conversation) via chat_email_log, and returns early when the master
+// email switch is off.
 const cron = require('node-cron');
 const { runReminderCheck } = require('./reminderService');
 const { runChatReminderCheck } = require('./chatReminderService');
@@ -23,7 +24,11 @@ function start() {
   // something unread, and nothing at all otherwise.
   cron.schedule('* * * * *', () => {
     runChatReminderCheck()
-      .then(r => console.log('[Chat reminders] Run:', r))
+      // Logged only when it actually did something. A line a minute reporting
+      // that nothing happened is 1,440 a day, and a real error scrolls out of
+      // reach between them — which is how a 500 sat unnoticed in this very log.
+      // The startup run below always prints, so "is it alive?" still has an answer.
+      .then(r => { if (r.notified || r.emailed) console.log('[Chat reminders] Run:', r); })
       .catch(err => console.error('[Chat reminders] Run failed:', err.message));
   });
 

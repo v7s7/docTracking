@@ -9,6 +9,7 @@
 // conversation in the afternoon sent nothing at all.
 const { db } = require('../db');
 const { sendMail } = require('./mailService');
+const { isEmailEnabled } = require('./settingsService');
 const { readConfig } = require('./configService');
 const { layout, rowsTable, arabicPlural, CONVERSATIONS } = require('./emailTemplate');
 
@@ -152,6 +153,15 @@ function emailableConversations(userId, stale, renudgeIso) {
 }
 
 async function runChatReminderCheck() {
+  // The master switch being off is a deliberate setting, not a transient SMTP
+  // failure, and the two must not be treated alike. sendMail() suppresses each
+  // digest and returns false; because nothing is then recorded as sent, the very
+  // same digests are rebuilt and suppressed again sixty seconds later, forever.
+  // Skip the pass outright instead.
+  if (!isEmailEnabled()) {
+    return { checked: 0, present: 0, notified: 0, emailed: 0, skipped: 'email switch is off' };
+  }
+
   const t = db.prepare(`SELECT
       datetime('now','localtime') AS now,
       datetime('now','localtime','-${STALE_MINUTES} minutes') AS stale,
