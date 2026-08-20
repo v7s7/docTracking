@@ -534,6 +534,7 @@ const T = {
     sending:           'Sending…',
     selectConversation:'Select a conversation to start messaging.',
     departmentGroup:   'Department group',
+    startChatHint: 'Message a colleague, or a whole department.',
     emailSwitch: {
       title: 'Email sending', on: 'Enabled', off: 'Disabled',
       note: 'Master switch for every outgoing email. When disabled, nothing is sent and in-app notifications keep working — use it for testing and demonstrations.',
@@ -1216,6 +1217,7 @@ const T = {
     sending:           'جارٍ الإرسال…',
     selectConversation:'اختر محادثة لبدء المراسلة.',
     departmentGroup:   'مجموعة القسم',
+    startChatHint: 'راسل زميلاً، أو قسماً بأكمله.',
     emailSwitch: {
       title: 'إرسال البريد الإلكتروني', on: 'مُفعّل', off: 'مُعطّل',
       note: 'مفتاح رئيسي لكل بريد صادر من النظام. عند التعطيل لا يُرسل أي بريد، وتبقى الإشعارات داخل النظام تعمل كالمعتاد — للاختبار والعروض التقديمية.',

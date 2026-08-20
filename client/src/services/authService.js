@@ -59,3 +59,38 @@ export async function fetchMe() {
     return null;
   }
 }
+
+/**
+ * Store a token the server handed back mid-session.
+ *
+ * Sessions slide: any request made past the halfway point of a token's life
+ * comes back with a fresh one in the X-Renewed-Token header, so someone using
+ * the system daily is never bounced to the login screen. See the sliding-session
+ * block in server/middleware/authMiddleware.js.
+ */
+export function absorbRenewedToken(res) {
+  try {
+    const fresh = res?.headers?.get?.('X-Renewed-Token');
+    if (fresh) localStorage.setItem(TOKEN_KEY, fresh);
+  } catch (_) { /* never let this break a real response */ }
+}
+
+/**
+ * Watch every response for a renewed token, once, globally.
+ *
+ * Patching window.fetch rather than each service's own req() helper: there are
+ * six of those, each hand-written, and threading renewal through all of them
+ * would guarantee one gets missed — the request that then carries the stale
+ * token is the one that logs the user out.
+ */
+let installed = false;
+export function installTokenRenewal() {
+  if (installed || typeof window === 'undefined' || !window.fetch) return;
+  installed = true;
+  const original = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const res = await original(...args);
+    absorbRenewedToken(res);
+    return res;
+  };
+}

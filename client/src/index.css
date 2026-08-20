@@ -3252,3 +3252,12 @@ code.tag {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .day-issue svg:first-child { color: var(--warning); flex-shrink: 0; }
+
+/* The only entry point to a new conversation. It used to be a bare "+" icon in
+   the sidebar header, and people could not find it — especially now that an
+   ordinary user opens chat to an empty list rather than 22 department channels.
+   The label hides on very narrow sidebars, where the icon alone has to do. */
+.msg-new-chat { white-space: nowrap; gap: 0.3rem; }
+@media (max-width: 420px) {
+  .msg-new-chat-label { display: none; }
+}

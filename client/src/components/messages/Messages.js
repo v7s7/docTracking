@@ -1756,8 +1756,12 @@ export default function Messages({ openConversation = null, onOpened }) {
               <button className="btn-header" onClick={() => setShowNotifSettings(true)} aria-label={t.notifSettings} title={t.notifSettings}>
                 <Settings size={16} strokeWidth={2} />
               </button>
-              <button className="btn-header" onClick={() => setShowDirectory(true)} aria-label={t.newChat} title={t.newChat}>
-                <Plus size={16} strokeWidth={2} />
+              {/* Labelled, not a bare icon. This is the only way into a new
+                  conversation, and with department channels no longer listed for
+                  everyone, a user who cannot find it has nothing at all. */}
+              <button className="btn btn-primary btn-sm msg-new-chat" onClick={() => setShowDirectory(true)}
+                aria-label={t.newChat} title={t.newChat}>
+                <Plus size={14} strokeWidth={2.4} /><span className="msg-new-chat-label">{t.newChat}</span>
               </button>
             </span>
           </div>
@@ -1820,6 +1824,21 @@ export default function Messages({ openConversation = null, onOpened }) {
               <div className="empty-state" style={{ padding: '2rem 1rem' }}>
                 <div className="empty-icon"><MessageCircle size={28} strokeWidth={1.4} /></div>
                 <div className="empty-sub">{query ? t.noResults : t.noConversations}</div>
+                {/* Until department channels became per-person threads, everyone
+                    opened this screen to 22 rows and never needed to be told how
+                    to start anything. Now a new user arrives at an empty list,
+                    and a bare "+" in the header is not an answer. */}
+                {!query && (
+                  <>
+                    <div className="empty-sub" style={{ marginTop: '0.4rem' }}>{t.startChatHint}</div>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      style={{ marginTop: '0.9rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                      onClick={() => setShowDirectory(true)}>
+                      <Plus size={14} strokeWidth={2.4} />{t.newChat}
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               <>

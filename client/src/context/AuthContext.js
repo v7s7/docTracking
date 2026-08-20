@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { login as apiLogin, logout as apiLogout, fetchMe, getStoredUser, persistUser } from '../services/authService';
+import { login as apiLogin, logout as apiLogout, fetchMe, getStoredUser, persistUser, installTokenRenewal } from '../services/authService';
 import { sendPresence } from '../services/messageService';
 
 const AuthContext = createContext(null);
@@ -14,6 +14,9 @@ export function AuthProvider({ children }) {
   // re-read from the users table on every request — so this is also how a role
   // or department change reaches the sidebar. Persisting it means the next load
   // starts from the corrected value rather than briefly showing the old one.
+  // Installed before the first request so no renewal is missed.
+  installTokenRenewal();
+
   useEffect(() => {
     fetchMe()
       .then(fresh => { if (fresh) { persistUser(fresh); setUser(fresh); } else setUser(null); })

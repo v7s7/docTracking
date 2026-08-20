@@ -10,13 +10,8 @@ const { logAudit } = require('../utils/audit');
 
 const router         = express.Router();
 const JWT_SECRET     = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
-
-function parseExpiryMs(str) {
-  const m = (str || '8h').match(/^(\d+)([smhd])$/);
-  if (!m) return 8 * 3600 * 1000;
-  return parseInt(m[1]) * { s: 1000, m: 60000, h: 3600000, d: 86400000 }[m[2]];
-}
+const { DEFAULT_EXPIRY, parseExpiryMs } = require('../utils/expiry');
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || DEFAULT_EXPIRY;
 
 function getSuperAdminOverrides() {
   return (process.env.SUPER_ADMIN_USERS || '')

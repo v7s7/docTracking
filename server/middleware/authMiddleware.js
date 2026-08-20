@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { DEFAULT_EXPIRY, parseExpirySeconds } = require('../utils/expiry');
 
 // Role ladder: higher weight = more privilege
 const ROLE_WEIGHT = {
@@ -52,6 +53,38 @@ function verifyToken(req, res, next) {
         req.user.role    = effectiveRole({ ...row, username: req.user.username, email: req.user.email });
         req.user.dept_id = row.dept_id || '';
       }
+    }
+
+    // ── Sliding sessions ──────────────────────────────────────────────────
+    // Someone using the system every day should never be thrown back to the
+    // login screen. Once a token is past the halfway point of its life it is
+    // quietly reissued, and the client swaps it in from the response header.
+    //
+    // The SAME jti is reused on purpose: the sessions row is what مدير النظام
+    // force-logs-out against, and minting a new id every renewal would both
+    // break that link and fill the table with rows for one person.
+    //
+    // A session that is never used still expires on its own, so a forgotten
+    // login on a shared machine does not stay valid indefinitely.
+    try {
+      if (req.user.exp && req.user.jti) {
+        const now      = Math.floor(Date.now() / 1000);
+        const lifetime = parseExpirySeconds(process.env.JWT_EXPIRES_IN || DEFAULT_EXPIRY);
+        if (req.user.exp - now < lifetime / 2) {
+          const { exp, iat, ...claims } = req.user;
+          const fresh = jwt.sign(claims, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || DEFAULT_EXPIRY });
+          db.prepare("UPDATE sessions SET expires_at = ? WHERE jti = ?")
+            .run(new Date(Date.now() + lifetime * 1000).toISOString(), req.user.jti);
+          // A header, not a body field: every route already has its own response
+          // shape and none of them would carry this.
+          res.set('X-Renewed-Token', fresh);
+          res.set('Access-Control-Expose-Headers', 'X-Renewed-Token');
+        }
+      }
+    } catch (e) {
+      // Renewal is a convenience. If it fails the request still succeeds and the
+      // existing token keeps working until it genuinely expires.
+      console.warn('[Auth] token renewal skipped:', e.message);
     }
 
     next();
