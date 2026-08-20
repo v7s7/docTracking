@@ -117,6 +117,14 @@ function refuseEdit(actor, target, patch = {}) {
   if (patch.role !== undefined && !HR_ASSIGNABLE_ROLES.includes(patch.role)) {
     return 'Only IT can grant the System Administrator role.';
   }
+  // Moving an account into تقنية المعلومات IS a promotion — effectiveRole() grants
+  // مدير النظام by department — so a department change is a role change wearing a
+  // different name. This gated patch.role and never looked at patch.dept_id, which
+  // let any HR user hand themselves full admin in a single request.
+  if (patch.dept_id !== undefined && String(patch.dept_id) === IT_DEPT_ID
+      && String(target?.dept_id || '') !== IT_DEPT_ID) {
+    return 'Only IT can move an account into تقنية المعلومات.';
+  }
   // You do not sign your own promotion. Contact details are still fine.
   if (actor?.id && target?.id && Number(actor.id) === Number(target.id)) {
     if (patch.role !== undefined && patch.role !== target.role) {
@@ -124,6 +132,9 @@ function refuseEdit(actor, target, patch = {}) {
     }
     if (patch.is_active !== undefined && !patch.is_active) {
       return 'You cannot deactivate your own account.';
+    }
+    if (patch.dept_id !== undefined && String(patch.dept_id) !== String(target.dept_id || '')) {
+      return 'You cannot change your own department. Ask IT.';
     }
   }
   return null;

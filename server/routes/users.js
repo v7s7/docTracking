@@ -173,16 +173,18 @@ router.patch('/bulk', ...USER_ADMIN, (req, res) => {
   }
 
   const targets = db.prepare(
-    `SELECT id, username, role FROM users WHERE id IN (${ids.map(() => '?').join(',')})`
+    `SELECT id, username, role, dept_id FROM users WHERE id IN (${ids.map(() => '?').join(',')})`
   ).all(...ids);
 
   // Changing your own role or switching yourself off in a bulk action is almost
   // always a slip — and it locks you out of the only screen that could undo it.
+  // dept_id counts as a role change here: effectiveRole() grants مدير النظام by
+  // department, so moving yourself into تقنية المعلومات is self-promotion.
   const self = targets.find(u => u.id === req.user.id);
-  if (self && (role !== undefined || is_active !== undefined)) {
+  if (self && (role !== undefined || is_active !== undefined || dept_id !== undefined)) {
     return res.status(400).json({
       success: false,
-      message: 'You are in the selection. Clear yourself from it before changing role or status.',
+      message: 'You are in the selection. Clear yourself from it before changing role, department or status.',
     });
   }
 
@@ -350,6 +352,11 @@ router.delete('/:id', ...SA_ONLY, (req, res) => {
   const gone = db.prepare('SELECT username, full_name, role, dept_id FROM users WHERE id = ?').get(req.params.id);
   const info = db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
   if (info.changes === 0) return res.status(404).json({ success: false, message: 'User not found.' });
+  // A deleted account must not keep a live session. authMiddleware now refuses a
+  // token whose row has vanished, so this is belt-and-braces — but it also clears
+  // the row so the الجلسات screen tells the truth. Note this does NOT stop an
+  // AD-backed leaver signing in again; that needs the account disabled in AD.
+  db.prepare('DELETE FROM sessions WHERE username = ?').run(gone.username);
   logAudit(req.user, 'user.delete', 'user', req.params.id, gone, req.ip);
   res.json({ success: true });
 });

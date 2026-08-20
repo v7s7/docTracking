@@ -31,12 +31,17 @@ function verifyToken(req, res, next) {
     // optional meant a token forged with the signing secret could simply omit it,
     // skip this lookup entirely, and be accepted as any user — while remaining
     // immune to force-logout, because there was no session row to delete.
-    // A token without a jti is not one of ours. Verified by test-forgery.js.
+    // A token without a jti is not one of ours.
+    //
+    // The session is also bound to WHOSE it is. Looking the jti up on its own let
+    // anyone holding the signing key keep their own honest session id while simply
+    // renaming themselves in the payload; the row has stored `username` all along,
+    // it was just never read. Verified by scripts/test-escalation.js.
     if (!req.user.jti) {
       return res.status(401).json({ success: false, message: 'Session expired. Please sign in again.' });
     }
-    const sess = db.prepare('SELECT jti FROM sessions WHERE jti = ?').get(req.user.jti);
-    if (!sess) {
+    const sess = db.prepare('SELECT jti, username FROM sessions WHERE jti = ?').get(req.user.jti);
+    if (!sess || sess.username !== req.user.username) {
       return res.status(401).json({ success: false, message: 'Session expired. Please sign in again.' });
     }
 
@@ -45,21 +50,41 @@ function verifyToken(req, res, next) {
     // demotion left the old privileges live for that whole window. Re-read them
     // per request; it is one primary-key lookup, next to the session check that
     // already happens here.
+    // Identity comes from the ROW, never from the token.
+    //
+    // Two separate holes lived here. This whole block sat behind `if (req.user.id)`,
+    // so a token that omitted id skipped the is_active check AND the role refresh
+    // together and kept whatever role it claimed — and `id: null` is a shape this
+    // server mints itself, at routes/auth.js, for an AD user with no local row.
+    // Second, effectiveRole() was handed token-supplied username/email; since the
+    // SUPER_ADMIN_USERS override is keyed on exactly those, a token could name
+    // itself into مدير النظام. The row is now the only source for both.
+    const { effectiveRole } = require('../utils/permissions');
+    let row = null;
     if (req.user.id) {
-      const row = db.prepare('SELECT role, dept_id, is_active FROM users WHERE id = ?').get(req.user.id);
-      if (row) {
-        if (!row.is_active) {
-          return res.status(401).json({ success: false, message: 'This account has been disabled.' });
-        }
-        // Role, department and active status come from the row, not the token,
-        // so a change takes effect on the very next request. effectiveRole() is
-        // the single definition shared with both login paths — it re-applies the
-        // SUPER_ADMIN_USERS override (which is not stored on the row, and must
-        // not be silently stripped here) and grants مدير النظام to تقنية المعلومات.
-        const { effectiveRole } = require('../utils/permissions');
-        req.user.role    = effectiveRole({ ...row, username: req.user.username, email: req.user.email });
-        req.user.dept_id = row.dept_id || '';
+      row = db.prepare('SELECT id, username, email, role, dept_id, is_active FROM users WHERE id = ?').get(req.user.id);
+      if (!row) {
+        // Deleted while the session was still live.
+        return res.status(401).json({ success: false, message: 'This account no longer exists.' });
       }
+    } else {
+      row = db.prepare('SELECT id, username, email, role, dept_id, is_active FROM users WHERE username = ?').get(sess.username);
+    }
+    if (row) {
+      if (!row.is_active) {
+        return res.status(401).json({ success: false, message: 'This account has been disabled.' });
+      }
+      // Role and department take effect on the very next request, so a demotion
+      // is not left live for the rest of the token's lifetime.
+      req.user.id      = row.id;
+      req.user.username = row.username;
+      req.user.role    = effectiveRole(row);
+      req.user.dept_id = row.dept_id || '';
+    } else {
+      // Authenticated against AD but with no local row: the floor, not whatever
+      // the token asked for.
+      req.user.role    = 'STAFF';
+      req.user.dept_id = '';
     }
 
     // ── Sliding sessions ──────────────────────────────────────────────────
