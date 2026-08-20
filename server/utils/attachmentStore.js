@@ -65,7 +65,15 @@ function stagingStorage(multer, uploadDir) {
   const dir = path.join(uploadDir, STAGING);
   fs.mkdirSync(dir, { recursive: true });
   return multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, dir),
+    // Re-created per upload rather than only once when this module loads. If the
+    // folder goes away while the server is running — a tidy-up, a restore, a
+    // backup script — every upload otherwise fails with a generic
+    // "تعذر رفع المرفقات" until somebody restarts the process, with nothing in
+    // the log to say why. mkdirSync is a no-op when the folder already exists.
+    destination: (_req, _file, cb) => {
+      try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { return cb(e); }
+      cb(null, dir);
+    },
     filename: (_req, file, cb) =>
       cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`),
   });

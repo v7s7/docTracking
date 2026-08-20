@@ -26,11 +26,18 @@ function verifyToken(req, res, next) {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
     const { db } = require('../db');
 
-    if (req.user.jti) {
-      const sess = db.prepare('SELECT jti FROM sessions WHERE jti = ?').get(req.user.jti);
-      if (!sess) {
-        return res.status(401).json({ success: false, message: 'Session expired. Please sign in again.' });
-      }
+    // Every token this server issues carries a jti, and the matching row in
+    // `sessions` is the ONLY thing that can revoke it. Treating the claim as
+    // optional meant a token forged with the signing secret could simply omit it,
+    // skip this lookup entirely, and be accepted as any user — while remaining
+    // immune to force-logout, because there was no session row to delete.
+    // A token without a jti is not one of ours. Verified by test-forgery.js.
+    if (!req.user.jti) {
+      return res.status(401).json({ success: false, message: 'Session expired. Please sign in again.' });
+    }
+    const sess = db.prepare('SELECT jti FROM sessions WHERE jti = ?').get(req.user.jti);
+    if (!sess) {
+      return res.status(401).json({ success: false, message: 'Session expired. Please sign in again.' });
     }
 
     // Role and department are signed into the token at login, so a Super Admin
