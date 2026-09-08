@@ -39,8 +39,41 @@ const call = async (tok, p, opts = {}) => {
   return { status: r.status, body: b };
 };
 
+
+async function reachable(api) {
+  try { await fetch(api + it_is_up_probe); return true; }
+  catch (e) {
+    console.error("");
+    console.error("  THE SERVER IS NOT RUNNING at " + api);
+    console.error("  (" + ((e && e.cause && e.cause.code) || e.message) + ")");
+    console.error("");
+    console.error("  Start it from the server folder with:  npm start");
+    console.error("  If it IS running, it is on another port: set TEST_API=http://127.0.0.1:<port>");
+    console.error("");
+    return false;
+  }
+}
+const it_is_up_probe = "/auth/me";
 (async () => {
+  if (!await reachable(API)) { db.close(); process.exit(3); }
   const hr = db.prepare("SELECT id,username,full_name,role,dept_id FROM users WHERE dept_id='hr_dept' AND is_active=1 AND role='STAFF' LIMIT 1").get();
+
+  // The server must be reading the SAME copy this script writes to, or every
+  // session it creates is invisible and all four checks 401 for the wrong
+  // reason — which reads exactly like a regression. Prove a legitimate token
+  // works before concluding anything from one being refused.
+  const probe = jwt.sign({ id: hr.id, username: hr.username, name: hr.full_name, role: hr.role, dept_id: hr.dept_id, jti: sess(hr) }, SECRET, { expiresIn: '10m' });
+  const pre = await call(probe, '/correspondence/stats');
+  if (pre.status === 401) {
+    console.error('');
+    console.error('  The server is NOT using this database.');
+    console.error('  A valid session written to ' + DBC + ' was refused, so the');
+    console.error('  server is reading a different file. Start it with the same DB_PATH:');
+    console.error('');
+    console.error('     set DB_PATH=' + DBC + ' && set PORT=3399 && node index.js');
+    console.error('');
+    db.close(); process.exit(4);
+  }
   const it = db.prepare("SELECT id,username,full_name,role,dept_id FROM users WHERE dept_id='it_dept' AND is_active=1 LIMIT 1").get();
   console.log('using ' + hr.username + ' (HR staff) against ' + API + '\n');
 

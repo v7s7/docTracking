@@ -20,8 +20,24 @@ const sign = extra => jwt.sign(
   { id: victim.id, username: victim.username, name: victim.full_name, role: 'STAFF', dept_id: victim.dept_id, ...extra },
   process.env.JWT_SECRET, { expiresIn: '1h' });
 const hit = async (token, p) => (await fetch(API + p, { headers: { Authorization: 'Bearer ' + token } })).status;
+async function reachable(api) {
+  try { await fetch(api + it_is_up_probe); return true; }
+  catch (e) {
+    console.error("");
+    console.error("  THE SERVER IS NOT RUNNING at " + api);
+    console.error("  (" + ((e && e.cause && e.cause.code) || e.message) + ")");
+    console.error("");
+    console.error("  Start it from the server folder with:  npm start");
+    console.error("  If it IS running, it is on another port: set TEST_API=http://127.0.0.1:<port>");
+    console.error("");
+    return false;
+  }
+}
+const it_is_up_probe = "/auth/me";
+
 
 (async () => {
+  if (!await reachable(API)) { db.close(); process.exit(3); }
   console.log('target: ' + victim.username + ' (id ' + victim.id + ') via ' + API + '\n');
 
   console.log('— forged token naming a session that does not exist —');
