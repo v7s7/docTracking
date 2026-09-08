@@ -152,9 +152,27 @@ function visibilityClause(user, table = 'c') {
   const depts = myDepartments(user);
   const inList = depts.length ? depts.map(() => '?').join(',') : null;
 
+  // Status is PART of visibility, not a filter layered on top of it. A memo
+  // belongs to the sending department until its head approves it; only then has
+  // the other side any business reading it. Leaving the recipient terms
+  // unqualified had two consequences, both reproduced against real accounts:
+  //
+  //  1. قسم B read a memo addressed to it while still 'pending' — before قسم A's
+  //     own head had seen it, which defeats the approval step entirely.
+  //  2. Rejection wrote awaiting_dept_id back to the SENDING department, so the
+  //     instant a head refused an employee's memo it became readable — body,
+  //     attachments and the stated reason — by every colleague in that
+  //     department, and stayed readable after the author fixed and resent it.
+  //
+  // A row reaches the other party once approved, and never before.
+  const LANDED = "IN ('approved','done')";
+
   if (isApprover(user) && inList) {
+    // from_dept_id carries no status condition on purpose: an approver sees his
+    // own department's traffic at every stage — that is the queue he works.
     return {
-      clause: `(${table}.from_dept_id IN (${inList}) OR ${table}.to_dept_id IN (${inList}))`,
+      clause: `(${table}.from_dept_id IN (${inList})`
+            + ` OR (${table}.to_dept_id IN (${inList}) AND ${table}.status ${LANDED}))`,
       params: [...depts, ...depts],
     };
   }
@@ -167,8 +185,12 @@ function visibilityClause(user, table = 'c') {
     // (routes/correspondence.js, box === 'inbox'), so without this term the row
     // appears in the list, counts toward the badge, and then 403s when opened
     // through loadVisible.
+    // The inbox filters status itself, so qualifying these two leaves the
+    // two-way reply flow untouched.
     return {
-      clause: `(${table}.from_user_id = ? OR ${table}.to_dept_id IN (${inList}) OR ${table}.awaiting_dept_id IN (${inList}))`,
+      clause: `(${table}.from_user_id = ?`
+            + ` OR (${table}.to_dept_id IN (${inList}) AND ${table}.status ${LANDED})`
+            + ` OR (${table}.awaiting_dept_id IN (${inList}) AND ${table}.status ${LANDED}))`,
       params: [user?.id ?? -1, ...depts, ...depts],
     };
   }

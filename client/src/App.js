@@ -55,7 +55,7 @@ const CIRC_VIEWS = {
   'circ-director': 'director_general',
 };
 
-function corrChildren(t) {
+function corrChildren(t, canSeeReports) {
   const c = t.corr.nav;
   return [
     { id: 'corr-new',       icon: <PenSquare   size={17} strokeWidth={1.8} />, label: c.new },
@@ -63,7 +63,12 @@ function corrChildren(t) {
     { id: 'corr-approvals', icon: <CheckCircle2 size={17} strokeWidth={1.8} />, label: c.approvals, badge: 'approvals' },
     { id: 'corr-returned',  icon: <RotateCcw   size={17} strokeWidth={1.8} />, label: c.returned,  badge: 'returned' },
     { id: 'corr-archive',   icon: <Archive     size={17} strokeWidth={1.8} />, label: c.archive },
-    { id: 'corr-reports',   icon: <BarChart3   size={17} strokeWidth={1.8} />, label: t.reports.title },
+    // URD 6.3 scopes التقارير to رئيس القسم and مدير النظام. It was reachable by
+    // all 119 staff, and every figure on it is the viewer's own visible slice —
+    // read by an ordinary employee as directorate-wide totals.
+    ...(canSeeReports
+      ? [{ id: 'corr-reports', icon: <BarChart3 size={17} strokeWidth={1.8} />, label: t.reports.title }]
+      : []),
   ];
 }
 
@@ -79,7 +84,7 @@ function navItems(user, t, hasMessages, chatOnly) {
 
   const items = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} strokeWidth={1.8} />, label: t.dashboard },
-    { id: 'corr',      icon: <Mail size={20} strokeWidth={1.8} />, label: t.corr.nav.correspondence, children: corrChildren(t) },
+    { id: 'corr',      icon: <Mail size={20} strokeWidth={1.8} />, label: t.corr.nav.correspondence, children: corrChildren(t, ['MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(role)) },
   ];
   items.push({ id: 'directory', icon: <BookUser size={20} strokeWidth={1.8} />, label: t.directory.title });
   if (hasMessages) items.push({ id: 'messages', icon: <MessageCircle size={20} strokeWidth={1.8} />, label: t.messages });

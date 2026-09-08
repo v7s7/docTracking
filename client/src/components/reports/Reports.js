@@ -97,6 +97,14 @@ export default function Reports() {
     () => (data?.byDepartment || []).slice(0, 8).map(d => ({ ...d, label: deptName(d.id, d.label) })),
     [data, deptName]
   );
+  // isMine comes from the server, which knows which departments this user acts
+  // for. Ranking the viewer's own department against its counterparties is not
+  // a ranking — every visible row touches it, so it always wins.
+  const counterparties = useMemo(
+    () => (data?.byDepartment || []).filter(d => !d.isMine).slice(0, 8)
+      .map(d => ({ ...d, label: deptName(d.id, d.label) })),
+    [data, deptName]
+  );
   const services = useMemo(
     () => (data?.byService || []).map(s => ({ ...s, label: s.label || r.otherType })).slice(0, 8),
     [data, r]
@@ -106,7 +114,7 @@ export default function Reports() {
   if (err) return <div className="alert alert-error">{err}</div>;
 
   const s = data?.summary || {};
-  const maxDept = Math.max(1, ...topDepts.map(d => d.total));
+  const maxDept = Math.max(1, ...counterparties.map(d => d.total));
   const maxSvc  = Math.max(1, ...services.map(x => x.count));
 
   return (
@@ -128,6 +136,15 @@ export default function Reports() {
           <Download size={14} strokeWidth={2} /> {r.exportExcel}
         </button>
       </div>
+
+      {/* Whose numbers these are. Every figure below is this user's visible
+          slice, and a table of department names reads as directorate totals
+          unless it says otherwise. */}
+      {!!(data?.scope?.departments || []).length && (
+        <div className="rep-scope">
+          {r.scopeNote} <strong>{data.scope.departments.map(d => deptName(d.id, d.label)).join('، ')}</strong>
+        </div>
+      )}
 
       <div className="stat-grid">
         <Tile icon={<FileText size={20} strokeWidth={1.8} />}  label={r.total}      value={s.total ?? 0} />
@@ -152,8 +169,12 @@ export default function Reports() {
             </div>
           </div>
           <div className="card-body">
-            {!topDepts.length ? <div className="empty-sub">{r.noData}</div>
-              : topDepts.map(d => <BarRow key={d.id} label={d.label} value={d.total} max={maxDept} />)}
+            {/* The viewer's own department is excluded: by construction every
+                visible row touches it, so it ranked first every time and the
+                chart could never answer the question it was asked. What is left
+                ranks the counterparties, which it can. */}
+            {!counterparties.length ? <div className="empty-sub">{r.noData}</div>
+              : counterparties.map(d => <BarRow key={d.id} label={d.label} value={d.total} max={maxDept} />)}
           </div>
         </div>
 

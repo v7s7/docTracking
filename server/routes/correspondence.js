@@ -23,7 +23,7 @@ const store = require('../utils/attachmentStore');
 const { readConfig }  = require('../services/configService');
 const { resolveSubject, OTHER_SERVICE_ID } = require('../utils/serviceScope');
 const {
-  isAdmin, canApproveFor, myDepartments, visibilityClause, approversOf, approvalQueueFor,
+  isAdmin, isApprover, canApproveFor, myDepartments, visibilityClause, approversOf, approvalQueueFor,
 } = require('../utils/approvals');
 const notify = require('../services/correspondenceNotify');
 const chat   = require('../services/chatBridge');
@@ -461,6 +461,11 @@ router.post('/notifications/read', AUTH, (req, res) => {
 // directly — the difference is in days, hence the *24.
 router.get('/reports', AUTH, (req, res) => {
   const user = req.user;
+  // URD 6.3 scopes التقارير to رئيس القسم and مدير النظام. Hiding the nav entry
+  // is not the gate — this is.
+  if (!isApprover(user)) {
+    return res.status(403).json({ success: false, message: 'التقارير متاحة لرؤساء الأقسام ومدير النظام.' });
+  }
   const { from, to } = req.query;
 
   const { clause, params } = visibilityClause(user);
@@ -513,9 +518,26 @@ router.get('/reports', AUTH, (req, res) => {
   };
   sent.forEach(r => bump(r.id, 'sent', r.n));
   recv.forEach(r => bump(r.id, 'received', r.n));
+  // Every figure on this screen is computed over visibilityClause, so it is one
+  // person's slice — NOT the directorate's totals, which is how a bare table of
+  // department names reads. A رئيس قسم would see «قسم الصيانة — صادر ٢» while
+  // الصيانة had in fact sent twenty, and conclude they were idle.
+  //
+  // Recomputing org-wide is the wrong fix: it would hand all 119 staff a size
+  // map of departments they may not read, which is exactly the bypass that was
+  // removed from visibilityClause. So the numbers stay scoped and the response
+  // says so out loud, and each row declares whether it is the viewer's own
+  // department or a counterparty.
+  const mineSet = new Set(myDepartments(user));
   const byDepartment = [...deptMap.values()]
-    .map(d => ({ ...d, total: d.sent + d.received }))
+    .map(d => ({ ...d, total: d.sent + d.received, isMine: mineSet.has(d.id) }))
     .sort((a, b) => b.total - a.total);
+
+  const scope = {
+    // Named departments, so the screen can say whose traffic this is.
+    departments: [...mineSet].map(id => ({ id, label: labels[id] || id })),
+    orgWide: false,
+  };
 
   const byService = db.prepare(`
     SELECT c.service_id id, COUNT(*) n FROM correspondences c ${W}
@@ -557,6 +579,7 @@ router.get('/reports', AUTH, (req, res) => {
       avgApprovalHours:   timing?.approve_h  != null ? Math.round(timing.approve_h  * 10) / 10 : null,
       avgCompletionHours: timing?.complete_h != null ? Math.round(timing.complete_h * 10) / 10 : null,
     },
+    scope,
     byMonth, byDepartment, byService, backlog,
     approvers: approvers.map(a => ({ ...a, avg_h: a.avg_h != null ? Math.round(a.avg_h * 10) / 10 : null })),
   });
@@ -844,8 +867,14 @@ router.post('/:id/reject', AUTH, (req, res) => {
 
   db.transaction(() => {
     db.prepare(`
+      -- awaiting_dept_id is deliberately NOT written here. It used to be set
+      -- back to the sending department, which published the rejected memo and
+      -- its refusal reason to every colleague of the author through
+      -- visibilityClause. Nothing reads the column for a 'returned' row —
+      -- every other reader filters status to approved or done. A returned memo
+      -- belongs to its author alone.
       UPDATE correspondences
-         SET status = 'returned', awaiting_dept_id = from_dept_id,
+         SET status = 'returned',
              rejection_reason = ?, updated_at = datetime('now','localtime')
        WHERE id = ?
     `).run(reason, row.id);

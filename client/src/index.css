@@ -3261,3 +3261,17 @@ code.tag {
 @media (max-width: 420px) {
   .msg-new-chat-label { display: none; }
 }
+
+/* Reports: whose numbers these are. Every figure on that screen is the
+   viewer's own visible slice, and a table of department names reads as
+   directorate totals unless it says otherwise. */
+.rep-scope {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-inline-start: 3px solid var(--primary, #1C7C1C);
+  background: var(--surface-2, #f6f7f6);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-secondary, #5c6b62);
+}
+.rep-scope strong { color: var(--text-primary, #16211b); font-weight: 600; }

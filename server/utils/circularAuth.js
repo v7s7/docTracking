@@ -34,19 +34,27 @@ const SOURCE_DEPT = {
 };
 
 /**
- * Serial prefix for each kind — VP-2026-001 / DG-2026-001.
+ * Serial prefix for each kind — T-VP-2026-001 / T-DG-2026-001.
  *
- * Read from the signing office's `code` in config/departments.json rather than
- * hardcoded, so a تعميم and a correspondence from the same office carry the
- * same prefix and there is one place to change it. Falls back to a literal only
- * if the config is somehow missing the field.
+ * The office code comes from config/departments.json, but circulars carry a
+ * 'T-' prefix in front of it (ت for تعميم) so they occupy a separate number
+ * space from correspondence.
+ *
+ * They previously shared the office code outright, which read as tidy and was
+ * a collision: the two counters live in different tables, each with its own
+ * UNIQUE constraint, so neither can see the other. The first تعميم from مكتب
+ * المدير العام and the first مراسلة sent by that office would both have been
+ * DG-2026-001 — the number printed on the letterhead, shown as the circular's
+ * identity, and searched on in both archives.
  */
+const CIRCULAR_PREFIX = 'T';
 const FALLBACK_CODE = { deputy_chairman: 'VP', director_general: 'DG' };
 
 function sourceCode(source) {
   const deptId = SOURCE_DEPT[source];
   const { departments = [] } = readConfig();
-  return departments.find(d => d.id === deptId)?.code || FALLBACK_CODE[source] || 'GEN';
+  const code = departments.find(d => d.id === deptId)?.code || FALLBACK_CODE[source] || 'GEN';
+  return CIRCULAR_PREFIX + '-' + code;
 }
 
 function isSource(source) {

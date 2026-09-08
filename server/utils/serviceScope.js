@@ -51,14 +51,31 @@ function servicesBetween(fromDept, toDept) {
   return [...issues, ...requests.filter(s => !seen.has(s.id))];
 }
 
-// Every department, with each one's subjects narrowed to what `fromDeptId` may
-// use. The sender's own department is excluded — a department never sends
-// correspondence to itself.
+// Can this department actually receive a memo? A department with no active
+// account is a dead end, not a recipient: nobody is notified it arrived, and
+// nobody can ever press تم الإنجاز, because completion requires membership of
+// the receiving department. The memo sits in جارية التنفيذ permanently and the
+// author is never told why. قسم الاستقبال, قسم الموارد والمعلومات and أخرى are
+// all in this state today, sitting in the dropdown beside nineteen real ones.
+//
+// This is deliberately about PEOPLE, not approvers — an ordinary member of the
+// receiving department is enough to close a memo.
+function canReceive(deptId) {
+  const { db } = require('../db');
+  const row = db.prepare(
+    "SELECT COUNT(*) n FROM users WHERE is_active = 1 AND dept_id = ?"
+  ).get(deptId);
+  return !!(row && row.n > 0);
+}
+
+// Every department that can actually receive, with each one's subjects narrowed
+// to what `fromDeptId` may use. The sender's own department is excluded — a
+// department never sends correspondence to itself.
 function requestableDepartments(fromDeptId) {
   const { departments = [] } = readConfig();
   const fromDept = departments.find(d => d.id === fromDeptId);
   return departments
-    .filter(d => d.id !== fromDeptId)
+    .filter(d => d.id !== fromDeptId && canReceive(d.id))
     .map(d => ({ id: d.id, label: d.label, services: servicesBetween(fromDept, d) }));
 }
 
@@ -74,6 +91,11 @@ function resolveSubject({ fromDeptId, toDeptId, serviceId, customSubject }) {
   const toDept   = departments.find(d => d.id === toDeptId);
   const fromDept = departments.find(d => d.id === fromDeptId);
   if (!toDept) return { error: 'القسم المستلم غير موجود.' };
+  // Repeated server-side so a hand-made request cannot reach a dead-end
+  // department by bypassing the dropdown.
+  if (!canReceive(toDeptId)) {
+    return { error: 'لا يوجد موظفون في القسم المستلم، ولا يمكن إرسال مراسلة إليه.' };
+  }
 
   if (!serviceId || serviceId === OTHER_SERVICE_ID) {
     const subject = String(customSubject || '').trim();
@@ -90,6 +112,7 @@ function resolveSubject({ fromDeptId, toDeptId, serviceId, customSubject }) {
 
 module.exports = {
   OTHER_SERVICE_ID,
+  canReceive,
   isServiceAllowedFrom,
   isOutgoingAllowedTo,
   servicesBetween,
