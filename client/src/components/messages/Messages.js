@@ -6,14 +6,14 @@ import {
   getDirectory, getConversations, openDM, openDeptThread, getMessages, sendMessage, markRead, fileUrl,
   getConversationMembers, streamUrl, startGroupChat, hideConversation, unhideConversation,
   getReadStatus, sendTyping, toggleReaction, searchMessages,
-  getPinnedMessage, pinMessage, unpinMessage, translateMessage,
+  getPinnedMessage, pinMessage, unpinMessage, translateMessage, markAllChatsRead,
   uploadGroupAvatar, setGroupAvatarColor as setGroupAvatarColorApi, removeGroupAvatar,
 } from '../../services/messageService';
 import { getDepartments } from '../../services/deptService';
 import {
   Send, Paperclip, Search, ArrowLeft, X, Download, MessageCircle, Building2, FileText, Plus, Users,
   Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Smile, Reply, Pin, PinOff, Loader2, MoreHorizontal,
-  Settings, Camera, Trash2, Languages,
+  Settings, Camera, Trash2, Languages, CheckCheck,
 } from 'lucide-react';
 
 const AVATAR_COLORS = ['#4f46e5', '#0891b2', '#16a34a', '#d97706', '#dc2626', '#9333ea', '#475569'];
@@ -1405,7 +1405,7 @@ function ChatThread({
 // straight to a chat, {userId} opens (or creates) the DM with that person.
 // Consumed once, then cleared via onOpened so a back-and-forth doesn't
 // re-trigger it.
-export default function Messages({ openConversation = null, onOpened }) {
+export default function Messages({ openConversation = null, onOpened, onUnreadChanged }) {
   const { t }    = useLang();
   const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
@@ -1713,6 +1713,18 @@ export default function Messages({ openConversation = null, onOpened }) {
     } catch (_) {}
   }
 
+  // Clears every thread this user can open, including the ones hiding in the
+  // collapsed section and the department threads that sort to the bottom of a
+  // long list. The server recounts and returns the remainder, so the nav badge
+  // updates now instead of on App's next 20s poll.
+  async function handleMarkAllRead() {
+    try {
+      const { unread } = await markAllChatsRead();
+      setConversations(prev => prev.map(c => ({ ...c, unread: 0, mentioned: false })));
+      onUnreadChanged?.(unread ?? 0);
+    } catch (_) {}
+  }
+
   function handleSelect(convId) {
     setActiveId(convId);
     setConversations(prev => prev.map(c => c.id === convId ? { ...c, unread: 0, mentioned: false } : c));
@@ -1746,6 +1758,16 @@ export default function Messages({ openConversation = null, onOpened }) {
   const visibleConversations = filteredConversations.filter(c => !c.hidden);
   const hiddenConversations  = filteredConversations.filter(c => c.hidden);
 
+  // Hiding a chat is a display preference only — the server keeps counting its
+  // unread toward the nav badge (see POST /conversations/:id/hide). Without this
+  // total the section header reads «المحادثات المخفية (3)» while the sidebar says 7,
+  // and nothing on screen connects the two: the badge looks stuck and no amount
+  // of reading the visible list clears it.
+  const hiddenUnread = hiddenConversations.reduce((n, c) => n + (c.unread || 0), 0);
+
+  // Unfiltered: the mark-all button must not vanish because a search is active.
+  const totalUnread = conversations.reduce((n, c) => n + (c.unread || 0), 0);
+
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
       <div className={`msg-layout${active ? ' has-active' : ''}`}>
@@ -1753,6 +1775,12 @@ export default function Messages({ openConversation = null, onOpened }) {
           <div className="msg-sidebar-header">
             <span className="card-title">{t.messages}</span>
             <span style={{ display: 'flex', gap: '0.25rem' }}>
+              {totalUnread > 0 && (
+                <button className="btn-header" onClick={handleMarkAllRead}
+                  aria-label={t.markAllRead} title={t.markAllRead}>
+                  <CheckCheck size={16} strokeWidth={2} />
+                </button>
+              )}
               <button className="btn-header" onClick={() => setShowNotifSettings(true)} aria-label={t.notifSettings} title={t.notifSettings}>
                 <Settings size={16} strokeWidth={2} />
               </button>
@@ -1884,6 +1912,9 @@ export default function Messages({ openConversation = null, onOpened }) {
                     <button className="msg-hidden-toggle" onClick={() => setShowHidden(s => !s)}>
                       {showHidden ? <ChevronDown size={14} strokeWidth={2} /> : <ChevronRight size={14} strokeWidth={2} />}
                       <span>{t.hiddenChats} ({hiddenConversations.length})</span>
+                      {hiddenUnread > 0 && (
+                        <span className="msg-unread-badge">{hiddenUnread > 99 ? '99+' : hiddenUnread}</span>
+                      )}
                     </button>
                     {showHidden && hiddenConversations.map(conv => (
                       <ConversationItem key={conv.id} conv={conv} active={conv.id === activeId} onClick={() => handleSelect(conv.id)} onToggleHide={handleToggleHide} t={t} meId={user?.id} />

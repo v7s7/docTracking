@@ -27,6 +27,7 @@ export const markRead         = (convId)  => req(`/messages/conversations/${conv
 export const hideConversation   = (convId) => req(`/messages/conversations/${convId}/hide`,   { method: 'POST' });
 export const unhideConversation = (convId) => req(`/messages/conversations/${convId}/unhide`, { method: 'POST' });
 export const getUnreadCount   = ()        => req('/messages/unread-count');
+export const markAllChatsRead = ()        => req('/messages/read-all', { method: 'POST' });
 export const sendPresence     = (status = 'active') => req('/messages/presence', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },

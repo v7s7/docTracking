@@ -620,7 +620,7 @@ function AppShell() {
               onChat={u => { setPendingConv({ userId: u.id }); handleNavAndClearTask('messages'); }}
               onCompose={() => handleNavAndClearTask('corr-new')} />
           ) : view === 'messages' && user.id ? (
-            <Messages openConversation={pendingConv} onOpened={() => setPendingConv(null)} />
+            <Messages openConversation={pendingConv} onOpened={() => setPendingConv(null)} onUnreadChanged={setUnreadMsgs} />
           ) : view === 'users' && canManageUsers(user) ? (
             <UserManagement />
           ) : view === 'settings' && isSuperAdmin(user.role) ? (
