@@ -11,6 +11,9 @@
 //
 // Runs against a THROWAWAY database, built from scratch:
 //   set DB_PATH=%TEMP%\unread-test.db && node scripts/test-unread.js
+//
+// cmd keeps that DB_PATH for the rest of the window. Clear it with `set DB_PATH=`
+// before running unread-check.js, or that reads this throwaway file instead.
 const fs   = require('fs');
 const path = require('path');
 const SERVER = path.join(__dirname, '..');

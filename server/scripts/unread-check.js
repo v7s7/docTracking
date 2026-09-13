@@ -25,6 +25,15 @@ const H = t => console.log('\n' + t + '\n' + '-'.repeat(t.length));
 
 console.log('\ndatabase: ' + (process.env.DB_PATH || path.join(SERVER, 'data', 'doctracking.db')));
 
+// A cmd window keeps `set DB_PATH=...` for its whole life, so running the test
+// first and this second reads the test's throwaway database and reports on users
+// who do not exist. Worth shouting about: the output looks perfectly plausible.
+if (process.env.DB_PATH) {
+  console.log('');
+  console.log('  !!  DB_PATH is set, so this is NOT the live database.');
+  console.log('  !!  Clear it first:  set DB_PATH=');
+}
+
 const who = process.argv[2];
 const users = who
   ? db.prepare('SELECT id, username, full_name, dept_id FROM users WHERE username = ?').all(who)
