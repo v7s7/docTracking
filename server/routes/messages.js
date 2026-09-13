@@ -130,15 +130,47 @@ function audienceOf(conv) {
  * department, and reading another department's private threads is not part of
  * running the system — same reasoning as visibilityClause() in utils/approvals.js.
  */
+// THE rule, written once, as SQL. Everything that asks "may this user see this
+// conversation?" binds this fragment: the permission check, GET /conversations,
+// the nav badge and the clear-all. It used to be spelled twice — once in JS here
+// and once in each query — and the copies disagreed: the badge admitted any
+// thread you held a conversation_members row for, which this does not. Before
+// Aug 2026 a department channel was readable by all 119 staff, so opening one
+// left a membership row behind; after department chats became per-person threads
+// (7e255dd) those rows outlived the access they recorded. The badge went on
+// counting 24 messages sitting in threads /conversations would not list and
+// POST /:id/read answered 403 for — a number nobody could clear by reading.
+//
+// Bind order is always: cm.user_id, then peer_user_id, then dept_id — scopeArgs().
+// A `type` outside ('dm','department','group') cannot exist (schema CHECK), so
+// the ELSE branch is exactly "dm or group, and I am a member".
+const CAN_OPEN = `CASE WHEN c.type = 'department'
+                      THEN (c.peer_user_id = ? OR c.dept_id = ?)
+                      ELSE cm.user_id IS NOT NULL END`;
+
+const MY_MEMBERSHIP = `
+  LEFT JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?`;
+
+const scopeArgs = user => [user.id, user.id, user.dept_id || ''];
+
+// Every conversation this user may open. GET /conversations lists exactly these,
+// and /read-all clears exactly these, so the badge can never outrun either.
+const myConversationIds = user => db.prepare(`
+  SELECT c.id FROM conversations c ${MY_MEMBERSHIP} WHERE ${CAN_OPEN}
+`).all(...scopeArgs(user)).map(r => r.id);
+
+// THE nav badge. /unread-count returns it; /read-all reports what is left.
+const unreadCountFor = user => db.prepare(`
+  SELECT COUNT(*) as n FROM messages msg
+  JOIN conversations c ON c.id = msg.conversation_id
+  ${MY_MEMBERSHIP}
+  WHERE msg.sender_id != ?
+    AND (${CAN_OPEN})
+    AND (cm.last_read_at IS NULL OR msg.created_at > cm.last_read_at)
+`).get(user.id, user.id, ...scopeArgs(user).slice(1)).n;
+
 function canSeeConversation(conv, user) {
-  if (!conv || !user) return false;
-  if (conv.type !== 'department') {
-    return !!db.prepare("SELECT 1 FROM conversation_members WHERE conversation_id=? AND user_id=?")
-      .get(conv.id, user.id);
-  }
-  if (conv.dept_id && String(user.dept_id || '') === String(conv.dept_id)) return true;
-  if (conv.peer_user_id && Number(conv.peer_user_id) === Number(user.id)) return true;
-  return false;
+  return !!(conv && user) && !!getAccessibleConversation(conv.id, user);
 }
 
 function ensureMembership(conversationId, userId) {
@@ -295,9 +327,10 @@ function groupMembers(convId) {
 
 // Returns the conversation row if the user may access it, else null
 function getAccessibleConversation(conversationId, user) {
-  const conv = db.prepare("SELECT * FROM conversations WHERE id=?").get(conversationId);
-  if (!conv) return null;
-  return canSeeConversation(conv, user) ? conv : null;
+  if (!user) return null;
+  return db.prepare(`
+    SELECT c.* FROM conversations c ${MY_MEMBERSHIP} WHERE c.id = ? AND (${CAN_OPEN})
+  `).get(user.id, conversationId, ...scopeArgs(user).slice(1)) || null;
 }
 
 // GET /messages/directory — colleagues available to start a DM with
@@ -332,22 +365,10 @@ router.get('/stream', (req, res) => {
 router.get('/conversations', (req, res) => {
   ensureAllDeptConversations();
 
-  const deptRows = db.prepare(`
+  const rows = db.prepare(`
     SELECT c.*, cm.last_read_at, cm.hidden_at
-    FROM conversations c
-    LEFT JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
-    WHERE c.type = 'department'
-      AND (c.peer_user_id = ? OR c.dept_id = ?)
-  `).all(req.user.id, req.user.id, req.user.dept_id || '');
-
-  const dmRows = db.prepare(`
-    SELECT c.*, cm.last_read_at, cm.hidden_at
-    FROM conversation_members cm
-    JOIN conversations c ON c.id = cm.conversation_id
-    WHERE cm.user_id = ? AND c.type IN ('dm','group')
-  `).all(req.user.id);
-
-  const rows = [...deptRows, ...dmRows];
+    FROM conversations c ${MY_MEMBERSHIP} WHERE ${CAN_OPEN}
+  `).all(...scopeArgs(req.user));
 
   const result = rows.map(conv => {
     const unread = db.prepare(`
@@ -863,11 +884,14 @@ router.get('/search', (req, res) => {
     conversationIds = [conv.id];
   } else {
     ensureAllDeptConversations();
-    const deptIds = db.prepare(
-      "SELECT id FROM conversations WHERE type='department' AND (peer_user_id = ? OR dept_id = ?)"
-    ).all(req.user.id, req.user.dept_id || '').map(r => r.id);
-    const memberIds = db.prepare("SELECT conversation_id FROM conversation_members WHERE user_id=?").all(req.user.id).map(r => r.conversation_id);
-    conversationIds = [...new Set([...deptIds, ...memberIds])];
+    // CAN_OPEN, like everything else. This used to be "my department threads,
+    // UNION every conversation_members row I hold" — the same too-wide rule the
+    // nav badge had, and with the same leftover rows behind it. But search
+    // returns message bodies and sender names, and there is no second check
+    // below: it re-read every row it was handed. A stale membership row on a
+    // department channel meant its private messages were searchable by someone
+    // canSeeConversation() would refuse at the door.
+    conversationIds = myConversationIds(req.user);
   }
 
   if (!conversationIds.length) return res.json({ success: true, results: [], hasMore: false });
@@ -949,18 +973,24 @@ router.post('/conversations/:id/unhide', (req, res) => {
 // GET /messages/unread-count — total across all conversations (nav badge)
 router.get('/unread-count', (req, res) => {
   ensureAllDeptConversations();
+  res.json({ success: true, unread: unreadCountFor(req.user) });
+});
 
-  const total = db.prepare(`
-    SELECT COUNT(*) as n FROM messages msg
-    JOIN conversations c ON c.id = msg.conversation_id
-    LEFT JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
-    WHERE msg.sender_id != ?
-      AND (cm.user_id IS NOT NULL
-           OR (c.type = 'department' AND (c.peer_user_id = ? OR c.dept_id = ?)))
-      AND (cm.last_read_at IS NULL OR msg.created_at > cm.last_read_at)
-  `).get(req.user.id, req.user.id, req.user.id, req.user.dept_id || '').n;
+// POST /messages/read-all — clear the nav badge in one go.
+//
+// Chats had no equivalent of the notification bell's "mark all read", so the
+// only way down to zero was opening every thread one at a time — and a thread
+// that is hidden, or that sorted to the bottom of a long list, is one nobody
+// finds. Same scope as /unread-count: every thread this user can actually open,
+// which is exactly the set the badge counts, so this always reaches zero.
+router.post('/read-all', (req, res) => {
+  ensureAllDeptConversations();
 
-  res.json({ success: true, unread: total });
+  const ids = myConversationIds(req.user);
+  db.transaction(list => list.forEach(id => touchRead(id, req.user.id)))(ids);
+
+  // Recounted rather than assumed zero: a message can land between the two.
+  res.json({ success: true, cleared: ids.length, unread: unreadCountFor(req.user) });
 });
 
 // POST /messages/presence — heartbeat marking the user "active now"
@@ -1000,3 +1030,8 @@ module.exports.isUserOnline             = isUserOnline;
 module.exports.broadcastToUsers         = broadcastToUsers;
 module.exports.audienceOf               = audienceOf;
 module.exports.resolveDeptThread        = resolveDeptThread;
+// Exported for scripts/test-unread.js, which must exercise THE rule rather than
+// a copy of it — a test that reimplements the predicate cannot detect drift.
+module.exports.canSeeConversation       = canSeeConversation;
+module.exports.myConversationIds        = myConversationIds;
+module.exports.unreadCountFor           = unreadCountFor;
