@@ -34,6 +34,29 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+// JWT_EXPIRES_IN, if set, must carry a unit — "8h", not "8". This is not
+// pickiness: jsonwebtoken hands the raw string straight to the `ms` package,
+// and `ms` treats a bare digit string as an ALREADY-IN-MILLISECONDS value with
+// no conversion. "8" is not 8 hours to `ms` — it is 8 milliseconds. Every token
+// this server mints would expire before the response finished sending, so
+// every sign-in would succeed and then bounce the very next request to
+// "Session expired. Please sign in again." — indistinguishable from a broken
+// login except that the login itself keeps reporting success.
+//
+// utils/expiry.js's OWN parser silently falls back to its 30-day default on
+// this same malformed input, which is why `node scripts/check-env.js` could
+// read a value like this and report a healthy 30-day window while the actual
+// signed tokens were already dead — the diagnostic and the real code were
+// answering two different questions. That gap is closed there too, but the
+// server refusing to start on a value it cannot safely use is the fix that
+// actually prevents this rather than merely reporting it after the fact.
+if (process.env.JWT_EXPIRES_IN && !/^\d+[smhd]$/.test(process.env.JWT_EXPIRES_IN)) {
+  console.error(`[Server] FATAL: JWT_EXPIRES_IN="${process.env.JWT_EXPIRES_IN}" has no unit. Refusing to start.`);
+  console.error('         Use a number followed by s, m, h or d — e.g. JWT_EXPIRES_IN=8h');
+  console.error('         A bare number here does not mean hours: every session would expire instantly.');
+  process.exit(1);
+}
+
 app.disable('x-powered-by');
 
 // Security headers (CSP, X-Frame-Options, X-Content-Type-Options, HSTS, etc.).

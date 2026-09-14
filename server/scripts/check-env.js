@@ -40,11 +40,45 @@ else if (fp(secret) === BURNED_JWT_FP) {
 else ok('JWT_SECRET has been rotated (fingerprint ' + fp(secret) + ')');
 
 // ── session lifetime ────────────────────────────────────────────────────────
-const { parseExpirySeconds, configuredExpiry } = require(path.join(SERVER, 'utils', 'expiry'));
+//
+// Two questions, and they used to be answered by two different parsers that
+// can disagree: "what does the app THINK the lifetime is" (utils/expiry.js,
+// used for the sessions.expires_at column and the sliding-renewal midpoint)
+// and "what does jsonwebtoken ACTUALLY mint" (whatever `ms()` makes of the raw
+// string, inside jwt.sign — the thing that decides whether a token works).
+//
+// A bare number with no unit — "8" instead of "8h" — is where they diverge.
+// utils/expiry.js's own regex doesn't match it and silently falls back to its
+// 30-day default; `ms()` treats the same string as already-in-milliseconds, so
+// jwt.sign mints a token that is dead before the HTTP response finishes
+// sending. The old version of this check asked only utils/expiry.js and would
+// have reported a healthy 30-day window for exactly the value that was locking
+// everyone out. It now mints a REAL token the way login actually does and
+// measures what came out, so it is reporting the same thing the server does.
+const jwt = require(path.join(SERVER, 'node_modules', 'jsonwebtoken'));
+const { configuredExpiry } = require(path.join(SERVER, 'utils', 'expiry'));
 const life = configuredExpiry();
-const days = parseExpirySeconds(life) / 86400;
-if (days < 1) fail('JWT_EXPIRES_IN=' + life + ' — people are signed out after ' + (days * 24) + 'h idle. Sliding sessions cannot help overnight.');
-else ok('JWT_EXPIRES_IN=' + life + ' (idle window ' + days + ' day' + (days === 1 ? '' : 's') + ')');
+
+let actualSeconds = null;
+try {
+  const probe = jwt.sign({ x: 1 }, 'check-env-probe-secret', { expiresIn: life });
+  const { iat, exp } = jwt.decode(probe);
+  actualSeconds = exp - iat;
+} catch (e) {
+  fail(`JWT_EXPIRES_IN=${life} — jsonwebtoken rejects this outright: ${e.message}`);
+}
+
+if (actualSeconds !== null) {
+  const days = actualSeconds / 86400;
+  if (actualSeconds <= 60) {
+    fail(`JWT_EXPIRES_IN=${life} mints a token that lives ${actualSeconds}s — everyone is signed out right after logging in.`);
+    console.log('        this almost always means a missing unit — use 8h, not 8. See index.js\'s startup check.');
+  } else if (days < 1) {
+    fail(`JWT_EXPIRES_IN=${life} — people are signed out after ${(days * 24).toFixed(1)}h idle. Sliding sessions cannot help overnight.`);
+  } else {
+    ok(`JWT_EXPIRES_IN=${life} (idle window ${days.toFixed(days % 1 ? 1 : 0)} day${days === 1 ? '' : 's'}, confirmed by actually signing a token)`);
+  }
+}
 
 // ── URLs that end up in emails ──────────────────────────────────────────────
 for (const k of ['APP_URL', 'CLIENT_URL']) {
