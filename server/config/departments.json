@@ -676,7 +676,7 @@
     },
     {
       "id": "hr_dept",
-      "label": "قسم الموارد البشرية",
+      "label": "مجموعة الموارد البشرية",
       "ldapGroup": "hr_dept",
       "services": [
         {
@@ -866,7 +866,7 @@
     },
     {
       "id": "procurement_dept",
-      "label": "قسم المشتريات",
+      "label": "المشتريات",
       "ldapGroup": "procurement_dept",
       "services": [],
       "head": {
@@ -885,7 +885,7 @@
     },
     {
       "id": "it_dept",
-      "label": "قسم تقنية المعلومات",
+      "label": "مجموعة تقنية المعلومات",
       "ldapGroup": "it_dept",
       "services": [],
       "head": {
@@ -911,7 +911,7 @@
     },
     {
       "id": "admin_affairs_dept",
-      "label": "قسم الخدمات الإدارية",
+      "label": "الشؤون الإدارية",
       "ldapGroup": "admin_affairs_dept",
       "services": [],
       "head": {
