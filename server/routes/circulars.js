@@ -23,6 +23,7 @@ const { logAudit }    = require('../utils/audit');
 const { decodeUploadName } = require('../utils/uploadName');
 const store = require('../utils/attachmentStore');
 const { sendMail }    = require('../services/mailService');
+const { layout, meta } = require('../services/emailTemplate');
 const {
   SOURCES, sourceCode, isSource,
   canPublishCircular, publishableSources, canModifyCircular,
@@ -384,15 +385,21 @@ function emailEveryone(item) {
 
     const kind = LABEL[item.source] || 'تعميم';
     const url  = process.env.APP_URL || '';
+    // layout()/meta() escape every field internally — item.title reaches here
+    // as typed by whoever published it, and the previous version put it into
+    // the HTML unescaped. A تعميم reaches literally everyone active in the
+    // organisation, which makes it the single highest-reach email this system
+    // sends and the worst possible place to have skipped that.
     sendMail({
       to,
       subject: `${kind} — ${item.title}`,
-      html: `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif">
-        <h3 style="margin:0 0 .5rem">${kind}</h3>
-        <p style="margin:0 0 .25rem"><b>${item.title}</b></p>
-        <p style="margin:0;color:#555">رقم التعميم: ${item.serial}</p>
-        ${url ? `<p style="margin:1rem 0 0"><a href="${url}">فتح النظام</a></p>` : ''}
-      </div>`,
+      html: layout({
+        title: kind,
+        lead: item.title,
+        bodyHtml: meta([['رقم التعميم', item.serial]]),
+        ctaUrl: url,
+        ctaLabel: 'فتح التعميم',
+      }),
       text: `${kind}\n${item.title}\nرقم التعميم: ${item.serial}`,
     }).catch(e => console.warn('[Circulars] email failed:', e.message));
   } catch (e) {

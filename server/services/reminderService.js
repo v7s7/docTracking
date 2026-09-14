@@ -7,51 +7,60 @@
 const { db } = require('../db');
 const { sendMail } = require('./mailService');
 const { readConfig } = require('./configService');
+const { layout, ltr, esc, arabicPlural, TASKS, BRAND } = require('./emailTemplate');
 
 const DUE_SOON_HOURS = 48;
-
-function escapeHtml(s) {
-  return String(s || '').replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
-}
 
 function deptLabel(depts, id) {
   return depts.find(d => d.id === id)?.label || id;
 }
 
-function buildEmailHtml(label, tasks, appUrl) {
-  const rows = tasks.map(t => `
-    <tr>
-      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${escapeHtml(t.serial)}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${escapeHtml(t.title)}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #eee;color:${t.kind === 'overdue' ? '#C41E1E' : '#B7791F'};font-weight:600;">
-        ${t.kind === 'overdue' ? 'متأخرة / Overdue' : 'قريبة الاستحقاق / Due soon'}
-      </td>
-      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${escapeHtml((t.expected_at || '').slice(0, 16))}</td>
-    </tr>
-  `).join('');
+// Overdue in the brand's own warning red; due-soon in amber. Local to this one
+// table rather than added to BRAND, which is the shared chrome's palette, not
+// every status colour any one email might need.
+const STATUS_COLOR = { overdue: '#C41E1E', due_soon: '#B7791F' };
+const STATUS_LABEL = { overdue: 'متأخرة', due_soon: 'قريبة الاستحقاق' };
 
-  return `
-    <div style="font-family:Arial,sans-serif;">
-      <div style="direction:rtl;text-align:right;">
-        <p>لديك <b>${tasks.length}</b> مهمة تحتاج اهتمام في قسم <b>${escapeHtml(label)}</b>:</p>
-      </div>
-      <p style="color:#666;font-size:0.9em;">You have <b>${tasks.length}</b> task(s) needing attention in <b>${escapeHtml(label)}</b>:</p>
-      <table style="border-collapse:collapse;width:100%;margin-top:10px;">
-        <thead>
-          <tr style="background:#f5f5f5;">
-            <th style="padding:6px 10px;text-align:left;">Serial</th>
-            <th style="padding:6px 10px;text-align:left;">Title</th>
-            <th style="padding:6px 10px;text-align:left;">Status</th>
-            <th style="padding:6px 10px;text-align:left;">Expected</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      ${appUrl ? `<p style="margin-top:14px;"><a href="${appUrl}" style="color:#C41E1E;">${escapeHtml(appUrl)}</a></p>` : ''}
-    </div>
-  `;
+/**
+ * The task table. Not built with emailTemplate's rowsTable() — that helper is
+ * a fixed label/value pair, and a task needs four columns — but it borrows the
+ * exact same colours and font stack (BRAND, imported) so it sits inside
+ * layout()'s shell without looking like a different product bolted on, which
+ * is exactly what this whole file looked like before: Arial instead of Tahoma,
+ * an English-only header row, and a bilingual status tag doing "Overdue" work
+ * twice in one line. serial and the date are Latin content inside an Arabic
+ * table — ltr() isolates them for the same bidi reason the correspondence
+ * emails already had to fix once.
+ */
+function taskRows(tasks) {
+  return tasks.map(t => `
+    <tr>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BRAND.border};font-family:Tahoma,Arial,sans-serif;font-size:13px;color:${BRAND.ink};">${ltr(t.serial)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BRAND.border};font-family:Tahoma,Arial,sans-serif;font-size:13px;color:${BRAND.ink};">${esc(t.title)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BRAND.border};font-family:Tahoma,Arial,sans-serif;font-size:13px;font-weight:bold;color:${STATUS_COLOR[t.kind] || BRAND.ink};white-space:nowrap;">${STATUS_LABEL[t.kind] || ''}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BRAND.border};font-family:Tahoma,Arial,sans-serif;font-size:13px;color:${BRAND.muted};">${ltr((t.expected_at || '').slice(0, 16))}</td>
+    </tr>`).join('');
+}
+
+function buildEmailHtml(label, tasks, appUrl) {
+  const head = ['الرقم', 'العنوان', 'الحالة', 'الموعد المتوقع'];
+  const table = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" dir="rtl"
+           style="border:1px solid ${BRAND.border};border-radius:8px;overflow:hidden;">
+      <tr style="background:${BRAND.wash};">
+        ${head.map(h => `<th align="right" style="padding:8px 10px;font-family:Tahoma,Arial,sans-serif;font-size:12px;color:${BRAND.muted};font-weight:normal;">${esc(h)}</th>`).join('')}
+      </tr>
+      ${taskRows(tasks)}
+    </table>`;
+
+  return layout({
+    title: `لديك ${arabicPlural(tasks.length, TASKS)} تحتاج اهتمامك`,
+    lead:  `في قسم ${label}.`,
+    bodyHtml: table,
+    ctaUrl: appUrl,
+    ctaLabel: 'فتح المهام',
+    footer: `${tasks.length} task(s) need attention — ${label}`,
+  });
 }
 
 async function runReminderCheck() {
@@ -110,7 +119,12 @@ async function runReminderCheck() {
     const label = deptLabel(depts, deptId);
     const sent = await sendMail({
       to: recipients,
-      subject: `[Doc Tracking] ${tasks.length} task(s) need attention — ${label}`,
+      // Natural Arabic, matching how the other three notification types write
+      // theirs — "[Doc Tracking] N task(s)..." was the one subject line in the
+      // system that was entirely English, bracket-prefixed, and looked like it
+      // came from a different product than the rest of the mail this system
+      // sends.
+      subject: `${arabicPlural(tasks.length, TASKS)} تحتاج اهتمامك — ${label}`,
       html: buildEmailHtml(label, tasks, appUrl),
     });
     if (sent) emailed += recipients.length;

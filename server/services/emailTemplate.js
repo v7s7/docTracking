@@ -43,6 +43,7 @@ function arabicPlural(n, [one, two, few, many]) {
 }
 
 const CONVERSATIONS = ['محادثة واحدة', 'محادثتان', 'محادثات', 'محادثة'];
+const TASKS = ['مهمة واحدة', 'مهمتان', 'مهام', 'مهمة'];
 
 /**
  * Wrap content in the branded shell.
@@ -173,4 +174,4 @@ function meta(pairs) {
        ${esc(k)}: <span style="color:${BRAND.ink};">${esc(v)}</span></div>`).join('');
 }
 
-module.exports = { layout, rowsTable, kvTable, paragraph, meta, ltr, arabicPlural, CONVERSATIONS, esc, BRAND };
+module.exports = { layout, rowsTable, kvTable, paragraph, meta, ltr, arabicPlural, CONVERSATIONS, TASKS, esc, BRAND };
