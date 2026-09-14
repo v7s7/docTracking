@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { login as apiLogin, logout as apiLogout, fetchMe, getStoredUser, persistUser, installTokenRenewal } from '../services/authService';
+import {
+  login as apiLogin, logout as apiLogout, fetchMe, getStoredUser, persistUser,
+  installTokenRenewal, installFocusRefresh,
+} from '../services/authService';
 import { sendPresence } from '../services/messageService';
 
 const AuthContext = createContext(null);
@@ -17,11 +20,32 @@ export function AuthProvider({ children }) {
   // Installed before the first request so no renewal is missed.
   installTokenRenewal();
 
-  useEffect(() => {
-    fetchMe()
-      .then(fresh => { if (fresh) { persistUser(fresh); setUser(fresh); } else setUser(null); })
-      .finally(() => setLoading(false));
+  // Three outcomes from fetchMe(), and they mean three different things for
+  // what happens to the screen someone is looking at:
+  //   an object   → the server's current answer. Adopt it.
+  //   null        → the token is genuinely no longer valid. Sign out.
+  //   undefined   → could not tell (network hiccup, 500). Change NOTHING —
+  //                 in particular, do not sign out over it. This matters far
+  //                 more once this same handler is also driving the focus
+  //                 refresh below than it did when it only ran once at load.
+  const applyFetchedUser = useCallback((fresh) => {
+    if (fresh === undefined) return;
+    if (fresh) { persistUser(fresh); setUser(fresh); }
+    else setUser(null);
   }, []);
+
+  useEffect(() => {
+    fetchMe().then(applyFetchedUser).finally(() => setLoading(false));
+  }, [applyFetchedUser]);
+
+  // Re-asks the server whenever the tab regains focus. Without this, `user`
+  // is whatever it was at the moment this tab was opened for the rest of the
+  // session — an administrator moving someone to a different department, or
+  // changing their role, writes to the database immediately but has no way to
+  // reach a tab that is already open. See installFocusRefresh's own comment
+  // for the concrete symptom this closes (CreateTaskModal picking the wrong
+  // department's forms).
+  useEffect(() => installFocusRefresh(applyFetchedUser), [applyFetchedUser]);
 
   const login = useCallback(async (username, password) => {
     const data = await apiLogin(username, password);
