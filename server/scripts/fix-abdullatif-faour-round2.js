@@ -30,12 +30,16 @@
  *   m.abdullatif (real, live account) → correct only the one wrong field:
  *     mobile 33104704 → 35676906. Username, id, dept_id, ext, full_name,
  *     email, session: all untouched.
- *   m.faour (dormant duplicate, zero references) → repurposed in place into
- *     Mohamad Nadeem Faour's own correct row (name, maintenance_dept, no
- *     ext, mobile 66333554, email m.faour@swd.bh — confirmed directly this
+ *   m.faour (dormant, never logged in) → repurposed in place into Mohamad
+ *     Nadeem Faour's own correct row (name, maintenance_dept, no ext,
+ *     mobile 66333554, email m.faour@swd.bh — confirmed directly this
  *     conversation), instead of deleting it and leaving him with no account
- *     until someone notices and creates one. Same zero-reference safety
- *     check applies either way; this just finishes the job in one pass.
+ *     until someone notices and creates one. It does have a handful of
+ *     correspondence_notifications / chat_email_log rows — stale department-
+ *     broadcast artifacts from sitting in the wrong department, not personal
+ *     approval requests (checked: neither account is that department's
+ *     configured head/deputy) — cleared as part of the repurpose since they
+ *     play no part in computing who may actually approve anything.
  *
  * محمد طلحه وحيد is not touched by this at all — he has no row on
  * production to begin with (his mobile number was only ever stray data on
@@ -117,14 +121,43 @@ function main() {
     return;
   }
 
+  // correspondence_notifications and chat_email_log are pure notification
+  // bookkeeping (read directly in services/correspondenceNotify.js and
+  // db/index.js before writing this) — never consulted to decide who may
+  // approve what, so clearing them cannot change any real workflow state.
+  // Anything else referencing this row is unknown territory: refuse rather
+  // than guess.
   const refs = referencesTo(faour.id, 'm.faour');
-  if (faourSessions || refs.length) {
-    console.error('  refusing to repurpose m.faour — found real activity or references:');
+  const KNOWN_SAFE = ['correspondence_notifications', 'chat_email_log'];
+  const unknownRefs = refs.filter(r => !KNOWN_SAFE.some(t => r.startsWith(t + '.')));
+
+  if (faourSessions || unknownRefs.length) {
+    console.error('  refusing to repurpose m.faour — found activity or references this script does not know how to handle safely:');
     if (faourSessions) console.error(`    sessions (${faourSessions})`);
-    refs.forEach(r => console.error(`    ${r}`));
+    unknownRefs.forEach(r => console.error(`    ${r}`));
     process.exit(1);
   }
-  console.log('  OK — m.faour (id ' + faour.id + ') has no sessions and nothing anywhere references it. Safe to repurpose.\n');
+
+  if (refs.length) {
+    console.log('  m.faour has notification bookkeeping rows, but nothing that represents real use of the login:\n');
+    const notifRows = db.prepare(`
+      SELECT n.id, n.correspondence_id, n.serial, n.subject, n.type, n.is_read, n.created_at, c.status
+        FROM correspondence_notifications n LEFT JOIN correspondences c ON c.id = n.correspondence_id
+       WHERE n.user_id = ?`).all(faour.id);
+    notifRows.forEach(r => console.log(`    correspondence_notifications#${r.id}  ${r.serial || '(no serial)'}  "${r.subject || ''}"  type=${r.type}  read=${!!r.is_read}  correspondence status=${r.status || '?'}  ${r.created_at}`));
+    const chatRows = db.prepare('SELECT conversation_id, last_emailed_at FROM chat_email_log WHERE user_id = ?').all(faour.id);
+    chatRows.forEach(r => console.log(`    chat_email_log  conversation_id=${r.conversation_id}  last_emailed_at=${r.last_emailed_at}`));
+    console.log('\n  These exist because this id was incorrectly sitting in mosques_guidance_dept: automated');
+    console.log('  department-wide notifications addressed "whoever is active here" and wrongly picked up this');
+    console.log('  never-logged-in account along with it (neither m.faour nor m.abdullatif is that department\'s');
+    console.log('  configured head/deputy, so none of these are personal approval requests). Correspondence');
+    console.log('  approval is computed fresh from department config every time, never from these rows — clearing');
+    console.log('  them changes no one\'s ability to approve or act on anything still open. Left in place, they');
+    console.log('  would only show up as confusing unread badges about a department Nadeem Faour has nothing to');
+    console.log('  do with, so they are cleared as part of the repurpose below.\n');
+  }
+
+  console.log('  OK — m.faour (id ' + faour.id + ') has no sessions and no references this script cannot account for. Safe to repurpose.\n');
 
   console.log('  m.faour row before the change, for the record:');
   console.log('   ', JSON.stringify(faour));
@@ -139,6 +172,8 @@ function main() {
 
   db.transaction(() => {
     db.prepare("UPDATE users SET mobile = '35676906' WHERE username = 'm.abdullatif'").run();
+    db.prepare('DELETE FROM correspondence_notifications WHERE user_id = ?').run(faour.id);
+    db.prepare('DELETE FROM chat_email_log WHERE user_id = ?').run(faour.id);
     db.prepare("UPDATE users SET full_name=?, dept_id=?, ext=?, mobile=?, email=? WHERE username = 'm.faour'")
       .run('محمد نديم فاعور', 'maintenance_dept', null, '66333554', 'm.faour@swd.bh');
   })();
