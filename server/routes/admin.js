@@ -109,6 +109,31 @@ router.put('/departments/:id', ...SUPER_ONLY, (req, res) => {
   res.json({ success: true, department: cfg.departments[idx] });
 });
 
+// Unlinks a department's head/deputy from a login account — the in-app,
+// no-server-access equivalent of scripts/unlink-department-role.js. Fixes the
+// case where one person ended up head/deputy of more than one department:
+// only the account link is cleared, name/ext/mobile stay on file untouched,
+// exactly like an intentionally-unlinked contact elsewhere in this config
+// already looks. Idempotent — unlinking an already-empty slot is a no-op.
+router.delete('/departments/:id/leadership/:slot', ...SUPER_ONLY, (req, res) => {
+  const { slot } = req.params;
+  if (slot !== 'head' && slot !== 'deputy') {
+    return res.status(400).json({ success: false, message: '`slot` must be "head" or "deputy".' });
+  }
+
+  const cfg  = readConfig();
+  const dept = cfg.departments.find(d => d.id === req.params.id);
+  if (!dept) return res.status(404).json({ success: false, message: 'Department not found.' });
+
+  const removedUsername = dept[slot]?.username || null;
+  if (removedUsername) {
+    dept[slot].username = null;
+    writeConfig(cfg);
+    logAudit(req.user, 'DEPARTMENT_LEADERSHIP_UNLINKED', 'department', dept.id, { slot, removedUsername }, req.ip);
+  }
+  res.json({ success: true, department: dept, removedUsername });
+});
+
 router.delete('/departments/:id', ...SUPER_ONLY, (req, res) => {
   const cfg    = readConfig();
   const before = cfg.departments.length;

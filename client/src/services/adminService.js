@@ -22,6 +22,9 @@ export const getDepartments   = ()          => request('GET',    '/admin/departm
 export const createDept       = (body)      => request('POST',   '/admin/departments', body);
 export const updateDept       = (id, body)  => request('PUT',    `/admin/departments/${id}`, body);
 export const deleteDept       = (id)        => request('DELETE', `/admin/departments/${id}`);
+// Unlinks a department's head/deputy from whichever account currently holds
+// it — name/ext/mobile stay on file, only the login link is removed.
+export const unlinkDeptLeadership = (deptId, slot) => request('DELETE', `/admin/departments/${deptId}/leadership/${slot}`);
 
 // Services (within a department)
 export const getServices      = (deptId)              => request('GET',    `/admin/departments/${deptId}/services`);

@@ -6,6 +6,7 @@ import {
   bulkUpdateUsers,
 } from '../../services/userService';
 import { getDepartments } from '../../services/deptService';
+import { unlinkDeptLeadership } from '../../services/adminService';
 import { getAuditLog } from '../../services/auditService';
 import {
   X, AlertTriangle, Users, Network, UserPlus, Search, ChevronDown,
@@ -836,10 +837,13 @@ function RolesGuide({ t, users }) {
 //
 // SUPER_ADMIN only, same gate as the AD browse panel below it: this is
 // organisational structure, not a day-to-day HR task.
-function DepartmentLeadership({ t, depts }) {
+function DepartmentLeadership({ t, depts, onReload }) {
   const d = t.deptLeadership;
   const [open, setOpen] = useState(false);
   const [onlyMulti, setOnlyMulti] = useState(true);
+  const [busy, setBusy] = useState(null); // "<deptId>:<slot>" currently being removed
+  const [err, setErr] = useState('');
+  const [confirm, confirmDialog] = useConfirm();
 
   const people = useMemo(() => {
     const byUsername = new Map();
@@ -863,8 +867,28 @@ function DepartmentLeadership({ t, depts }) {
   // its neighbours, when the answer is simply "nobody."
   useEffect(() => { if (multi.length) setOpen(true); }, [multi.length]);
 
+  async function handleRemove(person, post) {
+    const roleLabel = post.slot === 'head' ? d.asHead : d.asDeputy;
+    const msg = d.confirmRemove
+      .replace('{name}', person.name)
+      .replace('{role}', roleLabel)
+      .replace('{dept}', post.deptLabel);
+    if (!await confirm(msg, { danger: true })) return;
+
+    const key = `${post.deptId}:${post.slot}`;
+    setBusy(key); setErr('');
+    try {
+      await unlinkDeptLeadership(post.deptId, post.slot);
+      onReload();
+    } catch {
+      setErr(d.removeFailed);
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="card" style={{ marginBottom: '1.25rem' }}>
+      {confirmDialog}
       <button className="usr-disclose" onClick={() => setOpen(o => !o)} aria-expanded={open}>
         <Network size={17} strokeWidth={1.7} style={{ color: multi.length ? 'var(--warning)' : 'var(--primary)' }} />
         <span>
@@ -887,6 +911,7 @@ function DepartmentLeadership({ t, depts }) {
               {d.all} <span className="usr-chip-n">{people.length}</span>
             </button>
           </div>
+          {err && <p style={{ margin: '0 1.25rem 0.75rem', color: 'var(--danger)', fontSize: 'var(--fs-xs)' }}>{err}</p>}
           <div className="usr-roles">
             {shown.length === 0 && <p style={{ padding: '0 0.15rem', color: 'var(--text-3)' }}>{d.empty}</p>}
             {shown.map(p => (
@@ -896,11 +921,26 @@ function DepartmentLeadership({ t, depts }) {
                   {p.posts.length > 1 && <span className="usr-chip-n" style={{ background: 'var(--warning)', color: '#fff' }}>{p.posts.length}</span>}
                 </div>
                 <p style={{ marginBottom: '0.3rem' }} dir="ltr" className="text-muted">{p.username}</p>
-                {p.posts.map((post, i) => (
-                  <p key={i}>
-                    {post.slot === 'head' ? d.asHead : d.asDeputy} — {post.deptLabel}
-                  </p>
-                ))}
+                {p.posts.map((post, i) => {
+                  const key = `${post.deptId}:${post.slot}`;
+                  return (
+                    <p key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <span>{post.slot === 'head' ? d.asHead : d.asDeputy} — {post.deptLabel}</span>
+                      {p.posts.length > 1 && (
+                        <button
+                          type="button"
+                          className="dir-clear"
+                          title={d.remove}
+                          aria-label={d.remove}
+                          disabled={busy === key}
+                          onClick={() => handleRemove(p, post)}
+                        >
+                          <X size={12} strokeWidth={2.4} />
+                        </button>
+                      )}
+                    </p>
+                  );
+                })}
               </div>
             ))}
           </div>
@@ -976,7 +1016,7 @@ export default function UserManagement() {
     <div className="usr-page">
       {confirmDialog}
       <RolesGuide t={t} users={users} />
-      {can.browseDirectory && <DepartmentLeadership t={t} depts={depts} />}
+      {can.browseDirectory && <DepartmentLeadership t={t} depts={depts} onReload={load} />}
       <SystemUsers
         t={t} users={users} depts={depts} loading={loading} error={error} can={can}
         onReload={load} onEdit={setModal} onDelete={handleDelete}
