@@ -822,6 +822,94 @@ function RolesGuide({ t, users }) {
   );
 }
 
+// ── Who holds more than one department ──────────────────────────────────────
+//
+// Prompted by a real, unanswerable question: "why does this person see a
+// second department's correspondence?" There is nowhere in the app that ever
+// writes department head/deputy — every one of those assignments came from
+// directly editing config/departments.json, during setup or by script, never
+// through an audited action. So "why" has no log to check. What مدير النظام
+// CAN have is "who, right now" — a live read of the same config every
+// department screen already reads, computed client-side from data already on
+// the page (no new endpoint, GET /departments already returns head+deputy for
+// every department).
+//
+// SUPER_ADMIN only, same gate as the AD browse panel below it: this is
+// organisational structure, not a day-to-day HR task.
+function DepartmentLeadership({ t, depts }) {
+  const d = t.deptLeadership;
+  const [open, setOpen] = useState(false);
+  const [onlyMulti, setOnlyMulti] = useState(true);
+
+  const people = useMemo(() => {
+    const byUsername = new Map();
+    for (const dept of depts) {
+      for (const slot of ['head', 'deputy']) {
+        const p = dept[slot];
+        if (!p?.username) continue; // an unlinked contact — a name with no account, nothing to flag
+        const key = p.username.trim().toLowerCase();
+        if (!byUsername.has(key)) byUsername.set(key, { username: p.username, name: p.name, posts: [] });
+        byUsername.get(key).posts.push({ deptId: dept.id, deptLabel: dept.label, slot });
+      }
+    }
+    return [...byUsername.values()].sort((a, b) => b.posts.length - a.posts.length || a.name.localeCompare(b.name, 'ar'));
+  }, [depts]);
+
+  const multi = people.filter(p => p.posts.length > 1);
+  const shown = onlyMulti ? multi : people;
+
+  // Opens itself when there is something to see, so the fact reaches مدير
+  // النظام on the next visit to this page without a click — collapsed, like
+  // its neighbours, when the answer is simply "nobody."
+  useEffect(() => { if (multi.length) setOpen(true); }, [multi.length]);
+
+  return (
+    <div className="card" style={{ marginBottom: '1.25rem' }}>
+      <button className="usr-disclose" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <Network size={17} strokeWidth={1.7} style={{ color: multi.length ? 'var(--warning)' : 'var(--primary)' }} />
+        <span>
+          <span className="card-title">{d.title}</span>
+          <span className="card-subtitle">{multi.length ? d.subtitleMulti.replace('{n}', multi.length) : d.subtitleNone}</span>
+        </span>
+        <ChevronDown size={16} strokeWidth={2} className={open ? 'usr-chev open' : 'usr-chev'} />
+      </button>
+      {open && (
+        <>
+          <div className="usr-deptfilter">
+            <button
+              className={`btn btn-sm ${onlyMulti ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setOnlyMulti(true)}>
+              {d.multiOnly} <span className="usr-chip-n">{multi.length}</span>
+            </button>
+            <button
+              className={`btn btn-sm ${!onlyMulti ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setOnlyMulti(false)}>
+              {d.all} <span className="usr-chip-n">{people.length}</span>
+            </button>
+          </div>
+          <div className="usr-roles">
+            {shown.length === 0 && <p style={{ padding: '0 0.15rem', color: 'var(--text-3)' }}>{d.empty}</p>}
+            {shown.map(p => (
+              <div key={p.username} className="usr-role" style={p.posts.length > 1 ? { borderColor: 'var(--warning)' } : undefined}>
+                <div className="usr-role-head">
+                  <strong>{p.name}</strong>
+                  {p.posts.length > 1 && <span className="usr-chip-n" style={{ background: 'var(--warning)', color: '#fff' }}>{p.posts.length}</span>}
+                </div>
+                <p style={{ marginBottom: '0.3rem' }} dir="ltr" className="text-muted">{p.username}</p>
+                {p.posts.map((post, i) => (
+                  <p key={i}>
+                    {post.slot === 'head' ? d.asHead : d.asDeputy} — {post.deptLabel}
+                  </p>
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Page ────────────────────────────────────────────────────────────────────
 export default function UserManagement() {
   const { t } = useLang();
@@ -888,6 +976,7 @@ export default function UserManagement() {
     <div className="usr-page">
       {confirmDialog}
       <RolesGuide t={t} users={users} />
+      {can.browseDirectory && <DepartmentLeadership t={t} depts={depts} />}
       <SystemUsers
         t={t} users={users} depts={depts} loading={loading} error={error} can={can}
         onReload={load} onEdit={setModal} onDelete={handleDelete}
