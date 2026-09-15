@@ -30,18 +30,20 @@
  *   m.abdullatif (real, live account) → correct only the one wrong field:
  *     mobile 33104704 → 35676906. Username, id, dept_id, ext, full_name,
  *     email, session: all untouched.
- *   m.faour (dormant duplicate, zero references) → deleted outright, same
- *     as the "orphan" cleanup fix-directory-links.js already does for an
- *     unclaimed link-directory row. Frees the username for whoever actually
- *     is Mohamad Nadeem Faour to use the moment he first logs in.
+ *   m.faour (dormant duplicate, zero references) → repurposed in place into
+ *     Mohamad Nadeem Faour's own correct row (name, maintenance_dept, no
+ *     ext, mobile 66333554, email m.faour@swd.bh — confirmed directly this
+ *     conversation), instead of deleting it and leaving him with no account
+ *     until someone notices and creates one. Same zero-reference safety
+ *     check applies either way; this just finishes the job in one pass.
  *
  * محمد طلحه وحيد is not touched by this at all — he has no row on
  * production to begin with (his mobile number was only ever stray data on
  * m.abdullatif, never a real account of his). Nothing to undo for him here.
  *
  * Self-verifying like the rest of this family: refuses instead of guessing
- * if reality has moved again since this was written, and refuses the delete
- * outright if anything anywhere references that row.
+ * if reality has moved again since this was written, and refuses to touch
+ * m.faour at all if anything anywhere references that row.
  */
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
@@ -97,7 +99,7 @@ function main() {
   console.log(`  m.faour has ${faourSessions} session(s) — must be 0 for the delete below to be safe.\n`);
 
   if (faour.password_hash) {
-    console.error('  refusing — m.faour has a local password set, meaning a real person has been using this exact login. Not deleting.');
+    console.error('  refusing — m.faour has a local password set, meaning a real person has been using this exact login. Not touching it.');
     process.exit(1);
   }
   if (faour.full_name !== 'محمد عبداللطيف محمد') {
@@ -117,16 +119,18 @@ function main() {
 
   const refs = referencesTo(faour.id, 'm.faour');
   if (faourSessions || refs.length) {
-    console.error('  refusing to delete m.faour — found real activity or references:');
+    console.error('  refusing to repurpose m.faour — found real activity or references:');
     if (faourSessions) console.error(`    sessions (${faourSessions})`);
     refs.forEach(r => console.error(`    ${r}`));
     process.exit(1);
   }
-  console.log('  OK — m.faour (id ' + faour.id + ') has no sessions and nothing anywhere references it. Safe to delete.\n');
+  console.log('  OK — m.faour (id ' + faour.id + ') has no sessions and nothing anywhere references it. Safe to repurpose.\n');
 
-  console.log('  m.faour row about to be deleted, in full, for the record:');
+  console.log('  m.faour row before the change, for the record:');
   console.log('   ', JSON.stringify(faour));
   console.log('');
+  console.log('  becomes:');
+  console.log('    full_name محمد نديم فاعور, dept_id maintenance_dept, ext (none), mobile 66333554, email m.faour@swd.bh\n');
 
   if (!APPLY) {
     console.log('[fix round 2] dry run — nothing written. Re-run with --apply to make these changes.\n');
@@ -135,14 +139,16 @@ function main() {
 
   db.transaction(() => {
     db.prepare("UPDATE users SET mobile = '35676906' WHERE username = 'm.abdullatif'").run();
-    db.prepare("DELETE FROM users WHERE username = 'm.faour'").run();
+    db.prepare("UPDATE users SET full_name=?, dept_id=?, ext=?, mobile=?, email=? WHERE username = 'm.faour'")
+      .run('محمد نديم فاعور', 'maintenance_dept', null, '66333554', 'm.faour@swd.bh');
   })();
 
-  const after = db.prepare("SELECT id, username, full_name, dept_id, ext, mobile, email FROM users WHERE username = 'm.abdullatif'").get();
-  console.log('[fix round 2] done. m.abdullatif now:');
-  console.log('  ', JSON.stringify(after));
-  console.log('\n  m.faour deleted. It will be recreated correctly the moment its real');
-  console.log('  owner (Mohamad Nadeem Faour) is given an account or first logs in.\n');
+  const abdullatifAfter = db.prepare("SELECT id, username, full_name, dept_id, ext, mobile, email FROM users WHERE username = 'm.abdullatif'").get();
+  const faourAfter      = db.prepare("SELECT id, username, full_name, dept_id, ext, mobile, email FROM users WHERE username = 'm.faour'").get();
+  console.log('[fix round 2] done.');
+  console.log('  m.abdullatif now:', JSON.stringify(abdullatifAfter));
+  console.log('  m.faour now:     ', JSON.stringify(faourAfter));
+  console.log('');
 }
 
 main();
