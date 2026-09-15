@@ -124,7 +124,7 @@ export default function CircularDetail({ item, onClose, onChanged, onEdit }) {
                           <tr key={`r${u.id}`}>
                             <td>{u.full_name}</td>
                             <td><ExtLink ext={u.ext} title={t.directory.callExt} /></td>
-                            <td>{deptName(u.dept_id)}</td>
+                            <td>{deptName(u.dept_id, u.dept_label)}</td>
                             <td><span className="badge" style={READ_STYLE}><Check size={11} strokeWidth={3} /> {fmtDateTime(u.read_at)}</span></td>
                           </tr>
                         ))}
@@ -132,7 +132,7 @@ export default function CircularDetail({ item, onClose, onChanged, onEdit }) {
                           <tr key={`u${u.id}`}>
                             <td>{u.full_name}</td>
                             <td><ExtLink ext={u.ext} title={t.directory.callExt} /></td>
-                            <td>{deptName(u.dept_id)}</td>
+                            <td>{deptName(u.dept_id, u.dept_label)}</td>
                             <td><span className="badge" style={UNREAD_STYLE}>{c.notReadYet}</span></td>
                           </tr>
                         ))}

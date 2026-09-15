@@ -24,6 +24,7 @@ const { decodeUploadName } = require('../utils/uploadName');
 const store = require('../utils/attachmentStore');
 const { sendMail }    = require('../services/mailService');
 const { layout, meta } = require('../services/emailTemplate');
+const { readConfig }  = require('../services/configService');
 const {
   SOURCES, sourceCode, isSource,
   canPublishCircular, publishableSources, canModifyCircular,
@@ -222,7 +223,15 @@ router.get('/:id/readers', AUTH, (req, res) => {
      ORDER BY u.dept_id, u.full_name COLLATE NOCASE
   `).all(row.id);
 
-  res.json({ success: true, read, unread });
+  // dept_label travels with dept_id so this list doesn't need the client's own
+  // hardcoded name map — read live, so a department renamed five minutes ago
+  // already shows correctly here, the same as everywhere else this pattern is
+  // used (from_dept_label, to_dept_label, ...).
+  const { departments = [] } = readConfig();
+  const labelOf = id => departments.find(d => d.id === id)?.label || id || '';
+  const withLabel = rows => rows.map(u => ({ ...u, dept_label: labelOf(u.dept_id) }));
+
+  res.json({ success: true, read: withLabel(read), unread: withLabel(unread) });
 });
 
 // ── GET /:id/attachments/:attId — authorised download ─────────────────────

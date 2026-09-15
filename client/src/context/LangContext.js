@@ -1391,11 +1391,30 @@ export function LangProvider({ children }) {
   // Department names come back from the API in Arabic only — they live in
   // departments.json, which has one label per department. groupLabels carries
   // both languages, so this is what turns "الموارد البشرية" into "Human
-  // Resources" when EN is selected. Falls back to whatever the server sent, so
-  // a department added through the admin panel still shows a name.
+  // Resources" when EN is selected.
+  //
+  // Priority used to be groupLabels FIRST, fallback second — which reads
+  // backwards once you notice almost every caller already passes the live
+  // label as `fallback` (from_dept_label, u.dept_label, d.label — the server
+  // sends one alongside nearly every dept_id). groupLabels was checked BEFORE
+  // that live value was ever looked at, so renaming a department in the admin
+  // panel changed the database and every server response immediately, but the
+  // screen kept showing the old name anyway — not stale data, a fresh answer
+  // the code had already decided not to use.
+  //
+  // In Arabic — the language departments.json's label actually IS — the fresh
+  // one now wins outright, so a rename reaches every screen the moment the
+  // next request lands, no rebuild required. English has no live source to
+  // prefer (the API only ever sends Arabic), so it still leans on the
+  // hardcoded translation first, with the fresh Arabic text as a fallback
+  // rather than a bare id — better than "board_office" while it waits for a
+  // human to add the translation.
   const deptName = useCallback(
-    (id, fallback) => (id && t.groupLabels?.[id]) || fallback || id || '',
-    [t]
+    (id, fallback) => {
+      if (lang === 'ar') return fallback || (id && t.groupLabels?.[id]) || id || '';
+      return (id && t.groupLabels?.[id]) || fallback || id || '';
+    },
+    [t, lang]
   );
 
   return (
