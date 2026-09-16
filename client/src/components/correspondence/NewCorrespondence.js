@@ -116,9 +116,17 @@ export default function NewCorrespondence({ editing = null, onDone, onCancel }) 
         priority,
         files,
       };
-      if (editing) await updateCorrespondence(editing.id, payload);
-      else         await createCorrespondence(payload);
-      onDone?.(editing ? c.resubmitted : c.sentToHead);
+      const res = editing
+        ? await updateCorrespondence(editing.id, payload)
+        : await createCorrespondence(payload);
+      // A رئيس قسم's own memo is approved the moment he sends it, so telling him
+      // it went to the department head for approval would simply be untrue. The
+      // server decides — the client reads the status it got back rather than
+      // re-deriving who may approve, which is how the two drift apart.
+      const direct = res?.item?.status === 'approved';
+      onDone?.(editing
+        ? (direct ? c.resubmittedDirect : c.resubmitted)
+        : (direct ? c.sentDirect        : c.sentToHead));
     } catch (e2) {
       setErr(e2.message);
     } finally {

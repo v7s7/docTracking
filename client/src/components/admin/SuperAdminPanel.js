@@ -878,6 +878,9 @@ function BackupTab({ t }) {
 // ── Templates tab ──────────────────────────────────────────────
 const blankTpl = { name: '', type: 'incoming', priority: 'normal', source_entity: '', delivery_method: '', expected_days: '', note: '' };
 
+// Unmounted with نظام المهام, kept whole so restoring it is one line in the
+// tab list above rather than a rewrite.
+// eslint-disable-next-line no-unused-vars
 function TemplatesTab({ t }) {
   const [templates, setTemplates] = useState([]);
   const [adding,    setAdding]    = useState(false);
@@ -1291,7 +1294,8 @@ export default function SuperAdminPanel() {
   const tabs = [
     { id: 'departments', icon: <Building2      size={15} strokeWidth={1.8} />, label: t.deptFields },
     { id: 'autoroles',   icon: <Key            size={15} strokeWidth={1.8} />, label: t.roleMaps },
-    { id: 'templates',   icon: <LayoutTemplate size={15} strokeWidth={1.8} />, label: t.templates },
+    // قوالب المهام retired with نظام المهام — TemplatesTab is still in this
+    // file, and GET/POST /templates is still on disk, both unmounted.
     { id: 'sessions',    icon: <Monitor        size={15} strokeWidth={1.8} />, label: t.activeSessions },
     { id: 'audit',       icon: <Activity       size={15} strokeWidth={1.8} />, label: t.auditLog },
     { id: 'backup',      icon: <HardDrive      size={15} strokeWidth={1.8} />, label: t.config },
@@ -1322,7 +1326,6 @@ export default function SuperAdminPanel() {
         <div className="card-body">
           {tab === 'departments' && <DepartmentsTab t={t} />}
           {tab === 'autoroles'   && <AutoRolesTab  t={t} />}
-          {tab === 'templates'   && <TemplatesTab  t={t} />}
           {tab === 'sessions'    && <SessionsTab   t={t} />}
           {tab === 'audit'       && <AuditLogTab   t={t} />}
           {tab === 'backup'      && <BackupTab     t={t} />}

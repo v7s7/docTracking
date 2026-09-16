@@ -1,22 +1,25 @@
 // server/services/scheduler.js
-// Daily cron + a startup catch-up run for the overdue/due-soon task
-// reminder check, plus a more frequent check for chat messages sitting
-// unread too long. Both are safe to run any number of times —
-// runReminderCheck dedupes per task per calendar day via
-// tasks.last_reminder_at, and runChatReminderCheck dedupes per
-// (person, conversation) via chat_email_log, and returns early when the master
-// email switch is off.
+// A recurring check for chat messages sitting unread too long. Safe to run any
+// number of times — runChatReminderCheck dedupes per (person, conversation) via
+// chat_email_log, and returns early when the master email switch is off.
+//
+// The daily 07:00 task digest that used to live here is retired with نظام
+// المهام; reminderService itself is still on disk and still reachable through
+// POST /admin/reminders/run, so nothing is lost if the module comes back.
 const cron = require('node-cron');
-const { runReminderCheck } = require('./reminderService');
 const { runChatReminderCheck } = require('./chatReminderService');
 
 function start() {
-  // 07:00 every day, server local time.
-  cron.schedule('0 7 * * *', () => {
-    runReminderCheck()
-      .then(r => console.log('[Reminders] Daily run:', r))
-      .catch(err => console.error('[Reminders] Daily run failed:', err.message));
-  });
+  // The 07:00 task digest is RETIRED along with نظام المهام (see index.js).
+  // It emailed people about tasks in a module nothing can reach any more, which
+  // is worse than sending nothing. Left commented rather than deleted so it
+  // comes back with the module if that is ever reversed.
+  //
+  // cron.schedule('0 7 * * *', () => {
+  //   runReminderCheck()
+  //     .then(r => console.log('[Reminders] Daily run:', r))
+  //     .catch(err => console.error('[Reminders] Daily run failed:', err.message));
+  // });
 
   // Every minute. The chat check is now a 5-minute quiet window rather than a
   // 1-hour staleness timer, so it has to run far more often than the daily
@@ -32,19 +35,16 @@ function start() {
       .catch(err => console.error('[Chat reminders] Run failed:', err.message));
   });
 
-  // Catch-up shortly after boot, in case the server was down at 07:00.
-  // Deduped by last_reminder_at / last_chat_reminder_at, so this won't
-  // double-send if a scheduled run already fired today.
+  // Catch-up shortly after boot, in case the server was down when a run was due.
+  // Deduped by last_chat_reminder_at, so this won't double-send if a scheduled
+  // run already fired.
   setTimeout(() => {
-    runReminderCheck()
-      .then(r => console.log('[Reminders] Startup run:', r))
-      .catch(err => console.error('[Reminders] Startup run failed:', err.message));
     runChatReminderCheck()
       .then(r => console.log('[Chat reminders] Startup run:', r))
       .catch(err => console.error('[Chat reminders] Startup run failed:', err.message));
   }, 15_000);
 
-  console.log('[Reminders] Scheduler started — task digest daily at 07:00, chat check every minute, plus startup catch-up.');
+  console.log('[Reminders] Scheduler started — chat check every minute, plus startup catch-up. (Task digest retired with نظام المهام.)');
 }
 
 module.exports = { start };

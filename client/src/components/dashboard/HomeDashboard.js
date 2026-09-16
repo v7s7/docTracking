@@ -7,6 +7,7 @@ import { useLang } from '../../context/LangContext';
 import { getMyDay, getCorrespondence, completeCorrespondence } from '../../services/correspondenceService';
 import { useToast } from '../common/Toast';
 import CorrespondenceDetail from '../correspondence/CorrespondenceDetail';
+import { StatusBadge, fmtDate } from '../correspondence/constants';
 
 // لوحة المتابعة
 //
@@ -18,6 +19,11 @@ import CorrespondenceDetail from '../correspondence/CorrespondenceDetail';
 // So the page leads with a list of things only this user can unblock, oldest
 // first, each with the one button that moves it on. Counts are still here, but
 // small and underneath, because they are context rather than work.
+//
+// URD 6.1 also requires the five headline figures and «قائمة بآخر المراسلات
+// مرتبة تنازلياً حسب التاريخ». Those are back, below the action list rather
+// than above it — the ordering is the point. What is waiting on you first;
+// where things stand second.
 
 // Each kind of action carries its own icon and its own verb. Colour never
 // travels alone — the icon and the label say the same thing.
@@ -120,7 +126,7 @@ export default function HomeDashboard({ onEdit, onDiscuss, onNavigate, refreshKe
   if (loading) return <div className="page-loading"><div className="spinner" /></div>;
   if (err) return <div className="alert alert-error">{err}</div>;
 
-  const { actions = [], counts = {}, dept, system, scope } = data || {};
+  const { actions = [], counts = {}, stats = {}, recent = [], dept, system, scope } = data || {};
   const Arrow = isRTL ? ArrowLeft : ArrowRight;
 
   return (
@@ -179,6 +185,54 @@ export default function HomeDashboard({ onEdit, onDiscuss, onNavigate, refreshKe
             hint={dept.oldestDays ? h.oldestWaiting.replace('{n}', dept.oldestDays) : undefined}
             onClick={() => onNavigate?.('corr-approvals')} />
         )}
+      </div>
+
+      {/* ── URD 6.1: the five figures, and the newest records ──── */}
+      <div className="card day-card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">{h.overall}</h2>
+            <div className="card-subtitle">{h.overallHint}</div>
+          </div>
+        </div>
+        <div className="card-body">
+          <div className="day-deptgrid">
+            <div><span className="day-stat">{stats.total ?? 0}</span><span>{h.kpiTotal}</span></div>
+            <div><span className="day-stat">{stats.pending ?? 0}</span><span>{t.corr.statuses.pending}</span></div>
+            <div><span className="day-stat">{stats.approved ?? 0}</span><span>{t.corr.statuses.approved}</span></div>
+            <div><span className="day-stat">{stats.done ?? 0}</span><span>{t.corr.statuses.done}</span></div>
+            <div><span className="day-stat">{stats.returned ?? 0}</span><span>{t.corr.statuses.returned}</span></div>
+          </div>
+
+          {!!recent.length && (
+            <div className="table-wrap" style={{ marginTop: '1rem' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t.corr.serial}</th>
+                    <th>{t.corr.subject}</th>
+                    <th>{t.corr.fromDept}</th>
+                    <th>{t.corr.toDept}</th>
+                    <th>{t.corr.status}</th>
+                    <th>{t.corr.date}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map(r => (
+                    <tr key={r.id} onClick={() => openOne(r.id)} style={{ cursor: 'pointer' }}>
+                      <td><code className="tag">{r.serial}</code></td>
+                      <td style={{ fontWeight: 600 }}>{r.subject}</td>
+                      <td>{deptName(r.from_dept_id, r.from_dept_label)}</td>
+                      <td>{deptName(r.to_dept_id, r.to_dept_label)}</td>
+                      <td><StatusBadge status={r.status} t={t} /></td>
+                      <td>{fmtDate(r.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── My department, for a رئيس قسم or نائب ─────────────── */}

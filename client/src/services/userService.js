@@ -19,6 +19,13 @@ export const updateUser     = (id, body) => req(`/users/${id}`, { method: 'PUT',
 export const deleteUser     = (id)       => req(`/users/${id}`, { method: 'DELETE' });
 export const assignLdapRole = (body)     => req('/users/ldap-assign', { method: 'POST', body: JSON.stringify(body) });
 
+// «استعادة من Active Directory». Two calls on purpose: preview first so the
+// confirmation can name the values being replaced, then apply. A dialog that
+// asks "restore from AD?" without showing what changes is asking someone to
+// approve something they cannot see.
+export const previewAdDefault = (id) => req(`/users/${id}/ad-default`);
+export const applyAdDefault   = (id) => req(`/users/${id}/ad-default`, { method: 'POST' });
+
 export async function uploadAvatar(file) {
   const form = new FormData();
   form.append('avatar', file);

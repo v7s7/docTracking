@@ -2,16 +2,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LangProvider, useLang } from './context/LangContext';
 import {
-  LayoutDashboard, ClipboardList, Users, Settings, LogOut, Lock, MessageCircle, Camera, Trash2, Download,
+  LayoutDashboard, Users, Settings, LogOut, Lock, MessageCircle, Camera, Trash2,
   Mail, PenSquare, Inbox, CheckCircle2, RotateCcw, Archive, ChevronDown, ChevronLeft, BookUser, BarChart3,
   Megaphone,
 } from 'lucide-react';
-import { exportTasks } from './services/taskService';
 import LoginPage from './components/auth/LoginPage';
 import SuperAdminPanel from './components/admin/SuperAdminPanel';
 import HomeDashboard from './components/dashboard/HomeDashboard';
 import { ToastProvider, useToast } from './components/common/Toast';
-import TaskDetail from './components/tasks/TaskDetail';
 import UserManagement from './components/users/UserManagement';
 import NotificationBell from './components/notifications/NotificationBell';
 import Messages from './components/messages/Messages';
@@ -75,9 +73,14 @@ function corrChildren(t, canSeeReports) {
 // ── Nav items per role ───────────────────────────────────────
 function navItems(user, t, hasMessages, chatOnly) {
   const role = user?.role;
-  // The desktop app is chat-focused for now: show only Messages.
-  // Correspondence is web-first while the desktop question is open — flip this
-  // single flag to surface it there too.
+  // The desktop app used to show only المحادثات. It now shows the whole system,
+  // the same as the web app — `chatOnly` is left as a parameter so the old
+  // behaviour is one argument away, but nothing passes true for it any more.
+  //
+  // Worth knowing if this is ever revisited: this is a WEB-side switch. The
+  // Electron wrapper loads the deployed bundle from the server, so changing it
+  // here reaches every desktop client on its next launch. Nobody reinstalls the
+  // .exe for this.
   if (chatOnly && hasMessages) {
     return [{ id: 'messages', icon: <MessageCircle size={20} strokeWidth={1.8} />, label: t.messages }];
   }
@@ -107,7 +110,7 @@ function NavBadge({ n }) {
 }
 
 // ── Header ───────────────────────────────────────────────────
-function Header({ user, onTaskClick, onCorrClick }) {
+function Header({ user, onCorrClick }) {
   const { logout, updateUser } = useAuth();
   const { t, lang, toggle } = useLang();
   const [statusText, setStatusTextState] = useState('');
@@ -194,7 +197,7 @@ function Header({ user, onTaskClick, onCorrClick }) {
           <button className={`lang-btn${lang === 'en' ? ' active' : ''}`} type="button"
             onClick={() => lang !== 'en' && toggle()}>EN</button>
         </div>
-        <NotificationBell onTaskClick={onTaskClick} onCorrClick={onCorrClick} />
+        <NotificationBell onCorrClick={onCorrClick} />
         <div style={{ position: 'relative' }}>
           <div className="user-chip" onClick={() => setShowStatusPopover(s => !s)} role="button" tabIndex={0} style={{ cursor: 'pointer' }}>
             <div className="user-avatar" style={!user?.avatar_url && user?.avatar_color ? { background: user.avatar_color } : undefined}>
@@ -277,7 +280,8 @@ function Header({ user, onTaskClick, onCorrClick }) {
 // ── Sidebar ──────────────────────────────────────────────────
 function Sidebar({ activeView, onNav, user, unreadMsgs, corrBadges, circBadges }) {
   const { t } = useLang();
-  const items = navItems(user, t, !!user?.id, isElectron);
+  // `false`, not isElectron: the desktop app now carries the full system.
+  const items = navItems(user, t, !!user?.id, false);
   const inCorr = CORR_VIEWS.includes(activeView);
   const [openGroup, setOpenGroup] = useState(inCorr);
 
@@ -355,13 +359,10 @@ function Sidebar({ activeView, onNav, user, unreadMsgs, corrBadges, circBadges }
 function AppShell() {
   const { user, loading } = useAuth();
   const { t }             = useLang();
+  // The desktop app still OPENS on المحادثات — that is the reason it is pinned
+  // to the taskbar — but everything else is now one click away in the sidebar
+  // rather than absent.
   const [view, setView]   = useState(() => (isElectron && user?.id) ? 'messages' : 'dashboard');
-  const [taskId, setTaskId] = useState(null);
-  // Bumped when a legacy task changes. Nothing re-reads it any more — the
-  // dashboard it used to remount is now the correspondence board — but
-  // TaskDetail (still reachable from the notification bell) expects the
-  // callback, so the setter stays and the value is intentionally unused.
-  const [, setRefresh]              = useState(0);
   const [unreadMsgs, setUnreadMsgs] = useState(0);
   // Correspondence being edited after rejection — non-null puts the composer
   // into edit mode. Cleared whenever the user navigates away.
@@ -384,9 +385,8 @@ function AppShell() {
 
   useEffect(() => { if (user) getDepartments().catch(() => {}); }, [user]);
 
-  const handleNavAndClearTask = useCallback((v) => {
+  const navigate = useCallback((v) => {
     setView(v);
-    setTaskId(null);
     setEditingCorr(null);   // leaving the composer abandons an in-progress edit
   }, []);
 
@@ -425,7 +425,6 @@ function AppShell() {
   const openCorrEditor = useCallback(item => {
     setEditingCorr(item);
     setView('corr-new');
-    setTaskId(null);
   }, []);
 
   const afterCorrSave = useCallback(msg => {
@@ -500,9 +499,9 @@ function AppShell() {
         const totalUnread = entries.reduce((sum, e) => sum + e.unread, 0);
         const body = (t.newMessagesBatch || '{n} new messages in {c} conversations')
           .replace('{n}', String(totalUnread)).replace('{c}', String(entries.length));
-        notif = new Notification(t.notifTitle || 'Doc Tracking', { body, icon: '/favicon.ico' });
+        notif = new Notification(t.notifTitle || 'Wasel', { body, icon: '/favicon.ico' });
       }
-      notif.onclick = () => { window.focus(); setView('messages'); setTaskId(null); };
+      notif.onclick = () => { window.focus(); setView('messages'); };
     }
 
     async function poll() {
@@ -560,30 +559,24 @@ function AppShell() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <a className="skip-link" href="#main-content">{t.skipToContent}</a>
-      <Header user={user} onTaskClick={id => { setView('tasks'); setTaskId(id); }} onCorrClick={() => handleNavAndClearTask('corr-approvals')} />
+      <Header user={user} onCorrClick={() => navigate('corr-approvals')} />
 
       <div style={{ display: 'flex', flex: 1, marginTop: 'var(--header-h)' }}>
         <Sidebar
-          activeView={taskId ? 'tasks' : view}
-          onNav={handleNavAndClearTask}
+          activeView={view}
+          onNav={navigate}
           user={user}
           unreadMsgs={unreadMsgs}
           corrBadges={corrBadges}
           circBadges={circBadges} />
 
         <main className="app-main" id="main-content" tabIndex={-1}>
-          {taskId ? (
-            <TaskDetail
-              taskId={taskId}
-              onBack={() => setTaskId(null)}
-              onUpdate={() => setRefresh(r => r + 1)}
-            />
-          ) : view === 'dashboard' ? (
+          {view === 'dashboard' ? (
             <>
               <HomeDashboard
                 onEdit={openCorrEditor}
-                onDiscuss={id => { setPendingConv({ conversationId: id }); handleNavAndClearTask('messages'); }}
-                onNavigate={handleNavAndClearTask}
+                onDiscuss={id => { setPendingConv({ conversationId: id }); navigate('messages'); }}
+                onNavigate={navigate}
                 refreshKey={corrRefresh} />
             </>
           ) : view === 'corr-new' ? (
@@ -591,7 +584,7 @@ function AppShell() {
               key={editingCorr?.id || 'new'}
               editing={editingCorr}
               onDone={afterCorrSave}
-              onCancel={editingCorr ? () => handleNavAndClearTask('corr-returned') : undefined} />
+              onCancel={editingCorr ? () => navigate('corr-returned') : undefined} />
           ) : view === 'corr-reports' ? (
             <Reports />
           ) : CORR_VIEWS.includes(view) ? (
@@ -600,25 +593,14 @@ function AppShell() {
               canApproveFor={corrApprovable}
               myDepartments={corrMyDepts}
               onEdit={openCorrEditor}
-              onDiscuss={id => { setPendingConv({ conversationId: id }); handleNavAndClearTask('messages'); }}
+              onDiscuss={id => { setPendingConv({ conversationId: id }); navigate('messages'); }}
               refreshKey={corrRefresh} />
-          ) : view === 'tasks' ? (
-            <div className="empty-state">
-              <div className="empty-icon"><ClipboardList size={32} strokeWidth={1.5} /></div>
-              <div className="empty-sub">{t.comingSoon}</div>
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-                onClick={() => exportTasks()}>
-                <Download size={14} strokeWidth={2} />{t.exportCSV}
-              </button>
-            </div>
           ) : CIRC_VIEWS[view] ? (
             <CircularsList source={CIRC_VIEWS[view]} onBadgeChange={loadCircBadges} />
           ) : view === 'directory' ? (
             <StaffDirectory
-              onChat={u => { setPendingConv({ userId: u.id }); handleNavAndClearTask('messages'); }}
-              onCompose={() => handleNavAndClearTask('corr-new')} />
+              onChat={u => { setPendingConv({ userId: u.id }); navigate('messages'); }}
+              onCompose={() => navigate('corr-new')} />
           ) : view === 'messages' && user.id ? (
             <Messages openConversation={pendingConv} onOpened={() => setPendingConv(null)} onUnreadChanged={setUnreadMsgs} />
           ) : view === 'users' && canManageUsers(user) ? (

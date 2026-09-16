@@ -95,23 +95,100 @@ const attachmentsOf = id => db.prepare(
   'SELECT id, file_name, file_type, file_size FROM circular_attachments WHERE circular_id = ? ORDER BY id'
 ).all(id);
 
-const readerCount = id => db.prepare(
-  'SELECT COUNT(*) n FROM circular_reads WHERE circular_id = ?'
-).get(id).n;
+const deptLabelOf = id =>
+  (readConfig().departments || []).find(d => d.id === id)?.label || id || '';
 
-// Everyone who should have read it. Active accounts only — a departed employee
-// must not make a تعميم look permanently unacknowledged.
-const audienceCount = () => db.prepare(
-  'SELECT COUNT(*) n FROM users WHERE is_active = 1'
-).get().n;
+/** The stored target list as an array, or null for "everyone". */
+const storedTargets = raw => {
+  if (!raw) return null;
+  try { const a = JSON.parse(raw); return Array.isArray(a) && a.length ? a : null; }
+  catch { return null; }
+};
+
+// Both counts are scoped to the تعميم's own audience, and both count only
+// ACTIVE accounts. «قرأه ٤٣ من ١٢٠» against a تعميم that was only ever sent to
+// three departments would be a meaningless fraction, and a departed employee
+// must not make one look permanently unacknowledged.
+//
+// readerCount joins users for the same reason — without it a reader who has
+// since been deactivated still counts, and read_count could exceed audience.
+const readerCount = (id, targetDepts) => {
+  const ids = storedTargets(targetDepts);
+  const scope = ids ? ` AND u.dept_id IN (${ids.map(() => '?').join(',')})` : '';
+  return db.prepare(`
+    SELECT COUNT(*) n FROM circular_reads r
+      JOIN users u ON u.id = r.user_id
+     WHERE r.circular_id = ? AND u.is_active = 1${scope}
+  `).get(id, ...(ids || [])).n;
+};
+
+const audienceCount = (targetDepts) => {
+  const ids = storedTargets(targetDepts);
+  const scope = ids ? ` AND dept_id IN (${ids.map(() => '?').join(',')})` : '';
+  return db.prepare(
+    `SELECT COUNT(*) n FROM users WHERE is_active = 1${scope}`
+  ).get(...(ids || [])).n;
+};
 
 // ── GET / — the list, with search and filters ─────────────────────────────
+/**
+ * SQL fragment scoping circulars to the people they were addressed to.
+ *
+ * URD 6.7 allows a تعميم «موجّه لجميع المستخدمين أو لأقسام محددة». ONE clause,
+ * used by the list, the badge counts, the bell and the single read — the same
+ * discipline as utils/approvals.js and for the same reasons: a تعميم must never
+ * appear in a list the caller is refused when they open it, and must never be
+ * counted in a badge that points at something they cannot see.
+ *
+ *   target_depts NULL → everyone. Every تعميم published before this column
+ *                       existed is NULL, so nothing retroactively disappears.
+ *   target_depts JSON → the named departments, plus whoever published it — the
+ *                       publisher would otherwise lose sight of their own تعميم
+ *                       the moment they addressed it to a department they are
+ *                       not a member of.
+ */
+function audienceClause(user, table = 'c') {
+  return {
+    clause: `(${table}.target_depts IS NULL`
+          + ` OR ${table}.published_by_id = ?`
+          + ` OR EXISTS (SELECT 1 FROM json_each(${table}.target_depts) WHERE value = ?))`,
+    params: [user?.id ?? -1, String(user?.dept_id || '')],
+  };
+}
+
+/**
+ * Validates a submitted target list against the live department config.
+ * Returns { value } — a JSON string, or null for "everyone" — or { error }.
+ * An empty selection is treated as "everyone", never as "nobody".
+ */
+function parseTargets(raw) {
+  if (raw === undefined || raw === null || raw === '') return { value: null };
+  let list = raw;
+  if (typeof raw === 'string') {
+    try { list = JSON.parse(raw); }
+    catch { list = raw.split(',').map(s => s.trim()).filter(Boolean); }
+  }
+  if (!Array.isArray(list)) return { error: 'قائمة الأقسام غير صحيحة.' };
+  const ids = [...new Set(list.map(String).map(s => s.trim()).filter(Boolean))];
+  if (!ids.length) return { value: null };
+
+  const known = new Set((readConfig().departments || []).map(d => d.id));
+  const bad = ids.filter(id => !known.has(id));
+  if (bad.length) return { error: `قسم غير معروف: ${bad.join('، ')}` };
+  // Every department selected is the same as no restriction — store NULL so the
+  // تعميم reads as org-wide everywhere rather than as a list that happens to
+  // cover everyone today and silently narrows when a department is added.
+  if (ids.length === known.size) return { value: null };
+  return { value: JSON.stringify(ids) };
+}
+
 router.get('/', AUTH, (req, res) => {
   const { source, search, from, to, unread, limit = 100, offset = 0 } = req.query;
   const uid = req.user?.id ?? -1;
 
-  const where = [];
-  const params = [];
+  const aud = audienceClause(req.user);
+  const where = [aud.clause];
+  const params = [...aud.params];
 
   if (source) {
     if (!isSource(source)) return res.status(400).json({ success: false, message: 'نوع التعميم غير معروف.' });
@@ -148,13 +225,15 @@ router.get('/', AUTH, (req, res) => {
 // Registered before /:id so "stats" is never read as an id.
 router.get('/stats', AUTH, (req, res) => {
   const uid = req.user?.id ?? -1;
+  const aud = audienceClause(req.user);
   const unread = {};
   for (const s of SOURCES) {
     unread[s] = db.prepare(`
       SELECT COUNT(*) n FROM circulars c
        WHERE c.source = ?
+         AND ${aud.clause}
          AND NOT EXISTS (SELECT 1 FROM circular_reads r WHERE r.circular_id = c.id AND r.user_id = ?)
-    `).get(s, uid).n;
+    `).get(s, ...aud.params, uid).n;
   }
   res.json({ success: true, unread, canPublish: publishableSources(req.user) });
 });
@@ -164,20 +243,26 @@ router.get('/stats', AUTH, (req, res) => {
 // circular published before they existed.
 router.get('/notifications', AUTH, (req, res) => {
   const uid = req.user?.id ?? -1;
+  const aud = audienceClause(req.user);
   const items = db.prepare(`
     SELECT c.id, c.serial, c.source, c.title, c.created_at
       FROM circulars c
-     WHERE NOT EXISTS (SELECT 1 FROM circular_reads r WHERE r.circular_id = c.id AND r.user_id = ?)
+     WHERE ${aud.clause}
+       AND NOT EXISTS (SELECT 1 FROM circular_reads r WHERE r.circular_id = c.id AND r.user_id = ?)
      ORDER BY c.created_at DESC, c.id DESC
      LIMIT 20
-  `).all(uid);
+  `).all(...aud.params, uid);
   res.json({ success: true, unread: items.length, items });
 });
 
 // ── GET /:id — one circular ───────────────────────────────────────────────
 router.get('/:id', AUTH, (req, res) => {
   const uid = req.user?.id ?? -1;
-  const row = db.prepare('SELECT * FROM circulars WHERE id = ?').get(req.params.id);
+  const aud = audienceClause(req.user);
+  // Gated with the SAME clause the list uses, so a targeted تعميم cannot be
+  // reached by typing its id — and so nothing the list shows can 404 here.
+  const row = db.prepare(`SELECT c.* FROM circulars c WHERE c.id = ? AND ${aud.clause}`)
+                .get(req.params.id, ...aud.params);
   if (!row) return res.status(404).json({ success: false, message: 'التعميم غير موجود.' });
 
   res.json({
@@ -191,9 +276,15 @@ router.get('/:id', AUTH, (req, res) => {
         ? (db.prepare('SELECT ext FROM users WHERE id = ?').get(row.published_by_id) || {}).ext || null
         : null,
       is_read:      !!db.prepare('SELECT 1 FROM circular_reads WHERE circular_id = ? AND user_id = ?').get(row.id, uid),
-      read_count:   readerCount(row.id),
-      audience:     audienceCount(),
+      read_count:   readerCount(row.id, row.target_depts),
+      audience:     audienceCount(row.target_depts),
       can_modify:   canModifyCircular(req.user, row),
+      // Ids for the composer to pre-select when correcting a تعميم, labels for
+      // the screen to print. Sending only labels would make the editor guess
+      // ids back from names; sending only ids would give the screen its own
+      // name map to drift out of step with the config.
+      target_depts_list: storedTargets(row.target_depts) || [],
+      target_labels:    (storedTargets(row.target_depts) || []).map(deptLabelOf),
     },
   });
 });
@@ -208,20 +299,27 @@ router.get('/:id/readers', AUTH, (req, res) => {
     return res.status(403).json({ success: false, message: 'لا تملك صلاحية الاطلاع على قائمة القراءة.' });
   }
 
+  // Both lists narrow to the target departments. Listing 120 people as "has not
+  // read it" for a تعميم that was addressed to three departments would turn the
+  // one screen built for chasing acknowledgement into noise.
+  const tIds  = storedTargets(row.target_depts);
+  const tScope = tIds ? ` AND u.dept_id IN (${tIds.map(() => '?').join(',')})` : '';
+  const tArgs  = tIds || [];
+
   const read = db.prepare(`
     SELECT u.id, u.full_name, u.dept_id, u.ext, r.read_at
       FROM circular_reads r JOIN users u ON u.id = r.user_id
-     WHERE r.circular_id = ? AND u.is_active = 1
+     WHERE r.circular_id = ? AND u.is_active = 1${tScope}
      ORDER BY r.read_at DESC
-  `).all(row.id);
+  `).all(row.id, ...tArgs);
 
   const unread = db.prepare(`
     SELECT u.id, u.full_name, u.dept_id, u.ext
       FROM users u
-     WHERE u.is_active = 1
+     WHERE u.is_active = 1${tScope}
        AND NOT EXISTS (SELECT 1 FROM circular_reads r WHERE r.circular_id = ? AND r.user_id = u.id)
      ORDER BY u.dept_id, u.full_name COLLATE NOCASE
-  `).all(row.id);
+  `).all(...tArgs, row.id);
 
   // dept_label travels with dept_id so this list doesn't need the client's own
   // hardcoded name map — read live, so a department renamed five minutes ago
@@ -277,15 +375,19 @@ router.post('/', AUTH, withUploads, (req, res) => {
   if (!String(title || '').trim()) return fail(req, res, 400, 'عنوان التعميم مطلوب.');
   if (!String(body  || '').trim()) return fail(req, res, 400, 'نص التعميم مطلوب.');
 
+  const targets = parseTargets(req.body?.target_depts);
+  if (targets.error) return fail(req, res, 400, targets.error);
+
   const serial = nextSerial(source);
   let id;
   try {
     db.transaction(() => {
       const info = db.prepare(`
-        INSERT INTO circulars (serial, source, title, body, published_by_id, published_by_name, published_by_dept)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO circulars (serial, source, title, body, published_by_id, published_by_name, published_by_dept, target_depts)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(serial, source, String(title).trim(), String(body).trim(),
-             user.id, user.full_name || user.name || user.username, user.dept_id || null);
+             user.id, user.full_name || user.name || user.username, user.dept_id || null,
+             targets.value);
       id = info.lastInsertRowid;
 
       const ins = db.prepare(`
@@ -309,7 +411,7 @@ router.post('/', AUTH, withUploads, (req, res) => {
   store.fileAll(db, UPLOAD_DIR, { table: 'circular_attachments',
     idColumn: 'circular_id', recordId: id, serial: serial, createdAt: db.prepare('SELECT created_at FROM circulars WHERE id = ?').get(id)?.created_at });
   logAudit(user, 'CIRCULAR_PUBLISHED', 'circular', id, { serial, source }, req.ip);
-  emailEveryone({ id, serial, source, title: String(title).trim() });
+  emailEveryone({ id, serial, source, title: String(title).trim(), target_depts: targets.value });
 
   res.json({ success: true, id, serial });
 });
@@ -327,6 +429,14 @@ router.put('/:id', AUTH, withUploads, (req, res) => {
   if (!title) return fail(req, res, 400, 'عنوان التعميم مطلوب.');
   if (!body)  return fail(req, res, 400, 'نص التعميم مطلوب.');
 
+  // Omitting the field entirely leaves the audience alone; sending it replaces
+  // it. Narrowing an existing تعميم is allowed — the read receipts of anyone
+  // dropped are kept, so widening it again restores them rather than asking
+  // those people to acknowledge it a second time.
+  const retarget = req.body?.target_depts !== undefined;
+  const targets  = retarget ? parseTargets(req.body.target_depts) : null;
+  if (targets?.error) return fail(req, res, 400, targets.error);
+
   db.transaction(() => {
     // edited_at is what the UI turns into the «مُعدّل» marker, so readers can
     // tell that the text changed after they read it.
@@ -337,6 +447,10 @@ router.put('/:id', AUTH, withUploads, (req, res) => {
              updated_at = datetime('now','localtime')
        WHERE id = ?
     `).run(title, body, row.id);
+
+    if (retarget) {
+      db.prepare('UPDATE circulars SET target_depts = ? WHERE id = ?').run(targets.value, row.id);
+    }
 
     const ins = db.prepare(`
       INSERT INTO circular_attachments (circular_id, stored_name, file_name, file_type, file_size)
@@ -386,9 +500,16 @@ const LABEL = {
 
 function emailEveryone(item) {
   try {
-    const rows = db.prepare(
-      "SELECT email FROM users WHERE is_active = 1 AND email IS NOT NULL AND email <> ''"
-    ).all();
+    // "Everyone" means the تعميم's audience, which since URD 6.7 is not always
+    // the whole directorate. Emailing 120 people about a تعميم addressed to
+    // three departments is exactly the noise targeting exists to prevent — and
+    // it would also hand them a link to something the API then refuses.
+    const ids   = storedTargets(item.target_depts);
+    const scope = ids ? ` AND dept_id IN (${ids.map(() => '?').join(',')})` : '';
+    const rows  = db.prepare(
+      `SELECT email FROM users
+        WHERE is_active = 1 AND email IS NOT NULL AND email <> ''${scope}`
+    ).all(...(ids || []));
     const to = rows.map(r => r.email).filter(Boolean);
     if (!to.length) return;
 

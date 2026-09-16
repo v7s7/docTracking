@@ -16,8 +16,8 @@ const BRAND = {
   wash:   '#F5F5F5',   // --bg
 };
 
-const ORG = 'الإدارة العامة للأوقاف السنية';
-const APP = 'نظام تتبع الوثائق';
+const ORG = 'الإدارة العامة للشؤون السنية';
+const APP = 'نظام وصل';
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => (

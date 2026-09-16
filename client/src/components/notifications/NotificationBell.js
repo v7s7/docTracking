@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLang } from '../../context/LangContext';
-import { getNotifications, markAllRead, markOneRead } from '../../services/notificationService';
 import { getCorrNotifications, markCorrNotifications } from '../../services/correspondenceService';
 import { Bell, ArrowRight, RotateCcw, AlertTriangle, Clock, BellPlus, BellOff } from 'lucide-react';
 
@@ -23,7 +22,7 @@ const TYPE_BADGE_BG = {
   due_soon: 'var(--warning-bg)',
 };
 
-export default function NotificationBell({ onTaskClick, onCorrClick }) {
+export default function NotificationBell({ onCorrClick }) {
   const { t }                   = useLang();
   const [open, setOpen]         = useState(false);
   const [unread, setUnread]     = useState(0);
@@ -40,14 +39,12 @@ export default function NotificationBell({ onTaskClick, onCorrClick }) {
 
   const load = useCallback(async () => {
     try {
-      // Two feeds, one bell. Correspondence rows are normalised into the shape
-      // this component already renders so nothing below needs to know which
-      // subsystem an item came from — only `kind` distinguishes them on click.
-      const [data, corr] = await Promise.all([
-        getNotifications().catch(() => ({ unread: 0, items: [] })),
-        getCorrNotifications().catch(() => ({ unread: 0, items: [] })),
-      ]);
-      const corrItems = (corr.items || []).map(c => ({
+      // One feed now. This bell used to merge task notifications with
+      // correspondence ones; نظام المهام is retired, so the task half is gone
+      // and `kind` stays on each row only because the render and click handlers
+      // below still read it — and because a second feed is a live possibility.
+      const corr = await getCorrNotifications().catch(() => ({ unread: 0, items: [] }));
+      const merged = (corr.items || []).map(c => ({
         id:          `c${c.id}`,
         raw_id:      c.id,
         kind:        'correspondence',
@@ -57,11 +54,9 @@ export default function NotificationBell({ onTaskClick, onCorrClick }) {
         type:        c.type,
         is_read:     c.is_read,
         created_at:  c.created_at,
-      }));
-      const merged = [...(data.items || []).map(i => ({ ...i, kind: 'task' })), ...corrItems]
-        .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+      })).sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
 
-      setUnread((data.unread || 0) + (corr.unread || 0));
+      setUnread(corr.unread || 0);
       setItems(merged);
 
       const maxId = merged.reduce((m, i) => Math.max(m, Number(i.raw_id ?? i.id) || 0), 0);
@@ -76,16 +71,16 @@ export default function NotificationBell({ onTaskClick, onCorrClick }) {
         merged
           .filter(i => (Number(i.raw_id ?? i.id) || 0) > lastIdRef.current)
           .forEach(i => {
-            const n = new Notification(t.notifTitle || 'Doc Tracking', {
+            const n = new Notification(t.notifTitle || 'Wasel', {
               body: i.task_serial ? `${i.task_serial} — ${i.task_title || ''}` : (i.task_title || ''),
               tag: `notif-${i.id}`,
             });
-            n.onclick = () => { window.focus(); (i.kind === 'correspondence' ? onCorrClick : onTaskClick)?.(i.task_id); };
+            n.onclick = () => { window.focus(); onCorrClick?.(i.task_id); };
           });
       }
       lastIdRef.current = Math.max(lastIdRef.current, maxId);
     } catch (_) {}
-  }, [t, onTaskClick, onCorrClick]);
+  }, [t, onCorrClick]);
 
   useEffect(() => {
     load();
@@ -108,7 +103,7 @@ export default function NotificationBell({ onTaskClick, onCorrClick }) {
   }, [open]);
 
   async function handleMarkAll() {
-    await Promise.all([markAllRead().catch(() => {}), markCorrNotifications().catch(() => {})]);
+    await markCorrNotifications().catch(() => {});
     setUnread(0);
     setItems(p => p.map(i => ({ ...i, is_read: 1 })));
   }
@@ -117,13 +112,12 @@ export default function NotificationBell({ onTaskClick, onCorrClick }) {
     if (!item.is_read) {
       // Correspondence has no per-row read endpoint; marking the group read is
       // close enough for a bell and avoids a second table of endpoints.
-      if (item.kind === 'correspondence') await markCorrNotifications().catch(() => {});
-      else await markOneRead(item.id).catch(() => {});
+      await markCorrNotifications().catch(() => {});
       setItems(p => p.map(i => i.id === item.id ? { ...i, is_read: 1 } : i));
       setUnread(p => Math.max(0, p - 1));
     }
     setOpen(false);
-    (item.kind === 'correspondence' ? onCorrClick : onTaskClick)?.(item.task_id);
+    onCorrClick?.(item.task_id);
   }
 
   function handleSnooze(e, item) {
@@ -132,7 +126,7 @@ export default function NotificationBell({ onTaskClick, onCorrClick }) {
     const updated = { ...snoozed, [item.id]: until };
     setSnoozed(updated);
     try { localStorage.setItem('notifSnoozed', JSON.stringify(updated)); } catch(_) {}
-    (item.kind === 'correspondence' ? markCorrNotifications() : markOneRead(item.id)).catch(() => {});
+    markCorrNotifications().catch(() => {});
     setItems(p => p.map(i => i.id === item.id ? { ...i, is_read: 1 } : i));
     if (!item.is_read) setUnread(p => Math.max(0, p - 1));
   }

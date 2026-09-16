@@ -2527,7 +2527,41 @@ code.tag {
     display: flex; justify-content: space-between; font-size: 8.5pt; color: #555;
     border-top: 2px solid #8b0000; padding-top: 5px; margin-top: 18px;
   }
+
+  /* ── التقارير ───────────────────────────────────────────────
+     URD 6.3 asks for «تصدير التقرير (PDF أو Excel)». Excel is the CSV export;
+     this is the PDF half, done as the browser's own Save as PDF over a print
+     stylesheet rather than a server-side PDF library — which would have to
+     re-solve Arabic shaping and bring a new dependency to do it.
+
+     Same reveal technique as the letter above: body * is already hidden, so
+     .rep-print only has to make itself visible again. */
+  .rep-print, .rep-print * { visibility: visible !important; }
+  .rep-print {
+    position: absolute;
+    inset-inline-start: 0;
+    top: 0;
+    width: 100%;
+  }
+  /* Filters and the export buttons are controls, not part of a report. */
+  .rep-print .rep-filters { display: none !important; }
+  /* A card cut in half across a page break is unreadable. */
+  .rep-print .rep-card,
+  .rep-print .stat-card { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; }
+  .rep-print .rep-reloading { opacity: 1 !important; }
+
+  /* The printed report needs its own letterhead — on screen the sidebar says
+     where you are, and on paper there is no sidebar. */
+  .rep-print-head { display: block !important; text-align: center; margin-bottom: 14px; }
+  .rep-print-org   { font-size: 11pt; font-weight: 700; }
+  .rep-print-title { font-size: 14pt; font-weight: 800; margin-top: 2px; }
+  .rep-print-range { font-size: 9pt; color: #555; margin-top: 2px; }
+
+  @page { size: A4; margin: 12mm; }
 }
+
+/* Printed only. On screen the page header already says where you are. */
+.rep-print-head { display: none; }
 
 /* ── Searchable, grouped department picker ──────────────────── */
 .dept-select { position: relative; }
@@ -2978,6 +3012,44 @@ code.tag {
   border-radius: 99px; padding: 0.05rem 0.4rem;
   margin-inline-start: 0.35rem;
 }
+/* URD 6.6 «مصنّفين حسب القسم»: a heading row opens each department's block.
+   Sticky, because the whole point of a grouped list of 120 people is knowing
+   whose department you are looking at when you have scrolled into the middle
+   of it. Sits below the table header, which is why the offset is not 0. */
+.usr-group-row th.usr-group-head {
+  position: sticky; top: var(--header-h);
+  background: var(--surface-2);
+  border-block: 1px solid var(--border);
+  text-align: start;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.01em;
+  color: var(--text-2); text-transform: none;
+  padding: 0.45rem 0.85rem;
+  z-index: 2;
+}
+.usr-table tbody tr.usr-group-row:hover { background: none; }
+.usr-group-count {
+  margin-inline-start: 0.5rem;
+  font-weight: 700; color: var(--text-3);
+}
+/* Says why this row sorts first — «رؤساء الأقسام أولاً» is otherwise an
+   ordering the reader has to reverse-engineer. Read from departments.json, so
+   it marks who actually approves, not merely who holds the MANAGER role. */
+.usr-post {
+  font-size: var(--fs-xs); font-weight: 700;
+  background: var(--primary-light); color: var(--primary);
+  border-radius: 99px; padding: 0.05rem 0.45rem;
+  margin-inline-start: 0.35rem;
+}
+.usr-table tbody tr.usr-picked .usr-post { background: var(--surface); }
+
+/* Renaming an account can lock someone out of the system, so the warning is
+   coloured as a warning rather than left as one more grey hint nobody reads. */
+.usr-rename-warn { color: var(--warning); font-weight: 600; }
+
+/* «استعادة من AD» is the destructive one of the three footer buttons, so it
+   sits away from حفظ rather than beside it. */
+.usr-ad-default { margin-inline-end: auto; display: inline-flex; align-items: center; gap: 0.35rem; }
+
 /* A missing department is the thing IT is here to fix — say so in words, and
    colour it as a gap rather than as data. */
 .usr-missing { color: var(--warning); font-style: italic; }
@@ -3047,6 +3119,19 @@ code.tag {
   border-radius: var(--radius); padding: 0.7rem 0.9rem; margin-bottom: 1.1rem;
 }
 .form-hint { font-size: var(--fs-xs); color: var(--text-3); margin-top: 0.3rem; }
+
+/* URD 6.7 audience picker. Wrapping chips rather than a multi-select listbox:
+   with 22 departments a listbox either scrolls (hiding most of the choice at
+   the moment the publisher is deciding who sees a تعميم) or grows taller than
+   the dialog. Chips show every option at once and the selection stays visible
+   while the body is being written. */
+.circ-audience {
+  display: flex; flex-wrap: wrap; gap: 0.35rem;
+  max-block-size: 8.5rem; overflow-y: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-2);
+}
 
 @media (prefers-reduced-motion: reduce) { .usr-chev { transition: none; } }
 

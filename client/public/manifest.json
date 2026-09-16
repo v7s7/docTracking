@@ -1,6 +1,6 @@
 {
-  "short_name": "docTracking",
-  "name": "نظام تتبع الوثائق - docTracking",
+  "short_name": "وصل",
+  "name": "نظام وصل — التواصل والمراسلات الداخلية",
   "icons": [
     { "src": "logo.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
     { "src": "logo.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },

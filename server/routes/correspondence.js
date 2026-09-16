@@ -3,6 +3,9 @@
 // Workflow contract (see claude/correspondence-merge-plan.md):
 //   employee creates            → pending
 //   own department head approves→ approved   → visible to the receiving department
+//   an author who approves for
+//   his own department creates  → approved   directly, no queue. The approval
+//                                            is still recorded on the timeline.
 //   receiving department        → done
 //   head rejects (reason forced)→ returned   → back to the author
 //   author edits and resubmits  → pending    (same id, same serial, timeline grows)
@@ -86,6 +89,30 @@ const PRIORITIES = ['high', 'med', 'low'];
 
 const deptLabel = id =>
   (readConfig().departments || []).find(d => d.id === id)?.label || id || '';
+
+/**
+ * Arabic-tolerant fold for name matching. Someone searching «الشئون» must find
+ * «الشؤون», and «الاداره» must find «الإدارة» — people do not type hamzas and
+ * the config spelling is not something they can see. Collapses the alef forms,
+ * ya/alef-maqsura, ta-marbuta/ha, the hamza carriers, and the diacritics.
+ */
+const foldAr = s => String(s || '').toLowerCase()
+  .replace(/[أإآٱ]/g, 'ا')   // أ إ آ ٱ → ا
+  .replace(/ى/g, 'ي')                        // ى → ي
+  .replace(/ة/g, 'ه')                        // ة → ه
+  .replace(/[ؤئء]/g, '')                // ؤ ئ ء → dropped
+  .replace(/[ً-ْـ]/g, '')               // harakat + tatweel
+  .replace(/\s+/g, ' ')
+  .trim();
+
+/** Ids of every department whose label contains the search text. */
+function departmentsMatching(search) {
+  const needle = foldAr(search);
+  if (!needle) return [];
+  return (readConfig().departments || [])
+    .filter(d => foldAr(d.label).includes(needle))
+    .map(d => d.id);
+}
 
 /**
  * Reference numbers people can actually use: IT-2026-001.
@@ -233,9 +260,27 @@ router.get('/', AUTH, (req, res) => {
 
   if (status) { where.push('c.status = ?'); params.push(status); }
   if (search) {
-    where.push('(c.subject LIKE ? OR c.serial LIKE ? OR c.from_dept_id LIKE ? OR c.to_dept_id LIKE ?)');
     const q = `%${search}%`;
-    params.push(q, q, q, q);
+    // subject/serial, plus the raw ids so a Latin search like "it" still works.
+    const terms = ['c.subject LIKE ?', 'c.serial LIKE ?', 'c.from_dept_id LIKE ?', 'c.to_dept_id LIKE ?'];
+    const sp    = [q, q, q, q];
+
+    // Department NAME search, per URD 6.2.5 «بحث نصي حسب عنوان المعاملة أو اسم
+    // القسم». Departments live in config/departments.json, not in a table, so
+    // there is nothing for SQL to join against — the label→id resolution has to
+    // happen here and the query then matches on ids.
+    //
+    // Matching from_dept_id against the search text was the whole of it before,
+    // and that only ever matched the INTERNAL id ('hr_dept'). «الموارد البشرية»
+    // — the only name a user ever sees on this screen — found nothing.
+    const hits = departmentsMatching(search);
+    if (hits.length) {
+      const ph = hits.map(() => '?').join(',');
+      terms.push(`c.from_dept_id IN (${ph})`, `c.to_dept_id IN (${ph})`);
+      sp.push(...hits, ...hits);
+    }
+    where.push(`(${terms.join(' OR ')})`);
+    params.push(...sp);
   }
 
   const sql = `FROM correspondences c ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
@@ -403,6 +448,44 @@ router.get('/my-day', AUTH, (req, res) => {
     };
   }
 
+  // URD 6.1 asks for two things this endpoint did not return: five headline
+  // figures, and «قائمة بآخر المراسلات مرتبة تنازلياً حسب التاريخ».
+  //
+  // They are not a replacement for the action list above — that one answers
+  // "what is waiting on me", which is the question people actually open this
+  // page with. These answer "where do things stand overall", and the
+  // requirement is for both.
+  //
+  // Computed over the SAME visibilityClause as every other read, so the totals
+  // are the viewer's own slice and the list can never show a record they would
+  // be refused when they click it.
+  const vis     = visibilityClause(user);
+  const visWhere = vis.clause ? `WHERE ${vis.clause}` : '';
+
+  const byStatus = {};
+  for (const r of db.prepare(
+    `SELECT c.status, COUNT(*) n FROM correspondences c ${visWhere} GROUP BY c.status`
+  ).all(...vis.params)) byStatus[r.status] = r.n;
+
+  const stats = {
+    total:    Object.values(byStatus).reduce((s, n) => s + n, 0),
+    pending:  byStatus.pending  || 0,   // بانتظار الموافقة
+    approved: byStatus.approved || 0,   // جارية التنفيذ
+    done:     byStatus.done     || 0,   // تم الإنجاز
+    returned: byStatus.returned || 0,   // مُعادة للمراجعة
+  };
+
+  const recent = db.prepare(
+    `SELECT c.id, c.serial, c.subject, c.status, c.priority, c.created_at,
+            c.from_user_name, c.from_dept_id, c.to_dept_id
+       FROM correspondences c ${visWhere}
+      ORDER BY c.created_at DESC, c.id DESC LIMIT 8`
+  ).all(...vis.params).map(r => ({
+    ...r,
+    from_dept_label: deptLabel(r.from_dept_id),
+    to_dept_label:   deptLabel(r.to_dept_id),
+  }));
+
   // مدير النظام gets the thing only they can fix: departments that cannot
   // approve anything, and people who cannot send anything.
   let system = null;
@@ -428,6 +511,8 @@ router.get('/my-day', AUTH, (req, res) => {
     scope: isAdmin(user) ? 'admin' : approvable.length ? 'approver' : 'staff',
     actions: decorated,
     counts,
+    stats,
+    recent,
     dept,
     system,
   });
@@ -518,6 +603,21 @@ router.get('/reports', AUTH, (req, res) => {
   };
   sent.forEach(r => bump(r.id, 'sent', r.n));
   recv.forEach(r => bump(r.id, 'received', r.n));
+
+  // URD 6.3: «متوسط زمن الاعتماد لكل قسم كمؤشر أداء». The summary tile above is
+  // one figure for everything visible, and the approvers table is per PERSON —
+  // neither answers "which department is slow to approve", which is the
+  // requirement. Keyed on from_dept_id because approval happens in the SENDING
+  // department: that is whose clock is being measured.
+  const deptApprovalHours = new Map(
+    db.prepare(`
+      SELECT c.from_dept_id id,
+             AVG((julianday(c.approved_at) - julianday(c.created_at)) * 24) avg_h
+        FROM correspondences c
+       ${W ? W + ' AND' : 'WHERE'} c.approved_at IS NOT NULL
+       GROUP BY c.from_dept_id
+    `).all(...p).map(r => [r.id, r.avg_h == null ? null : Math.round(r.avg_h * 10) / 10])
+  );
   // Every figure on this screen is computed over visibilityClause, so it is one
   // person's slice — NOT the directorate's totals, which is how a bare table of
   // department names reads. A رئيس قسم would see «قسم الصيانة — صادر ٢» while
@@ -530,7 +630,14 @@ router.get('/reports', AUTH, (req, res) => {
   // department or a counterparty.
   const mineSet = new Set(myDepartments(user));
   const byDepartment = [...deptMap.values()]
-    .map(d => ({ ...d, total: d.sent + d.received, isMine: mineSet.has(d.id) }))
+    .map(d => ({
+      ...d,
+      total: d.sent + d.received,
+      isMine: mineSet.has(d.id),
+      // null, not 0 — a department with nothing approved yet has no average,
+      // and 0 would read as "approves instantly" on the screen.
+      avgApprovalHours: deptApprovalHours.has(d.id) ? deptApprovalHours.get(d.id) : null,
+    }))
     .sort((a, b) => b.total - a.total);
 
   const scope = {
@@ -672,6 +779,18 @@ router.post('/', AUTH, requireStaff, withUploads, (req, res) => {
   if (!String(body || '').trim())     return fail(req, res, 400, 'نص المراسلة مطلوب.');
   if (!PRIORITIES.includes(priority)) return fail(req, res, 400, 'الأولوية غير صحيحة.');
 
+  // A sender who already approves for his own department does not queue a memo
+  // for himself. canApproveFor() is the SAME predicate POST /:id/approve
+  // enforces, so this grants nobody authority they did not already hold — it
+  // removes a round-trip whose only possible approver is the person who just
+  // wrote it. Before this, a رئيس قسم sending his own memo had to find it in
+  // الموافقات and approve himself, and the memo sat in بانتظار الموافقة —
+  // visibly blocked on nobody — until he did.
+  //
+  // The approval is still written to the timeline, by name and with its own
+  // timestamp, so the printed letter and the audit trail show who cleared it.
+  const selfApproved = canApproveFor(user, fromDeptId);
+
   // One transaction: insert, stamp the department-scoped serial, attach files.
   const create = db.transaction(() => {
     const info = db.prepare(`
@@ -692,6 +811,20 @@ router.post('/', AUTH, requireStaff, withUploads, (req, res) => {
       `).run(id, store.stagedName(f.filename), decodeUploadName(f.originalname), f.mimetype, f.size);
     }
     addEvent(id, 'created', user, null, 0);
+
+    // Approved inside the same transaction, with the same statement /approve
+    // runs, so the row is never observable in a pending state it was never
+    // really in — and no notification can fire for an approval that is about
+    // to happen a line later.
+    if (selfApproved) {
+      db.prepare(`
+        UPDATE correspondences
+           SET status = 'approved', awaiting_dept_id = to_dept_id,
+               approved_by_name = ?, approved_at = datetime('now','localtime')
+         WHERE id = ?
+      `).run(user.name || user.username, id);
+      addEvent(id, 'approved', user, null, 0);
+    }
     return id;
   });
 
@@ -705,7 +838,7 @@ router.post('/', AUTH, requireStaff, withUploads, (req, res) => {
 
 
   logAudit(user, 'CORRESPONDENCE_CREATED', 'correspondence', id,
-    { to_dept_id, service_id: resolved.serviceId, priority }, req.ip);
+    { to_dept_id, service_id: resolved.serviceId, priority, self_approved: selfApproved }, req.ip);
   const row = db.prepare('SELECT * FROM correspondences WHERE id = ?').get(id);
 
   // Move the uploads out of staging into 2026/<serial>/ now the serial exists.
@@ -715,7 +848,10 @@ router.post('/', AUTH, requireStaff, withUploads, (req, res) => {
     idColumn: 'correspondence_id', recordId: id, serial: row.serial, createdAt: row.created_at });
 
   const created = hydrate(row);
-  notify.onSubmitted(created);
+  // Nobody is waiting on an approval that already happened, so the approvers of
+  // قسم A hear nothing — only the receiving department is told it has arrived.
+  if (selfApproved) notify.onSelfApproved(created);
+  else              notify.onSubmitted(created);
   res.status(201).json({ success: true, item: created });
 });
 
@@ -738,6 +874,15 @@ router.put('/:id', AUTH, withUploads, (req, res) => {
   const prio = priority || row.priority;
   if (!PRIORITIES.includes(prio))   return fail(req, res, 400, 'الأولوية غير صحيحة.');
 
+  // Same rule as the composer: an author who approves for his own department
+  // does not queue the corrected memo for himself. Worth being explicit about
+  // what this means when the rejection came from his النائب — head and deputy
+  // are peers (see utils/approvals.js), so he could already overturn it with
+  // one click in الموافقات. The override is not new; what is new is that the
+  // timeline now records it as «تم التعديل وإعادة الإرسال» followed by
+  // «موافقة رئيس القسم», both in his name, on the letter and in the audit log.
+  const selfApproved = canApproveFor(user, row.from_dept_id);
+
   const resubmit = db.transaction(() => {
     db.prepare(`
       UPDATE correspondences
@@ -754,6 +899,16 @@ router.put('/:id', AUTH, withUploads, (req, res) => {
       `).run(row.id, store.stagedName(f.filename), decodeUploadName(f.originalname), f.mimetype, f.size);
     }
     addEvent(row.id, 'resubmitted', user, null, 0);
+
+    if (selfApproved) {
+      db.prepare(`
+        UPDATE correspondences
+           SET status = 'approved', awaiting_dept_id = to_dept_id,
+               approved_by_name = ?, approved_at = datetime('now','localtime')
+         WHERE id = ?
+      `).run(user.name || user.username, row.id);
+      addEvent(row.id, 'approved', user, null, 0);
+    }
   });
 
   try { resubmit(); }
@@ -767,9 +922,10 @@ router.put('/:id', AUTH, withUploads, (req, res) => {
   // Move the uploads out of staging into 2026/<serial>/ now the row exists.
   store.fileAll(db, UPLOAD_DIR, { table: 'correspondence_attachments',
     idColumn: 'correspondence_id', recordId: row.id, serial: row.serial, createdAt: row.created_at });
-  logAudit(user, 'CORRESPONDENCE_RESUBMITTED', 'correspondence', row.id, null, req.ip);
+  logAudit(user, 'CORRESPONDENCE_RESUBMITTED', 'correspondence', row.id, { self_approved: selfApproved }, req.ip);
   const resent = hydrate(db.prepare('SELECT * FROM correspondences WHERE id = ?').get(row.id));
-  notify.onSubmitted(resent);
+  if (selfApproved) notify.onSelfApproved(resent);
+  else              notify.onSubmitted(resent);
   res.json({ success: true, item: resent });
 });
 

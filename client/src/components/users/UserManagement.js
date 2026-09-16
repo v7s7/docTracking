@@ -3,14 +3,14 @@ import { useLang } from '../../context/LangContext';
 import { searchIndex, makeMatcher } from '../../utils/nameSearch';
 import {
   getUsers, getLdapUsers, createUser, updateUser, deleteUser, assignLdapRole,
-  bulkUpdateUsers,
+  bulkUpdateUsers, previewAdDefault, applyAdDefault,
 } from '../../services/userService';
 import { getDepartments } from '../../services/deptService';
 import { unlinkDeptLeadership } from '../../services/adminService';
 import { getAuditLog } from '../../services/auditService';
 import {
   X, AlertTriangle, Users, Network, UserPlus, Search, ChevronDown,
-  RefreshCw, CheckCircle, XCircle, Edit2, Trash2, ShieldCheck, Phone, History, Lock,
+  RefreshCw, CheckCircle, XCircle, Edit2, Trash2, ShieldCheck, Phone, History, Lock, RotateCcw,
 } from 'lucide-react';
 import { useConfirm } from '../common/ConfirmDialog';
 import DepartmentSelect from '../common/DepartmentSelect';
@@ -151,7 +151,8 @@ function LdapRoleModal({ user, depts, t, onSave, onClose }) {
 // ── Create / edit one user ──────────────────────────────────────────────────
 const blankForm = { username: '', password: '', full_name: '', email: '', role: 'STAFF', dept_id: '', is_active: true, ext: '', mobile: '', alt_email: '' };
 
-function UserModal({ initial, depts, t, can = {}, onSave, onClose }) {
+function UserModal({ initial, depts, t, can = {}, onSave, onClose, onSaved }) {
+  const u = t.usersAdmin;
   const [form, setForm] = useState(initial ? { ...initial, password: '', dept_id: initial.dept_id || '' } : blankForm);
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState('');
@@ -162,6 +163,40 @@ function UserModal({ initial, depts, t, can = {}, onSave, onClose }) {
   const isLdap = isEdit && initial.is_ldap;
   const roles  = VALID_ROLES.filter(r => (can.assignableRoles || VALID_ROLES).includes(r));
   const canSetPassword = can.createUsers !== false;
+  const [confirm, confirmDialog] = useConfirm();
+
+  // ── «استعادة من Active Directory» ──────────────────────────────────────
+  // Preview, then confirm naming the actual values, then apply. The two-step
+  // is the point: on this system the field most likely to change is the name,
+  // and the change is usually an Arabic name being replaced by a Latin one —
+  // which is exactly the thing somebody should see before agreeing to it.
+  const [adBusy, setAdBusy] = useState(false);
+  async function onAdDefault() {
+    setAdBusy(true); setErr('');
+    try {
+      const preview = await previewAdDefault(initial.id);
+      const changes = Object.entries(preview.changes || {});
+      if (!changes.length) { setErr(u.adDefaultNoChange); return; }
+
+      const lines = changes
+        .map(([field, v]) => `• ${t[field] || field}: «${v.from || '—'}» ← «${v.to}»`)
+        .join('\n');
+      const rename = preview.username_becomes !== preview.username
+        ? '\n\n' + u.adDefaultRename.replace('{from}', preview.username).replace('{to}', preview.username_becomes)
+        : '';
+
+      if (!await confirm(`${u.adDefaultConfirm}\n\n${lines}${rename}`)) return;
+
+      const done = await applyAdDefault(initial.id);
+      setForm(p => ({
+        ...p,
+        ...Object.fromEntries(Object.entries(done.changed || {}).map(([k, v]) => [k, v.to])),
+        username: done.username || p.username,
+      }));
+      onSaved?.();
+    } catch (e) { setErr(e.message); }
+    finally { setAdBusy(false); }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -207,10 +242,28 @@ function UserModal({ initial, depts, t, can = {}, onSave, onClose }) {
                 <input className="form-control" value={form.full_name}
                   onChange={e => set('full_name', e.target.value)} required />
               </div>
+              {/* The login name is DERIVED from the address, never typed — see
+                  the note in routes/users.js. Showing what it will become, live,
+                  is the whole safeguard: renaming an account to something AD
+                  does not recognise locks that person out, and the only warning
+                  they would otherwise get is being unable to sign in. */}
               <div className="form-group">
                 <label className="form-label">{t.email}</label>
                 <input className="form-control" type="email" value={form.email || ''}
-                  onChange={e => set('email', e.target.value)} dir="ltr" />
+                  onChange={e => set('email', e.target.value)} dir="ltr" placeholder="a.ahmedi@swd.bh" />
+                {isEdit && (() => {
+                  const local = String(form.email || '').split('@')[0].trim();
+                  if (!local || local === form.username) {
+                    return <div className="form-hint">{u.usernameFollows}</div>;
+                  }
+                  return (
+                    <div className="form-hint usr-rename-warn">
+                      {u.usernameWillChange
+                        .replace('{from}', form.username)
+                        .replace('{to}', local)}
+                    </div>
+                  );
+                })()}
               </div>
               {/* Extension and mobile feed دليل الهاتف, which people use daily —
                   so a desk move is fixed here rather than by editing a config
@@ -260,10 +313,26 @@ function UserModal({ initial, depts, t, can = {}, onSave, onClose }) {
             </div>
           </div>
           <div className="modal-foot">
+            {/* «الافتراضي» — pull this account's name and address back from
+                Active Directory. Since login no longer overwrites anything,
+                this is the only way AD can replace a stored value, and it is
+                always a person pressing a button. Left-aligned and ghost-styled
+                because it is the rare, destructive one of the three. */}
+            {isEdit && isLdap && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm usr-ad-default"
+                onClick={onAdDefault}
+                disabled={busy || adBusy}>
+                <RotateCcw size={13} strokeWidth={2} />
+                {adBusy ? (t.loading || '…') : u.adDefault}
+              </button>
+            )}
             <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>{t.cancel}</button>
             <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{t.save}</button>
           </div>
         </form>
+        {confirmDialog}
       </div>
     </div>
   );
@@ -364,6 +433,54 @@ function SystemUsers({ t, users, depts, loading, error, can, onReload, onEdit, o
     x => can.scope === 'hr' && (x.is_protected || x.role === 'SUPER_ADMIN'),
     [can.scope]
   );
+
+  // URD 6.6: «عرض جميع المستخدمين مصنّفين حسب القسم، مع ترتيب رؤساء الأقسام
+  // أولاً ضمن كل قسم». Two decisions worth stating outright:
+  //
+  //  • "رئيس القسم" here means the person NAMED as head or deputy on the
+  //    department in departments.json — the same source utils/approvals.js
+  //    reads to decide who may actually approve. Sorting by the stored MANAGER
+  //    role instead would lift 31 accounts to the top of their departments when
+  //    only about 24 hold a post, so the order on screen would not match who
+  //    holds authority. Asked and settled, not assumed.
+  //
+  //  • Departments keep their CONFIG order, which is the order of the official
+  //    organisation chart, rather than being sorted alphabetically. A reviewer
+  //    reading this beside the chart should find them in the same sequence.
+  //
+  // Grouping is applied to `shown`, never to `users`, so search, the role and
+  // department filters and bulk-select all keep working untouched — a heading
+  // only appears for a department that still has a visible row.
+  const rankIn = useCallback((deptId, username) => {
+    const d = depts.find(x => x.id === deptId);
+    if (!d || !username) return 2;
+    const who = String(username).toLowerCase();
+    if (String(d.head?.username   || '').toLowerCase() === who) return 0;
+    if (String(d.deputy?.username || '').toLowerCase() === who) return 1;
+    return 2;
+  }, [depts]);
+
+  const groups = useMemo(() => {
+    const byDept = new Map();
+    for (const x of shown) {
+      const k = x.dept_id || '__none';
+      if (!byDept.has(k)) byDept.set(k, []);
+      byDept.get(k).push(x);
+    }
+    // Config order, then the people with no department at all — they are the
+    // thing an administrator most needs to notice, so they go last where the
+    // heading reads as a problem rather than as one more department.
+    return [...depts.map(d => d.id), '__none']
+      .filter(k => byDept.has(k))
+      .map(k => ({
+        id: k,
+        label: k === '__none' ? u.noDeptFilter : deptLabel(k),
+        rows: byDept.get(k).slice().sort((a, b) =>
+          rankIn(k, a.username) - rankIn(k, b.username)
+          || String(a.full_name || '').localeCompare(String(b.full_name || ''), 'ar')
+        ),
+      }));
+  }, [shown, depts, deptLabel, rankIn, u]);
 
   const shownIds  = useMemo(() => shown.filter(x => !locked(x)).map(x => x.id), [shown, locked]);
   const allPicked = shownIds.length > 0 && shownIds.every(id => sel.has(id));
@@ -493,14 +610,23 @@ function SystemUsers({ t, users, depts, loading, error, can, onReload, onEdit, o
                   <th>{t.fullName}</th>
                   <th className="usr-th-ext">{t.directory.ext}</th>
                   <th>{t.email}</th>
-                  <th>{t.deptAssign}</th>
                   <th>{t.role}</th>
                   <th>{t.active}</th>
                   <th className="usr-td-action" />
                 </tr>
               </thead>
               <tbody>
-                {shown.map(x => (
+                {groups.map(g => (
+                  <React.Fragment key={g.id}>
+                    <tr className="usr-group-row">
+                      <th className="usr-group-head" colSpan={7} scope="colgroup">
+                        <span className={g.id === '__none' ? 'usr-missing' : undefined}>{g.label}</span>
+                        <span className="usr-group-count">{g.rows.length}</span>
+                      </th>
+                    </tr>
+                    {g.rows.map(x => {
+                      const rank = rankIn(g.id, x.username);
+                      return (
                   <tr key={x.id} className={[sel.has(x.id) && 'usr-picked', locked(x) && 'usr-locked-row']
                     .filter(Boolean).join(' ') || undefined}>
                     <td className="usr-th-check">
@@ -513,6 +639,13 @@ function SystemUsers({ t, users, depts, loading, error, can, onReload, onEdit, o
                         buttons in it. */}
                     <td>
                       <span className="usr-name">{x.full_name}</span>
+                      {/* Says WHY this row sorts first. Without it «رؤساء الأقسام
+                          أولاً» is an ordering the reader has to infer. */}
+                      {rank < 2 && (
+                        <span className="usr-post">
+                          {rank === 0 ? t.deptLeadership.asHead : t.deptLeadership.asDeputy}
+                        </span>
+                      )}
                       {!x.is_ldap && <span className="usr-local" title={t.localUsersNote}>{u.localTag}</span>}
                       <code className="tag usr-username" dir="ltr">{x.username}</code>
                     </td>
@@ -526,9 +659,10 @@ function SystemUsers({ t, users, depts, loading, error, can, onReload, onEdit, o
                         ? <a className="dir-plain dir-email" href={`mailto:${x.email}`} dir="ltr" title={x.email}>{x.email}</a>
                         : <span className="text-muted">—</span>}
                     </td>
-                    <td className={x.dept_id ? undefined : 'usr-missing'}>
-                      {x.dept_id ? deptLabel(x.dept_id) : u.noDeptFilter}
-                    </td>
+                    {/* No department column: every row now sits under its own
+                        department heading, so repeating it 120 times is noise —
+                        and the space it frees is what lets the action buttons
+                        stay on screen at 1366px. */}
                     <td><RoleBadge role={x.role} t={t} /></td>
                     <td><ActiveDot active={x.is_active} t={t} /></td>
                     <td className="usr-td-action">
@@ -549,6 +683,9 @@ function SystemUsers({ t, users, depts, loading, error, can, onReload, onEdit, o
                       </div>
                     </td>
                   </tr>
+                      );
+                    })}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -1029,7 +1166,7 @@ export default function UserManagement() {
       {modal && (
         <UserModal
           initial={modal === 'create' ? null : modal}
-          depts={depts} t={t} can={can} onSave={handleSave} onClose={() => setModal(null)} />
+          depts={depts} t={t} can={can} onSave={handleSave} onClose={() => setModal(null)} onSaved={load} />
       )}
     </div>
   );

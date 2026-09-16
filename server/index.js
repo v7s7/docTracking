@@ -90,15 +90,25 @@ app.use('/auth',        authRoutes);
 app.use('/admin',       adminRoutes);      // SUPER_ADMIN only
 app.use('/departments', deptRoutes);       // any authenticated user
 app.use('/users',       usersRoutes);      // SUPER_ADMIN only
-app.use('/tasks',       tasksRoutes);      // role-filtered inside
-app.use('/dashboard',      dashboardRoutes);     // role-filtered inside
-app.use('/notifications',  notificationsRoutes); // per-dept unread count
+// ── نظام المهام — RETIRED ──────────────────────────────────────────────────
+// Superseded by نظام المراسلات. The routes below are unmounted rather than
+// deleted, and the tasks / task_events / task_templates / notifications tables
+// are left intact with their data: this is reversible by uncommenting four
+// lines, which is what we want days before a submission.
+//
+// Nothing in the live system reads them any more — لوحة المتابعة now comes from
+// GET /correspondence/my-day, and the bell falls back to correspondence-only
+// notifications on its own (both halves are wrapped in .catch()).
+//
+// app.use('/tasks',          tasksRoutes);
+// app.use('/dashboard',      dashboardRoutes);
+// app.use('/notifications',  notificationsRoutes);
+// app.use('/templates',      templatesRoutes);
 app.use('/messages',   messagesRoutes);    // chat: DMs + department conversations
 app.use('/correspondence',  correspondenceRoutes);   // نظام المراسلات الداخلية
 app.use('/directory',       directoryRoutes);         // staff phone directory
 app.use('/circulars',       circularsRoutes);         // التعاميم — org-wide, read by all
 app.use('/sessions',  sessionsRoutes);
-app.use('/templates', templatesRoutes);
 app.use('/audit',     auditRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
@@ -120,7 +130,7 @@ if (fs.existsSync(clientIndexPath)) {
 }
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Server] docTracking API running on http://0.0.0.0:${PORT}`);
+  console.log(`[Server] Wasel (وصل) API running on http://0.0.0.0:${PORT}`);
   scheduler.start();
   startBackupScheduler();
 });

@@ -126,15 +126,28 @@ function notify(type, item, users) {
 
 // ── The five workflow moments ─────────────────────────────────────────────
 const onSubmitted = item => notify('needs_approval', item, approverUsers(item.from_dept_id));
-const onApproved  = item => {
-  notify('approved', item, [userById(item.from_user_id)]);
+
+// The receiving half of an approval: the memo has landed in قسم B and is
+// theirs to close.
+const announceArrival = item => {
   notify('incoming', item, deptUsers(item.to_dept_id));
   // People already keep the department channel open — announce the arrival
   // there rather than relying on them to check an inbox.
   chat.postToDepartment(item.to_dept_id,
     `📩 مراسلة واردة ${item.serial} — «${item.subject}» من ${deptLabel(item.from_dept_id)} · بانتظار الإنجاز`);
 };
+
+const onApproved  = item => {
+  notify('approved', item, [userById(item.from_user_id)]);
+  announceArrival(item);
+};
+
+// A memo written by someone who already approves for his own department is
+// approved the moment it is sent. There is nobody to tell that it was
+// approved — the author IS the approver, and «تمت الموافقة على مراسلتك» sent
+// to the person who just approved it is noise. Only قسم B needs to hear.
+const onSelfApproved = item => announceArrival(item);
 const onRejected  = item => notify('returned',  item, [userById(item.from_user_id)]);
 const onCompleted = item => notify('completed', item, [userById(item.from_user_id)]);
 
-module.exports = { onSubmitted, onApproved, onRejected, onCompleted, notify };
+module.exports = { onSubmitted, onApproved, onSelfApproved, onRejected, onCompleted, notify };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { BarChart3, Clock, RotateCcw, FileText, Download, AlertTriangle } from 'lucide-react';
+import { BarChart3, Clock, RotateCcw, FileText, Download, Printer, AlertTriangle } from 'lucide-react';
 import { useLang } from '../../context/LangContext';
 import { getCorrReports } from '../../services/correspondenceService';
 import { exportArchive } from '../../services/correspondenceService';
@@ -118,7 +118,11 @@ export default function Reports() {
   const maxSvc  = Math.max(1, ...services.map(x => x.count));
 
   return (
-    <div className={loading ? 'rep-reloading' : ''}>
+    // rep-print is what @media print reveals — URD 6.3 asks for a PDF export,
+    // and the browser's own «Save as PDF» over a proper print stylesheet gives
+    // one without a second rendering engine that would have to re-solve Arabic
+    // shaping. Same technique PrintLetter already uses for the formal letter.
+    <div className={`rep-print${loading ? ' rep-reloading' : ''}`}>
       {/* Filters: one row, above everything, scoping every number below. */}
       <div className="rep-filters">
         <div className="corr-chiprow" style={{ border: 'none', padding: 0 }}>
@@ -135,6 +139,19 @@ export default function Reports() {
           })() }).catch(e => toast.error(e.message))}>
           <Download size={14} strokeWidth={2} /> {r.exportExcel}
         </button>
+        <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
+          <Printer size={14} strokeWidth={2} /> {r.exportPdf}
+        </button>
+      </div>
+
+      {/* Printed only — on screen the page header already says where you are. */}
+      <div className="rep-print-head">
+        <div className="rep-print-org">{t.orgName}</div>
+        <div className="rep-print-title">{r.title}</div>
+        <div className="rep-print-range">
+          {r.ranges[range]}
+          {data?.range?.from ? ` · ${data.range.from} — ${data.range.to || ''}` : ''}
+        </div>
       </div>
 
       {/* Whose numbers these are. Every figure below is this user's visible
@@ -199,7 +216,10 @@ export default function Reports() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>{t.corr.fromDept}</th><th>{r.sent}</th><th>{r.received}</th><th>{r.total}</th></tr>
+                <tr>
+                  <th>{t.corr.fromDept}</th><th>{r.sent}</th><th>{r.received}</th><th>{r.total}</th>
+                  <th>{r.avgApprove}</th>
+                </tr>
               </thead>
               <tbody>
                 {(data?.byDepartment || []).map(d => (
@@ -208,6 +228,7 @@ export default function Reports() {
                     <td className="rep-num">{d.sent}</td>
                     <td className="rep-num">{d.received}</td>
                     <td className="rep-num" style={{ fontWeight: 700 }}>{d.total}</td>
+                    <td className="rep-num">{d.avgApprovalHours == null ? '—' : fmtH(d.avgApprovalHours)}</td>
                   </tr>
                 ))}
               </tbody>

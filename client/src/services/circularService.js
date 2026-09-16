@@ -25,11 +25,16 @@ async function req(path, opts = {}) {
   return data;
 }
 
-function toForm({ source, title, body, files = [] }) {
+function toForm({ source, title, body, files = [], targetDepts }) {
   const form = new FormData();
   if (source) form.append('source', source);
   form.append('title', title || '');
   form.append('body', body || '');
+  // URD 6.7. Sent as JSON because multipart has no array type — an empty
+  // selection means «جميع المستخدمين», which the server stores as NULL.
+  // `undefined` is not the same as `[]`: on an edit it means "leave the
+  // audience alone", so it must not be appended at all.
+  if (targetDepts !== undefined) form.append('target_depts', JSON.stringify(targetDepts || []));
   files.forEach(f => form.append('attachments', f));
   return form;
 }

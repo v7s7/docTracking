@@ -61,7 +61,7 @@ async function sendMail({ to, subject, html, text }) {
   }
 
   try {
-    const from = process.env.SMTP_FROM_DEFAULT || 'Doc Tracking <noreply@doctracking.local>';
+    const from = process.env.SMTP_FROM_DEFAULT || 'Wasel <noreply@wasel.local>';
     await t.sendMail({
       from,
       // With a bcc list the envelope still needs a To:, and the sender address

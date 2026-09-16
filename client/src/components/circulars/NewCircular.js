@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Plus, FileText, X } from 'lucide-react';
 import { useLang } from '../../context/LangContext';
 import { useToast } from '../common/Toast';
 import { fmtSize } from '../correspondence/constants';
 import { publishCircular, updateCircular } from '../../services/circularService';
+import { getDepartments } from '../../services/deptService';
 
 // Compose / correct a تعميم. `source` is fixed by the screen it opens from, so
 // there is no picker — a person who may sign for both offices reaches each one
@@ -21,6 +22,22 @@ export default function NewCircular({ source, editing, onClose, onSaved }) {
   const [busy, setBusy]   = useState(false);
   const fileInput = useRef(null);
 
+  // URD 6.7: «موجّه لجميع المستخدمين أو لأقسام محددة».
+  //
+  // Empty set == everyone, which is both the default and what every تعميم
+  // published before targeting existed already is. That equivalence is why
+  // there is no separate "send to all" toggle to get out of sync with the list:
+  // choosing nothing IS choosing everyone, and the hint below says so.
+  const [depts, setDepts]     = useState([]);
+  const [targets, setTargets] = useState(() => new Set(editing?.target_depts_list || []));
+  useEffect(() => { getDepartments().then(list => setDepts(list || [])).catch(() => {}); }, []);
+
+  const toggleDept = id => setTargets(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+
   const addFiles = list => setFiles(prev => [...prev, ...Array.from(list || [])]);
 
   async function submit(e) {
@@ -31,11 +48,12 @@ export default function NewCircular({ source, editing, onClose, onSaved }) {
     }
     setBusy(true);
     try {
+      const targetDepts = [...targets];
       if (editing) {
-        await updateCircular(editing.id, { title, body, files });
+        await updateCircular(editing.id, { title, body, files, targetDepts });
         toast.success(c.saved);
       } else {
-        await publishCircular({ source, title, body, files });
+        await publishCircular({ source, title, body, files, targetDepts });
         toast.success(c.published);
       }
       onSaved?.();
@@ -69,6 +87,33 @@ export default function NewCircular({ source, editing, onClose, onSaved }) {
                 placeholder={c.titlePlaceholder}
                 maxLength={200}
                 autoFocus />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{c.audienceField}</label>
+              <div className="circ-audience">
+                <button
+                  type="button"
+                  className={`corr-filter${targets.size === 0 ? ' active' : ''}`}
+                  onClick={() => setTargets(new Set())}>
+                  {c.audienceAll}
+                </button>
+                {depts.map(d => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    className={`corr-filter${targets.has(d.id) ? ' active' : ''}`}
+                    aria-pressed={targets.has(d.id)}
+                    onClick={() => toggleDept(d.id)}>
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+              <div className="form-hint">
+                {targets.size === 0
+                  ? c.audienceHintAll
+                  : c.audienceHintSome.replace('{n}', targets.size)}
+              </div>
             </div>
 
             <div className="form-group">

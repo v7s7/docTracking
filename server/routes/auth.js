@@ -80,10 +80,33 @@ router.post('/login', async (req, res) => {
       'SELECT * FROM users WHERE username = ? AND password_hash IS NULL AND is_active = 1'
     ).get(ldapUser.username);
 
-    // Keep name/email in sync with AD
+    // Active Directory SEEDS a record. It does not own it.
+    //
+    // This was `UPDATE users SET full_name=?, email=?` on every single login,
+    // so AD silently overwrote whatever الموارد البشرية had corrected. Two
+    // consequences, both observed on the live system rather than theorised:
+    //
+    //  • آدم أحمدي's Arabic name «ادم أحمد أحمدي» was replaced by the Latin AD
+    //    display name "Adam Ahmedi" the first time he signed in. دليل الهاتف,
+    //    the users screen and every printed letter carry the Arabic name, so
+    //    the whole directory would have degraded to Latin one login at a
+    //    time — 118 names, with nothing anywhere to say why.
+    //  • Any correction HR made survived only until that person next logged
+    //    in, and then reverted with no record that it had been undone.
+    //
+    // So a field is filled only when it is EMPTY — a genuinely new account
+    // still gets its name and address from AD on first sign-in. After that HR
+    // and مدير النظام own the record, and «استعادة من Active Directory» on the
+    // users screen is the deliberate, confirmed way to pull AD's values back.
     if (stored) {
-      db.prepare('UPDATE users SET full_name=?, email=? WHERE id=?')
-        .run(ldapUser.name, ldapUser.email, stored.id);
+      const sets = [];
+      const vals = [];
+      if (!String(stored.full_name || '').trim() && ldapUser.name)  { sets.push('full_name = ?'); vals.push(ldapUser.name); }
+      if (!String(stored.email     || '').trim() && ldapUser.email) { sets.push('email = ?');     vals.push(ldapUser.email); }
+      if (sets.length) {
+        db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals, stored.id);
+        console.log(`[Auth] Seeded ${sets.length} empty field(s) from AD for ${ldapUser.username}`);
+      }
     }
 
     const dept_id = stored ? (stored.dept_id || '') : '';

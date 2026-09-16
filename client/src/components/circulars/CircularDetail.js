@@ -78,6 +78,14 @@ export default function CircularDetail({ item, onClose, onChanged, onEdit }) {
                 {c.edited} · {fmtDateTime(item.edited_at)}
               </span>
             )}
+            {/* Only when it is narrowed. An org-wide تعميم saying «موجّه إلى:
+                جميع الموظفين» is a line that never varies and so carries no
+                information — the absence of this line IS "everyone". */}
+            {!!(item.target_labels || []).length && (
+              <div style={{ marginTop: '.35rem' }}>
+                {c.audienceLabel}: <b>{item.target_labels.join('، ')}</b>
+              </div>
+            )}
           </div>
 
           <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>{item.body}</div>

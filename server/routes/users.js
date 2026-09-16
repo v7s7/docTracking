@@ -245,6 +245,45 @@ router.put('/:id', ...USER_ADMIN, (req, res) => {
   if (role && !VALID_ROLES.includes(role)) {
     return res.status(400).json({ success: false, message: `Invalid role.` });
   }
+
+  // ── The login name follows the work address ──────────────────────────────
+  // At SWD the two are the same string by convention: alias a.ahmedi, mailbox
+  // a.ahmedi@swd.bh. They were nevertheless stored as independent fields, so a
+  // corrected address left the login name pointing at the old one and the two
+  // drifted silently — which is half of how the two Ahmedis ended up crossed.
+  //
+  // So editing the address renames the account to match, in the same write.
+  // This is deliberately NOT a free-text username field: the login name is
+  // derived, never typed, which is what keeps them from diverging again.
+  //
+  // It does mean an administrator can rename an account to something Active
+  // Directory does not recognise, and that person then cannot sign in. The
+  // guards below are what stand between a typo and a lockout: the address must
+  // be well formed, the resulting name must be non-empty, and it must not
+  // already belong to somebody else.
+  let nextUsername = user.username;
+  if (email !== undefined && String(email ?? '').trim() !== String(user.email ?? '').trim()) {
+    const addr = String(email ?? '').trim();
+    if (addr !== '') {
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) {
+        return res.status(400).json({ success: false, message: 'البريد الإلكتروني غير صحيح.' });
+      }
+      const local = addr.split('@')[0].trim();
+      if (!local) {
+        return res.status(400).json({ success: false, message: 'البريد الإلكتروني غير صحيح.' });
+      }
+      const clash = db.prepare(
+        'SELECT id, full_name FROM users WHERE lower(username) = lower(?) AND id <> ?'
+      ).get(local, user.id);
+      if (clash) {
+        return res.status(409).json({
+          success: false,
+          message: `اسم المستخدم «${local}» مستخدم بالفعل بواسطة ${clash.full_name}.`,
+        });
+      }
+      nextUsername = local;
+    }
+  }
   // Four digits internally; anything else is a typo that would break the
   // directory's tel: links and the search-by-extension people rely on.
   if (ext !== undefined && ext !== null && String(ext).trim() !== '' && !/^\d{3,5}$/.test(String(ext).trim())) {
@@ -271,6 +310,7 @@ router.put('/:id', ...USER_ADMIN, (req, res) => {
     ext:        ext        !== undefined ? clean(ext)         : user.ext,
     mobile:     mobile     !== undefined ? clean(mobile)      : user.mobile,
     alt_email:  alt_email  !== undefined ? clean(alt_email)   : user.alt_email,
+    username:   nextUsername,
     password_hash: user.password_hash,
   };
 
@@ -282,15 +322,15 @@ router.put('/:id', ...USER_ADMIN, (req, res) => {
   }
 
   db.prepare(`
-    UPDATE users SET full_name=?, email=?, role=?, dept_id=?, is_active=?, ext=?, mobile=?, alt_email=?, password_hash=?
+    UPDATE users SET full_name=?, email=?, role=?, dept_id=?, is_active=?, ext=?, mobile=?, alt_email=?, username=?, password_hash=?
     WHERE id=?
   `).run(updates.full_name, updates.email, updates.role, updates.dept_id, updates.is_active,
-         updates.ext, updates.mobile, updates.alt_email, updates.password_hash, user.id);
+         updates.ext, updates.mobile, updates.alt_email, updates.username, updates.password_hash, user.id);
 
   // Record only what actually moved, so the log reads as a list of changes
   // rather than a wall of unchanged fields.
   const diff = {};
-  for (const k of ['full_name', 'email', 'role', 'dept_id', 'is_active', 'ext', 'mobile', 'alt_email']) {
+  for (const k of ['full_name', 'email', 'username', 'role', 'dept_id', 'is_active', 'ext', 'mobile', 'alt_email']) {
     if (String(user[k] ?? '') !== String(updates[k] ?? '')) diff[k] = { from: user[k], to: updates[k] };
   }
   if (password) diff.password = 'reset';
@@ -299,6 +339,116 @@ router.put('/:id', ...USER_ADMIN, (req, res) => {
   }
 
   res.json({ success: true, user: safeUser(db.prepare('SELECT * FROM users WHERE id = ?').get(user.id)) });
+});
+
+// ── GET /:id/ad-default  /  POST /:id/ad-default ──────────────────────────
+//
+// «استعادة من Active Directory» — the deliberate way to pull AD's values back
+// over a record. Since login no longer overwrites anything (see routes/auth.js),
+// this is the ONLY path by which AD can replace a stored name or address, and
+// it is always someone pressing a button rather than something happening in the
+// background where nobody sees it.
+//
+// Two verbs on purpose:
+//   GET  returns the before/after so the screen can show exactly what would
+//        change and ask for confirmation. Nothing is written.
+//   POST performs it.
+//
+// The GET is what makes the confirmation honest: a dialog that says "restore
+// from AD?" without naming the values is asking someone to approve something
+// they cannot see. The user's own name is usually the field at stake, and on
+// this system that means replacing an Arabic name with a Latin one.
+async function adRecordFor(username) {
+  if (!process.env.LDAP_URL) {
+    const e = new Error('Active Directory is not configured.'); e.code = 'NOT_CONFIGURED'; throw e;
+  }
+  const all = await browseAllUsers();
+  const hit = (all || []).find(u => String(u.username || '').toLowerCase() === String(username).toLowerCase());
+  if (!hit) {
+    const e = new Error(`لا يوجد حساب باسم «${username}» في Active Directory.`); e.code = 'NOT_FOUND'; throw e;
+  }
+  return hit;
+}
+
+// The fields AD is allowed to speak for. Deliberately not dept_id, role, ext or
+// mobile: those are organisational facts الموارد البشرية owns, and AD at SWD
+// does not carry them — restoring them would mean writing blanks over real data.
+function adDiff(user, ad) {
+  const want = { full_name: ad.name || null, email: ad.email || null };
+  const diff = {};
+  for (const [k, v] of Object.entries(want)) {
+    if (v && String(user[k] ?? '') !== String(v)) diff[k] = { from: user[k] ?? null, to: v };
+  }
+  return diff;
+}
+
+router.get('/:id/ad-default', ...USER_ADMIN, async (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+  {
+    const refused = refuseEdit(req.user, user, {});
+    if (refused) return res.status(403).json({ success: false, message: refused });
+  }
+  try {
+    const ad = await adRecordFor(user.username);
+    const diff = adDiff(user, ad);
+    return res.json({
+      success: true,
+      username: user.username,
+      ad: { name: ad.name || null, email: ad.email || null },
+      changes: diff,
+      // The login name follows the address, so say so before it happens rather
+      // than letting an administrator discover it afterwards.
+      username_becomes: diff.email ? String(diff.email.to).split('@')[0] : user.username,
+    });
+  } catch (e) {
+    const code = e.code === 'NOT_CONFIGURED' ? 503 : e.code === 'NOT_FOUND' ? 404 : 502;
+    return res.status(code).json({ success: false, message: e.message, code: e.code });
+  }
+});
+
+router.post('/:id/ad-default', ...USER_ADMIN, async (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+  {
+    const refused = refuseEdit(req.user, user, {});
+    if (refused) return res.status(403).json({ success: false, message: refused });
+  }
+  try {
+    const ad   = await adRecordFor(user.username);
+    const diff = adDiff(user, ad);
+    if (!Object.keys(diff).length) {
+      return res.json({ success: true, changed: {}, message: 'لا يوجد اختلاف عن Active Directory.' });
+    }
+
+    const sets = [];
+    const vals = [];
+    for (const [k, v] of Object.entries(diff)) { sets.push(`${k} = ?`); vals.push(v.to); }
+
+    // Same rule as the ordinary edit: the login name follows the address.
+    let newUsername = user.username;
+    if (diff.email) {
+      const local = String(diff.email.to).split('@')[0].trim();
+      const clash = local && db.prepare(
+        'SELECT full_name FROM users WHERE lower(username) = lower(?) AND id <> ?'
+      ).get(local, user.id);
+      if (clash) {
+        return res.status(409).json({
+          success: false,
+          message: `تعذّر: اسم المستخدم «${local}» مستخدم بالفعل بواسطة ${clash.full_name}.`,
+        });
+      }
+      if (local) { sets.push('username = ?'); vals.push(local); newUsername = local; }
+    }
+
+    db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals, user.id);
+    logAudit(req.user, 'user.ad_default', 'user', user.id,
+      { username: user.username, became: newUsername, changed: diff }, req.ip);
+    return res.json({ success: true, changed: diff, username: newUsername });
+  } catch (e) {
+    const code = e.code === 'NOT_CONFIGURED' ? 503 : e.code === 'NOT_FOUND' ? 404 : 502;
+    return res.status(code).json({ success: false, message: e.message, code: e.code });
+  }
 });
 
 // POST /users/me/avatar — upload/replace the current user's own picture

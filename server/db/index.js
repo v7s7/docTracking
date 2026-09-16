@@ -504,6 +504,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_circ_reads_user ON circular_reads(user_id);
 `);
 
+// URD 6.7: a تعميم may be «موجّه لجميع المستخدمين أو لأقسام محددة».
+//
+// A JSON array of department ids, or NULL. NULL is not the same as '[]' and the
+// difference is load-bearing: NULL means "everyone", which is what every تعميم
+// published before this column existed was, and what the field defaults to.
+// Storing '[]' would silently hide a تعميم from the entire directorate.
+const circCols = db.prepare("PRAGMA table_info(circulars)").all().map(c => c.name);
+if (!circCols.includes('target_depts')) {
+  db.exec("ALTER TABLE circulars ADD COLUMN target_depts TEXT");
+}
+
 // ── Serial number helper ─────────────────────────────────────
 // Format: PREFIX-YYYY-NNNN  (e.g. CS-2026-0001)
 // Prefix is read from TASK_SERIAL_PREFIX env var, defaults to "CS"
