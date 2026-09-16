@@ -59,6 +59,20 @@
  * production a.ahmedi has already signed in, and none of that is keyed on
  * anything this script changes.
  *
+ * NOTIFICATIONS. On production the son, who has never signed in, held 12
+ * correspondence notifications. Filed in hr_dept by mistake, he received an
+ * «incoming» notification for every memo approved to الموارد البشرية, the way
+ * every member of a receiving department does. Those are cleared as part of the
+ * move — once he is out of HR he cannot open those memos, so each would be a
+ * bell entry naming HR correspondence that leads nowhere. Any notification NOT
+ * explained that way makes the script refuse instead.
+ *
+ * Because he never signed in, none of this was ever seen: no HR memo was read
+ * and the HR account-administration rights that came with the mis-filing were
+ * never used. The FATHER, moving INTO hr_dept, gains those rights — that is
+ * utils/permissions.js working as designed for الموارد البشرية, but it is a
+ * privilege change, not only a directory correction.
+ *
  * NOTE ON auth.js
  * Until the companion change to routes/auth.js ships, every LDAP login
  * OVERWRITES full_name from the AD display name — which would undo the Arabic
@@ -101,14 +115,55 @@ const TARGET = {
 // WORK done in the system under this account. Any of it means a person has been
 // operating inside the wrong department, and that deserves a human look before
 // the department moves under them. Refuses if any is non-zero.
+//
+// correspondence_notifications is deliberately NOT in this list. A notification
+// is something the system SENT a person, not something they did. Production
+// proved the difference: a.aadam had never signed in once, yet held 12 of them —
+// and this script refused with "he has been operating inside the wrong
+// department", which was false. See staleNotifications() below for how they
+// are actually handled.
 const WORK = [
   ['correspondence sent',      'SELECT COUNT(*) n FROM correspondences WHERE from_user_id = ?',            'id'],
   ['correspondence events',    'SELECT COUNT(*) n FROM correspondence_events WHERE actor_id = ?',          'id'],
-  ['corr notifications',       'SELECT COUNT(*) n FROM correspondence_notifications WHERE user_id = ?',    'id'],
   ['chat messages',            'SELECT COUNT(*) n FROM messages WHERE sender_id = ?',                      'id'],
   ['conversation memberships', 'SELECT COUNT(*) n FROM conversation_members WHERE user_id = ?',            'id'],
   ['circular reads',           'SELECT COUNT(*) n FROM circular_reads WHERE user_id = ?',                  'id'],
 ];
+
+/**
+ * Notifications this person received ONLY because they were filed in the
+ * department they are now leaving.
+ *
+ * services/correspondenceNotify.js creates notifications five ways, and only one
+ * reaches someone who has neither written nor approved anything:
+ *
+ *   needs_approval            → the SENDING department's approvers
+ *   incoming                  → EVERY active member of the RECEIVING department
+ *   approved/returned/completed → the memo's author only
+ *
+ * So a notification is stale exactly when it is `incoming` and the memo was
+ * addressed to the department being left. Anything else on the account is NOT
+ * explained by the mis-filing, and the script refuses rather than guess at it.
+ *
+ * Why they must go rather than stay: once moved, the person can no longer open
+ * those memos (visibilityClause scopes by department), so every one becomes a
+ * bell entry that names another department's correspondence — subject line
+ * included — and leads nowhere when clicked.
+ */
+function staleNotifications(row, leavingDeptId) {
+  let all = [];
+  try {
+    all = db.prepare(`
+      SELECT n.id, n.type, n.serial, n.is_read, c.to_dept_id
+        FROM correspondence_notifications n
+        LEFT JOIN correspondences c ON c.id = n.correspondence_id
+       WHERE n.user_id = ?
+    `).all(row.id);
+  } catch { return { all: [], stale: [], other: [] }; }   // table may not exist
+  const stale = all.filter(n => n.type === 'incoming' && n.to_dept_id === leavingDeptId);
+  const other = all.filter(n => !stale.includes(n));
+  return { all, stale, other };
+}
 
 // SIGN-IN traces. Reported, never blocking.
 //
@@ -297,8 +352,31 @@ for (const [username, want] of Object.entries(TARGET)) {
     }
   }
 
-  if (!changes.length) console.log('  nothing to change.');
-  else plan.push({ id: row.id, username, changes });
+  // Only when the department is actually changing. On a re-run the person is
+  // already in the right department, and "stale" would then match the
+  // notifications that legitimately belong to where they now are.
+  let clearNotifications = [];
+  if (row.dept_id && row.dept_id !== want.dept_id) {
+    const n = staleNotifications(row, row.dept_id);
+    if (n.other.length) {
+      console.log(`  !! ${n.other.length} notification(s) NOT explained by being filed in ${row.dept_id} — REFUSING:`);
+      n.other.forEach(x => console.log(
+        `     #${x.id}  type=${x.type}  serial=${x.serial || '—'}  to=${x.to_dept_id || '(memo deleted)'}`));
+      console.log('     Only «incoming» notifications for the department being left are safe to clear.');
+      blocked = true;
+      continue;
+    }
+    if (n.stale.length) {
+      const unread = n.stale.filter(x => !x.is_read).length;
+      console.log(`  notifications: ${n.stale.length} «incoming» for ${row.dept_id} memos, received only because`
+        + ` he was filed there (${unread} unread) → will be CLEARED`);
+      console.log(`     serials: ${[...new Set(n.stale.map(x => x.serial).filter(Boolean))].join(', ') || '—'}`);
+      clearNotifications = n.stale.map(x => x.id);
+    }
+  }
+
+  if (!changes.length && !clearNotifications.length) console.log('  nothing to change.');
+  else plan.push({ id: row.id, username, changes, clearNotifications });
 }
 
 console.log('');
@@ -307,21 +385,50 @@ if (blocked) {
   console.log('REFUSED — nothing written. Resolve the warnings above first.');
   process.exit(1);
 }
-if (!plan.length) {
-  console.log('Nothing to do — both accounts already hold the correct values.');
-  process.exit(0);
-}
-if (!APPLY) {
-  console.log(`Would update ${plan.length} account(s). Re-run with --apply to write.`);
-  process.exit(0);
-}
 
+// The CSV is checked on EVERY run, not only when the database has work to do.
+// The two can fall out of step: if directory-link.csv is open in Excel on the
+// server, Excel holds a lock, the CSV write fails, and the database write before
+// it has already succeeded. An earlier version exited with "Nothing to do" as soon
+// as the database was correct — so every later run skipped the CSV and it was
+// never retried, leaving the crossed file waiting for the next linker run.
+const csvPath = path.join(__dirname, '..', 'data', 'directory-link.csv');
+let csvPending = 0;
+try { csvPending = correctDirectoryCsv(fs.readFileSync(csvPath, 'utf8')).touched; }
+catch (e) { console.log(`  !! could not read directory-link.csv: ${e.message}`); }
+
+if (!APPLY) {
+  console.log(plan.length
+    ? `Would update ${plan.length} account(s).`
+    : 'Database: both accounts already hold the correct values.');
+  console.log(csvPending
+    ? `Would correct ${csvPending} row(s) in directory-link.csv.`
+    : 'directory-link.csv: already correct.');
+  if (plan.length || csvPending) console.log('Re-run with --apply to write.');
+  process.exit(0);
+}
+if (!plan.length && !csvPending) {
+  console.log('Nothing to do — both accounts and directory-link.csv are already correct.');
+  process.exit(0);
+}
+if (!plan.length) console.log('Database: already correct — correcting directory-link.csv only.');
+
+// One transaction for both accounts and every notification: a half-applied fix —
+// the son moved but still holding HR's notifications, say — is worse than none.
 const write = db.transaction(() => {
-  for (const { id, username, changes } of plan) {
+  for (const { id, username, changes, clearNotifications } of plan) {
     for (const [field, value] of changes) {
       db.prepare(`UPDATE users SET ${field} = ? WHERE id = ?`).run(value, id);
     }
-    console.log(`  updated ${username}: ${changes.map(([f]) => f).join(', ')}`);
+    if (changes.length) console.log(`  updated ${username}: ${changes.map(([f]) => f).join(', ')}`);
+
+    if (clearNotifications.length) {
+      // user_id in the WHERE as well as id: a stray id can never reach anyone else.
+      const del = db.prepare('DELETE FROM correspondence_notifications WHERE id = ? AND user_id = ?');
+      let n = 0;
+      for (const nid of clearNotifications) n += del.run(nid, id).changes;
+      console.log(`  cleared ${n} stale notification(s) for ${username}`);
+    }
   }
 });
 write();
@@ -337,13 +444,20 @@ write();
 //
 // Idempotent: each row is only rewritten while it still holds the wrong link.
 try {
-  const csvPath = path.join(__dirname, '..', 'data', 'directory-link.csv');
-  const result  = correctDirectoryCsv(fs.readFileSync(csvPath, 'utf8'));
+  const result = correctDirectoryCsv(fs.readFileSync(csvPath, 'utf8'));
 
   if (result.touched) {
-    fs.copyFileSync(csvPath, csvPath + '.before-ahmedi-fix');
+    // Keep the FIRST backup, never overwrite it. On a retry after a failed write
+    // the backup that already exists IS the original, pre-fix file — copying
+    // over it would swap the true original for whatever is on disk now. Found by
+    // simulating a locked CSV: the retry died overwriting the backup (Windows
+    // copies the read-only flag along with the file) and never reached the CSV.
+    const backup  = csvPath + '.before-ahmedi-fix';
+    const existed = fs.existsSync(backup);
+    if (!existed) fs.copyFileSync(csvPath, backup);
     fs.writeFileSync(csvPath, result.text, 'utf8');
-    console.log(`  directory-link.csv: ${result.touched} row(s) corrected (backup: directory-link.csv.before-ahmedi-fix)`);
+    console.log(`  directory-link.csv: ${result.touched} row(s) corrected `
+      + `(${existed ? 'kept the existing backup' : 'backup'}: directory-link.csv.before-ahmedi-fix)`);
   } else {
     console.log('  directory-link.csv: already correct');
   }
@@ -351,7 +465,10 @@ try {
   // Not fatal — the accounts are already fixed — but loud, because a crossed
   // CSV is a loaded gun for the next linker run.
   console.log(`  !! could not correct directory-link.csv: ${e.message}`);
-  console.log('     Do NOT run link-directory.js --apply until it is fixed by hand.');
+  console.log('     If it is open in Excel, close it and run this script with --apply again —');
+  console.log('     the accounts are already fixed, so the re-run will correct only the CSV.');
+  console.log('     Until then, do NOT run link-directory.js --apply.');
+  process.exitCode = 1;
 }
 
 console.log('');

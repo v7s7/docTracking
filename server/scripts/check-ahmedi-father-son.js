@@ -53,6 +53,38 @@ for (const [username, want] of Object.entries(EXPECTED)) {
   ].filter(([, n]) => n).map(([l, n]) => `${l}=${n}`);
   console.log(`  work done: ${work.length ? work.join(', ') + '   <- the fix will REFUSE' : 'none'}`);
   console.log(`  sign-ins:  ${traces.length ? traces.join(', ') + '   (does not block the fix)' : 'none'}`);
+
+  // Notifications RECEIVED — reported the same way the fix classifies them, so
+  // the two scripts can never again disagree about whether the fix will run.
+  // (An earlier version left this table out entirely: the check said "work done:
+  // none" while the fix refused over 12 notifications.)
+  let notes = [];
+  try {
+    notes = db.prepare(`
+      SELECT n.type, n.is_read, c.to_dept_id
+        FROM correspondence_notifications n
+        LEFT JOIN correspondences c ON c.id = n.correspondence_id
+       WHERE n.user_id = ?
+    `).all(row.id);
+  } catch { /* table may not exist */ }
+  if (!notes.length) {
+    console.log('  notifications received: none');
+  } else {
+    const groups = {};
+    for (const n of notes) {
+      const k = `${n.type} → ${n.to_dept_id || '(memo deleted)'}`;
+      groups[k] = (groups[k] || 0) + 1;
+    }
+    const moving  = row.dept_id !== want.dept_id;
+    const stale   = notes.filter(n => n.type === 'incoming' && n.to_dept_id === row.dept_id).length;
+    const other   = notes.length - stale;
+    const unread  = notes.filter(n => !n.is_read).length;
+    console.log(`  notifications received: ${notes.length} (${unread} unread)`);
+    Object.entries(groups).forEach(([k, n]) => console.log(`     ${String(n).padStart(3)} × ${k}`));
+    if (!moving)       console.log('     department not changing — the fix leaves these alone');
+    else if (other)    console.log(`     ${other} not explained by being filed in ${row.dept_id}  <- the fix will REFUSE`);
+    else               console.log(`     all ${stale} are «incoming» for ${row.dept_id}, from the mis-filing — the fix clears them`);
+  }
 }
 
 // ── Anyone ELSE sharing these addresses? ──────────────────────────────────
