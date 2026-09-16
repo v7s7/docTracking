@@ -74,10 +74,16 @@ const { db } = require('../db');
 const APPLY = process.argv.includes('--apply');
 
 // username → what the row must become. Every value confirmed with the owner.
+//
+// email is here because production showed a problem the development copy could
+// not: a.aadam — the SON — carried a.ahmedi@swd.bh, his FATHER's address. Two
+// accounts shared one mailbox, so every notification meant for the son landed in
+// his father's inbox. The son's Exchange card reads SMTP:a.aadam@swd.bh.
 const TARGET = {
   'a.ahmedi': {
     who:       'FATHER',
     full_name: 'ادم أحمد أحمدي',
+    email:     'a.ahmedi@swd.bh',
     dept_id:   'hr_dept',
     ext:       '5077',
     mobile:    '33211217',
@@ -85,6 +91,7 @@ const TARGET = {
   'a.aadam': {
     who:       'SON',
     full_name: 'عبدالله آدم أحمدي',
+    email:     'a.aadam@swd.bh',
     dept_id:   'investments_dept',
     ext:       '4065',
     mobile:    null,          // deliberately cleared — see header
@@ -125,6 +132,97 @@ function countsOf(row, list) {
     if (n) found.push(`${label}=${n}`);
   }
   return found;
+}
+
+// ── directory-link.csv, read the way the project's own tools read it ──────
+//
+// parseCsvLine is the parser from scripts/link-directory.js and
+// scripts/fix-directory-links.js, copied because neither exports it. The copy is
+// exact on purpose, because those two tools WRITE the file differently:
+//
+//   link-directory.js       quotes every field      "hr_dept","ادم أحمد أحمدي","a.aadam"
+//   fix-directory-links.js  quotes only when needed  hr_dept,ادم أحمد أحمدي,a.aadam
+//
+// Production holds the first form; the development copy had been re-saved in
+// the second. An earlier version of this script split on commas and compared
+// raw text — right on the development copy, silently wrong on production. No
+// row matched, so يوسف stayed linked to the father; and because "is the son
+// already listed?" failed the same way, a DUPLICATE a.aadam row was appended —
+// all while the script printed "1 row(s) corrected".
+//
+// Rows are matched on username AND extension, never on the Arabic name. Both are
+// plain ASCII, so a hamza written another way, a tatweel or an invisible joiner
+// in the name cannot make a row quietly fail to match.
+function parseCsvLine(line) {
+  const cells = []; let cur = ''; let q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') q = false;
+      else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ',') { cells.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  cells.push(cur);
+  return cells;
+}
+
+function correctDirectoryCsv(raw) {
+  const bom   = raw.startsWith('﻿') ? '﻿' : '';
+  const eol   = raw.includes('\r\n') ? '\r\n' : '\n';
+  const lines = raw.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.length);
+  const head  = parseCsvLine(lines[0]).map(h => h.trim());
+  const rows  = lines.slice(1).map(l => {
+    const cells = parseCsvLine(l);
+    return Object.fromEntries(head.map((h, i) => [h, (cells[i] || '').trim()]));
+  });
+
+  // Write back in the style the file already uses, so the diff is the rows that
+  // changed rather than every line re-quoted. Both tools write the header bare.
+  const allQuoted = lines.length > 1 && lines[1].startsWith('"');
+  const cell = v => {
+    const s = String(v ?? '');
+    return (allQuoted || /[",\r\n]/.test(s)) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  let touched = 0;
+  for (const r of rows) {
+    if (r.username === 'a.aadam' && r.ext === '5077') {
+      // Father's HR row. Its name, ext and mobile were right — only the AD link.
+      Object.assign(r, {
+        username: 'a.ahmedi', email: 'a.ahmedi@swd.bh', ad_name: 'Adam Ahmedi',
+        alternatives: 'corrected: father — was wrongly linked to his son a.aadam',
+      });
+      touched++;
+    } else if (r.username === 'a.ahmedi' && r.ext === '5064') {
+      // يوسف: a real employee with no AD account. Unlinked, not deleted.
+      Object.assign(r, {
+        username: '', email: '', ad_name: '', confidence: '',
+        alternatives: 'unlinked: real employee, no AD account; ext/mobile UNVERIFIED',
+      });
+      touched++;
+    }
+  }
+
+  // The son had no row of his own. Checked AFTER the loop, because until the
+  // father's row is re-linked it is the one still wearing a.aadam.
+  if (!rows.some(r => r.username === 'a.aadam')) {
+    const son = Object.fromEntries(head.map(h => [h, '']));
+    Object.assign(son, {
+      dept_id: 'investments_dept', dept_label: 'قسم الاستثمارات الوقفية', rank: 'staff', role: 'STAFF',
+      arabic_name: 'عبدالله آدم أحمدي', ext: '4065', mobile: '',
+      username: 'a.aadam', email: 'a.aadam@swd.bh', ad_name: 'Abdulla Aadam Ahmedi',
+      confidence: '1.00', alternatives: 'added: son of ادم أحمد أحمدي — mobile unknown',
+    });
+    const at = rows.findIndex(r => r.dept_id === 'investments_dept');
+    rows.splice(at >= 0 ? at : rows.length, 0, son);
+    touched++;
+  }
+
+  const text = bom + [head.join(','), ...rows.map(r => head.map(h => cell(r[h])).join(','))].join(eol);
+  return { text, touched, rows };
 }
 
 // ── Warn if auth.js will undo this ────────────────────────────────────────
@@ -175,13 +273,28 @@ for (const [username, want] of Object.entries(TARGET)) {
   }
 
   const changes = [];
-  for (const field of ['full_name', 'dept_id', 'ext', 'mobile']) {
+  for (const field of ['full_name', 'email', 'dept_id', 'ext', 'mobile']) {
     const from = row[field] ?? null;
     const to   = want[field] ?? null;
     const same = String(from ?? '') === String(to ?? '');
     console.log(`  ${field.padEnd(10)} ${same ? '=' : '→'} ${same ? `"${from ?? ''}" (already correct)`
                                                                   : `"${from ?? ''}"  →  "${to ?? ''}"`}`);
     if (!same) changes.push([field, to]);
+  }
+
+  // Moving an address onto this account must not create the same problem it is
+  // fixing somewhere else. Two accounts sharing a mailbox is exactly how the son
+  // came to receive nothing and the father everything twice.
+  const emailChange = changes.find(([f]) => f === 'email');
+  if (emailChange) {
+    const holder = db.prepare(
+      'SELECT username FROM users WHERE lower(email) = lower(?) AND id <> ?'
+    ).get(emailChange[1], row.id);
+    if (holder && !(holder.username in TARGET)) {
+      console.log(`  !! ${emailChange[1]} already belongs to ${holder.username} — REFUSING.`);
+      blocked = true;
+      continue;
+    }
   }
 
   if (!changes.length) console.log('  nothing to change.');
@@ -225,43 +338,12 @@ write();
 // Idempotent: each row is only rewritten while it still holds the wrong link.
 try {
   const csvPath = path.join(__dirname, '..', 'data', 'directory-link.csv');
-  const raw  = fs.readFileSync(csvPath, 'utf8');
-  const eol  = raw.includes('\r\n') ? '\r\n' : '\n';
-  const rows = raw.split(/\r?\n/);
-  let touched = 0;
+  const result  = correctDirectoryCsv(fs.readFileSync(csvPath, 'utf8'));
 
-  const out = rows.map(line => {
-    const c = line.split(',');
-    // Father's HR row: its name, ext and mobile were right — only the AD link.
-    if (c[4] === 'ادم أحمد أحمدي' && c[7] === 'a.aadam') {
-      c[7] = 'a.ahmedi'; c[8] = 'a.ahmedi@swd.bh'; c[9] = 'Adam Ahmedi';
-      c[11] = 'corrected: father — was wrongly linked to his son a.aadam';
-      touched++; return c.join(',');
-    }
-    // يوسف: a real employee with no AD account. Unlinked, not deleted.
-    if (c[4] === 'يوسف أحمد عيد أدم' && c[7] === 'a.ahmedi') {
-      c[7] = ''; c[8] = ''; c[9] = ''; c[10] = '';
-      c[11] = 'unlinked: real employee, no AD account; ext/mobile UNVERIFIED';
-      touched++; return c.join(',');
-    }
-    return line;
-  });
-
-  // The son had no directory row of his own.
-  if (!out.some(l => l.split(',')[7] === 'a.aadam')) {
-    const at = out.findIndex(l => l.split(',')[0] === 'investments_dept');
-    out.splice(at >= 0 ? at : out.length, 0, [
-      'investments_dept', 'قسم الاستثمارات الوقفية', 'staff', 'STAFF', 'عبدالله آدم أحمدي',
-      '4065', '', 'a.aadam', 'a.aadam@swd.bh', 'Abdulla Aadam Ahmedi', '1.00',
-      'added: son of ادم أحمد أحمدي — mobile unknown',
-    ].join(','));
-    touched++;
-  }
-
-  if (touched) {
+  if (result.touched) {
     fs.copyFileSync(csvPath, csvPath + '.before-ahmedi-fix');
-    fs.writeFileSync(csvPath, out.join(eol), 'utf8');
-    console.log(`  directory-link.csv: ${touched} row(s) corrected (backup: directory-link.csv.before-ahmedi-fix)`);
+    fs.writeFileSync(csvPath, result.text, 'utf8');
+    console.log(`  directory-link.csv: ${result.touched} row(s) corrected (backup: directory-link.csv.before-ahmedi-fix)`);
   } else {
     console.log('  directory-link.csv: already correct');
   }
